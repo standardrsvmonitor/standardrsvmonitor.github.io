@@ -102,6 +102,13 @@ tr.today td{color:var(--water)}
 .legend2{display:grid;grid-template-columns:auto 1fr auto auto;gap:9px 10px;margin-top:14px;font-size:13px;align-items:center}
 .legend2 i{width:10px;height:10px;border-radius:2px;display:inline-block} .legend2 .v{font-family:var(--mono);text-align:right} .legend2 .p{font-family:var(--mono);color:var(--muted);text-align:right;min-width:40px}
 .legend2 .sub{grid-column:2/5;color:var(--muted);font-size:11.5px;margin-top:-6px}
+@media (max-width:600px){
+  .kpi .l{white-space:normal;overflow:visible} .kpi .v{font-size:21px}
+  .stats .v{white-space:normal} .stats .v small{display:block;margin-left:0;margin-top:2px}
+  .nav{flex-wrap:nowrap;overflow-x:auto;scrollbar-width:none} .nav::-webkit-scrollbar{display:none} .nav a{white-space:nowrap}
+  .hero .asof{text-align:left} .panel>.tip{width:min(320px,calc(100vw - 48px))}
+  .legend2{font-size:12px} .bridge{font-size:12px}
+}
 .foot{margin-top:40px;color:var(--dim);font-size:12px;font-family:var(--mono);line-height:1.7}
 </style>
 
@@ -243,7 +250,7 @@ const kpis = [
     `ETH and USDG held in the reserve Safe, ETH in the policy vaults, tokenized equities held outside pools, and the reserve’s Uniswap v4 positions (${fmt.pct(L.reserve.lpUsd/L.reserve.totalUsd,0)} of the total). Excludes the ${fmt.eth(L.reserve.polBuybackEth,0)} S-Bill premium pot and the team wallet. Backing per minted token is $${backingTot.toFixed(3)}.`],
   ['Fee income, '+yd, fmt.usd(inc(Y)), `7-day average ${fmt.usd(inc7/7)} per day · ${fmt.pct(incAnn/mcFloat,0)} annualized on float`,
     `The most recent complete UTC day. Comprises STANDARD/ETH trading fees (each epoch’s distributed ETH allocated evenly across its days; the current epoch estimated from tax hook and fee splitter balances), charter auction proceeds, and the reserve’s fee income from its pools, in USD. Cumulative since genesis: ${fmt.usd(incLife)}.`],
-  ['Buybacks, '+yd, fmt.n(bbY,2)+' STANDARD', `${fmt.usd(bbY*(Y.price||L.price))} · 7-day total ${fmt.n(bb7,2)}`,
+  ['Buybacks, '+yd+' (STANDARD)', fmt.n(bbY,2), `${fmt.usd(bbY*(Y.price||L.price))} · 7-day total ${fmt.n(bb7,2)}`,
     `STANDARD purchased from the pool and burned by the contraction vault, plus the 15% POL allocation purchased into the Incentives Vault. ${fmt.eth(L.reserve.contractionEth,1)} remains in the contraction vault pending deployment.`],
   ['Epoch '+L.epoch+' net flow', (L.epochNetFlow>=0?'+':'')+L.epochNetFlow.toFixed(1)+' ETH', `${fmt.eth(L.accruedEth||L.feeSplitterEth,1)} collected · settles in ${Math.floor(epLeft/3600)}h ${Math.floor(epLeft%3600/60)}m`,
     `Net flow is ETH purchased less ETH sold through the pool so far this epoch. Its sign at settlement sets the regime: expansion allocates 70% of fees to the reserve, contraction allocates them to buybacks. Prior epoch ${fmt.sgn(L.previousEpochFlow)}${L.previousEpochFlow.toFixed(1)} ETH; consecutive positive epochs ${L.positiveStreak}. The multiplier settles to ${mUp.toFixed(2)}× if positive and ${mDn.toFixed(2)}× if negative.`],
@@ -253,7 +260,7 @@ const kpis = [
     `Current license price (${fmt.int(L.licensePriceNow)} STANDARD) divided by one branch’s daily issuance (${perBranch.toFixed(1)}). The charter figure divides ${fmt.usd(L.charterPriceNow*L.ethusd,1)} by the USD value of one branch’s daily issuance. Both exclude resolution fees and future multiplier changes.`],
   ['Charter auction, last clearing', L.charterLastSale.toFixed(2)+' ETH', `${(L.charterRemaining||0)>0?'currently '+L.charterPriceNow.toFixed(2)+' ETH, descending':'period sold out · next opens '+fmt.hm(L.charterNextOpen)+' UTC at '+L.charterNextStart.toFixed(2)+' ETH'}`,
     `<b>The most recent charter cleared at ${L.charterLastSale.toFixed(2)} ETH.</b> One charter is offered per ${L.auctionPeriodHours}-hour period in a descending-price auction: the period opened at ${L.charterDayStart.toFixed(2)} ETH (three times the previous clearing price) and the price halves every ${L.charterHalfLife||2} hours toward the ${L.charterFloor.toFixed(2)} ETH floor until a purchase occurs. After the period’s charter is sold the contract continues to quote a declining price, but no charter is available until the next period opens.`],
-  ['License auction, last clearing', fmt.int(L.licenseLastSale)+' STANDARD', `${(L.licenseRemaining||0)>0?'currently '+fmt.int(L.licensePriceNow)+', descending':'period sold out · next opens '+fmt.hm(L.licenseNextOpen)+' UTC at '+fmt.int(L.licenseNextStart)}`,
+  ['License auction, last clearing (STANDARD)', fmt.int(L.licenseLastSale), `${(L.licenseRemaining||0)>0?'currently '+fmt.int(L.licensePriceNow)+', descending':'period sold out · next opens '+fmt.hm(L.licenseNextOpen)+' UTC at '+fmt.int(L.licenseNextStart)}`,
     `<b>The most recent license cleared at ${fmt.int(L.licenseLastSale)} STANDARD</b>, burned on purchase. Twenty-five are offered per ${L.auctionPeriodHours}-hour period, opening at ${fmt.int(L.licenseDayStart)} (twice the previous clearing price) and halving every ${L.licenseHalfLife||2} hours toward a floor of ${fmt.int(L.licenseFloor)}, approximately two days of one branch’s issuance. Current quote ${fmt.int(L.licensePriceNow)}. Limited to three per charter per 24 hours.`, 'sm'],
   ['Branches outstanding', fmt.int(L.branches), `${dvi('branches')} on ${yd} · ${fmt.int(Y.licCount||0)} licenses purchased`,
     `Each charter opens with one branch; licenses add up to nine more, for a maximum of ten per charter. Withdrawals and revocations destroy branches. Reconstructed from events and reconciled to the live census.`],
@@ -270,7 +277,7 @@ const kpis = [
   ['Cumulative burn', fmt.n(L.burnedForever,2), `maximum supply ${fmt.n(L.maxSupply,1)} · issued ${fmt.n(L.cumulativeIssued,1)}`,
     `License purchases and fee burns permanently reduce the 1 billion hard cap. Deposits to branches also burn tokens but are re-minted on withdrawal and are excluded here.`],
 ];
-const PRIMARY = ['Token price','Market capitalization','Market capitalization, float','Reserve assets','Fee income, '+yd,'Buybacks, '+yd,'Epoch '+L.epoch+' net flow','License payback period'];
+const PRIMARY = ['Token price','Market capitalization','Market capitalization, float','Reserve assets','Fee income, '+yd,'Buybacks, '+yd+' (STANDARD)','Epoch '+L.epoch+' net flow','License payback period'];
 const tile = k=>`<div class="kpi"><span class="i" tabindex="0">i</span><div class="tip">${k[3]}</div><div class="l">${k[0]}</div><div class="v ${k[4]||''}">${k[1]}</div><div class="s">${k[2]}</div></div>`;
 document.getElementById('kpis').innerHTML = PRIMARY.map(n=>kpis.find(k=>k[0]===n)).filter(Boolean).map(tile).join('');
 document.getElementById('kpis2').innerHTML = kpis.filter(k=>!PRIMARY.includes(k[0])).map(tile).join('');

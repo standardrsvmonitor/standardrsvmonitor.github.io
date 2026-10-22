@@ -37,7 +37,7 @@ a{color:var(--peri)}
 .wrap{padding-inline:clamp(16px,4vw,48px);padding-block:8px 64px;max-width:1440px;margin:0 auto}
 .kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-block:18px 28px}
 @media (max-width:900px){.kpis{grid-template-columns:repeat(2,1fr)}}
-.kpi{position:relative;background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:14px 16px;min-width:0}
+.kpi{position:relative;background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:14px 16px 12px;min-width:0;display:flex;flex-direction:column;min-height:104px}
 .kpi .i{position:absolute;top:10px;right:10px;width:16px;height:16px;border-radius:50%;border:1px solid var(--line2);color:var(--dim);font-size:10px;font-family:var(--mono);display:flex;align-items:center;justify-content:center;cursor:help}
 .kpi .i:hover{color:var(--gold);border-color:var(--gold2)}
 .kpi .tip{display:none;position:absolute;right:8px;top:30px;z-index:30;width:270px;background:var(--panel2);border:1px solid var(--line2);border-radius:8px;padding:10px 12px;font-size:12px;color:var(--fg);line-height:1.45;box-shadow:0 10px 28px rgba(0,0,0,.45);font-family:var(--sans)}
@@ -51,7 +51,7 @@ th.why{text-align:left}
 .kpi .l{font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:var(--muted);padding-right:22px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .kpi .v.sm{font-size:19px;padding-top:4px}
 .kpi .v{font-family:var(--mono);font-size:24px;font-weight:500;margin-top:6px;color:var(--gold);font-variant-numeric:tabular-nums;letter-spacing:-.01em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.kpi .s{font-family:var(--mono);font-size:11.5px;color:var(--muted);margin-top:4px;font-variant-numeric:tabular-nums;line-height:1.5;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.kpi .s{font-family:var(--mono);font-size:11.5px;color:var(--muted);margin-top:auto;padding-top:6px;font-variant-numeric:tabular-nums;line-height:1.5;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-height:23px}
 .up{color:var(--green)} .dn{color:var(--red)}
 .pill{display:inline-block;padding:2px 8px;border-radius:999px;font-family:var(--mono);font-size:11px;border:1px solid var(--line2);color:var(--water);vertical-align:middle}
 .pill.exp{color:var(--green);border-color:rgba(168,199,154,.5)} .pill.con{color:var(--peach);border-color:rgba(243,182,144,.5)}
@@ -59,17 +59,19 @@ h2{font-size:12px;letter-spacing:.16em;text-transform:uppercase;color:var(--lav)
 h2:after{content:"";flex:1;height:1px;background:var(--line)}
 h2 .hint{font-weight:400;letter-spacing:0;text-transform:none;color:var(--dim);font-family:var(--mono);font-size:11px}
 .grid{display:grid;grid-template-columns:repeat(12,1fr);gap:12px}
-.panel{grid-column:span 6;background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:16px 16px 12px;min-width:0}
+.panel{grid-column:span 6;background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:18px 18px 16px;min-width:0}
 .panel.w12{grid-column:span 12} .panel.w4{grid-column:span 4} .panel.w8{grid-column:span 8}
 @media (max-width:900px){.panel,.panel.w4,.panel.w8{grid-column:span 12}}
-.panel .h{display:flex;justify-content:space-between;align-items:baseline;gap:12px;flex-wrap:wrap}
-.panel .t{font-weight:600;font-size:15px}
-.panel .n{font-family:var(--mono);color:var(--gold);font-size:13px;font-variant-numeric:tabular-nums}
+.panel .h{display:flex;justify-content:space-between;align-items:center;gap:14px;flex-wrap:nowrap;min-height:26px}
+.panel .h>div:first-child{min-width:0}
+.panel .t{font-weight:600;font-size:15px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.panel .n{font-family:var(--mono);color:var(--gold);font-size:12.5px;font-variant-numeric:tabular-nums;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;flex-shrink:1;text-align:right}
+.panel .h>div:last-child{display:flex;align-items:center;gap:10px;flex-shrink:0;min-width:0}
 .panel .d{color:var(--muted);font-size:12px;margin-top:2px}
-.ch{position:relative;height:260px;margin-top:12px}
-.ch.tall{height:320px}
+.ch{position:relative;height:300px;margin-top:14px}
+.ch.tall{height:300px}
 .src{font-family:var(--mono);font-size:10.5px;color:var(--dim);margin-top:8px}
-table{width:100%;border-collapse:collapse;font-size:12.5px;margin-top:10px;font-variant-numeric:tabular-nums}
+table{width:100%;border-collapse:collapse;font-size:12.5px;margin-top:14px;font-variant-numeric:tabular-nums}
 th{font-size:10.5px;letter-spacing:.1em;text-transform:uppercase;color:var(--muted);font-weight:500;text-align:right;padding:6px 8px;border-bottom:1px solid var(--line2);white-space:nowrap}
 th:first-child,td:first-child{text-align:left}
 td{padding:7px 8px;border-bottom:1px solid var(--line);text-align:right;font-family:var(--mono);white-space:nowrap}
@@ -80,26 +82,26 @@ tr.today td{color:var(--water)}
 .pos{color:var(--green)} .neg{color:var(--red)} .mut{color:var(--muted)}
 .btn{background:transparent;border:1px solid var(--line2);color:var(--water);font-family:var(--mono);font-size:11px;padding:5px 12px;border-radius:999px;cursor:pointer}
 .btn:hover{color:var(--gold);border-color:var(--gold2)}
-.bridge{display:grid;grid-template-columns:1fr auto;gap:4px 16px;font-family:var(--mono);font-size:12.5px;margin-top:10px}
+.bridge{display:grid;grid-template-columns:1fr auto;gap:5px 16px;font-family:var(--mono);font-size:12.5px;margin-top:14px}
 .bridge div:nth-child(odd){font-family:var(--sans);color:var(--muted)} .bridge .tot{color:var(--gold);font-weight:600;border-top:1px solid var(--line2);padding-top:6px}
 .bridge .tot:nth-child(odd){color:var(--fg)}
-.stats{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-top:12px} @media (max-width:900px){.stats{grid-template-columns:repeat(2,1fr)}}
+.stats{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-top:14px} @media (max-width:900px){.stats{grid-template-columns:repeat(2,1fr)}}
 .stats>div{background:var(--panel2);border:1px solid var(--line);border-radius:8px;padding:10px 12px;min-width:0}
 .stats .l{font-size:10.5px;letter-spacing:.1em;text-transform:uppercase;color:var(--muted)}
 .stats .v{font-family:var(--mono);font-size:24px;color:var(--gold);margin-top:4px;font-variant-numeric:tabular-nums;white-space:nowrap} .stats .v small{font-size:13px;color:var(--muted);margin-left:6px}
 .stats .s{font-family:var(--mono);font-size:11px;color:var(--muted);margin-top:3px;line-height:1.45}
 .kpis.small{grid-template-columns:repeat(5,1fr);margin-top:-18px}
 @media (max-width:900px){.kpis.small{grid-template-columns:repeat(2,1fr)}}
-.kpis.small .kpi{padding:10px 12px;background:transparent}
-.kpis.small .l{font-size:10px} .kpis.small .v{font-size:17px;margin-top:3px;color:var(--fg)} .kpis.small .s{font-size:11px;-webkit-line-clamp:1}
-.panel{position:relative} .panel .h{padding-right:24px}
-.panel>.i{position:absolute;top:14px;right:14px;width:16px;height:16px;border-radius:50%;border:1px solid var(--line2);color:var(--dim);font-size:10px;font-family:var(--mono);display:flex;align-items:center;justify-content:center;cursor:help}
+.kpis.small .kpi{padding:10px 12px 8px;background:transparent;min-height:78px}
+.kpis.small .l{font-size:10px} .kpis.small .v{font-size:17px;margin-top:3px;color:var(--fg)} .kpis.small .s{font-size:11px;min-height:19px;padding-top:4px}
+.panel{position:relative} .panel .h{padding-right:26px}
+.panel>.i{position:absolute;top:23px;right:18px;width:16px;height:16px;border-radius:50%;border:1px solid var(--line2);color:var(--dim);font-size:10px;font-family:var(--mono);display:flex;align-items:center;justify-content:center;cursor:help}
 .panel>.i:hover{color:var(--gold);border-color:var(--gold2)}
-.panel>.tip{display:none;position:absolute;right:12px;top:36px;z-index:30;width:320px;background:var(--panel2);border:1px solid var(--line2);border-radius:8px;padding:10px 12px;font-size:12px;color:var(--fg);line-height:1.5;box-shadow:0 10px 28px rgba(0,0,0,.45)}
+.panel>.tip{display:none;position:absolute;right:16px;top:46px;z-index:30;width:320px;background:var(--panel2);border:1px solid var(--line2);border-radius:8px;padding:10px 12px;font-size:12px;color:var(--fg);line-height:1.5;box-shadow:0 10px 28px rgba(0,0,0,.45)}
 .panel>.i:hover + .tip,.panel>.i:focus + .tip{display:block}
 .fold{display:none} .fold.open{display:block}
-.panel .d,.panel .src{display:none} .kpi .s:empty{display:none} .panel .tip .srcnote{display:block;margin-top:6px;color:var(--muted);font-size:11px}
-.bar{display:flex;height:26px;border-radius:7px;overflow:hidden;margin-top:16px;background:var(--panel2)} .bar>div{height:100%}
+.panel .d,.panel .src{display:none} .panel .tip .srcnote{display:block;margin-top:6px;color:var(--muted);font-size:11px}
+.bar{display:flex;height:26px;border-radius:7px;overflow:hidden;margin-top:18px;background:var(--panel2)} .bar>div{height:100%}
 .legend2{display:grid;grid-template-columns:auto 1fr auto auto;gap:9px 10px;margin-top:14px;font-size:13px;align-items:center}
 .legend2 i{width:10px;height:10px;border-radius:2px;display:inline-block} .legend2 .v{font-family:var(--mono);text-align:right} .legend2 .p{font-family:var(--mono);color:var(--muted);text-align:right;min-width:40px}
 .legend2 .sub{grid-column:2/5;color:var(--muted);font-size:11.5px;margin-top:-6px}
@@ -133,7 +135,7 @@ tr.today td{color:var(--water)}
   <h2 id="market">Market <span class="hint">Shaded intervals denote contraction epochs.</span></h2>
   <div class="grid">
     <div class="panel w8"><span class="i" tabindex="0">i</span><div class="tip">Price is the GeckoTerminal daily close for the STANDARD/ETH pool. Market capitalization on minted supply corresponds to the figure quoted by DexScreener and GeckoTerminal. Market capitalization on outstanding supply excludes STANDARD held in the protocol’s own pool and in the Incentives Vault. Shaded intervals denote contraction epochs.</div><div class="h"><div><div class="t">Token price and market capitalization</div><div class="d">Daily closing price with market capitalization on minted supply and on outstanding supply.</div></div><div class="n" id="px_now"></div></div><div class="ch tall"><canvas id="c_price"></canvas></div><div class="src">Source: GeckoTerminal daily close for the STANDARD/ETH pool; STANDARD transfer logs for supply and outstanding supply; epoch-settled events for the regime.</div></div>
-    <div class="panel w4"><span class="i" tabindex="0">i</span><div class="tip">Fee income comprises token trading fees, charter auction proceeds and fee income from every reserve pool. The launch epoch is excluded because genesis-day fees distort the first week.</div><div class="h"><div><div class="t">Fee yield on market capitalization, outstanding</div><div class="d">Trailing seven-day fee income, annualized, as a share of market capitalization on outstanding supply.</div></div><div class="n" id="yield_now"></div></div><div class="ch tall"><canvas id="c_yield"></canvas></div><div class="src">Source: epoch-routed events, charter purchases, stock-pool swap fees; outstanding supply from transfer logs.</div></div>
+    <div class="panel w4"><span class="i" tabindex="0">i</span><div class="tip">Fee income comprises token trading fees, charter auction proceeds and fee income from every reserve pool. The launch epoch is excluded because genesis-day fees distort the first week.</div><div class="h"><div><div class="t">Fee yield</div><div class="d">Trailing seven-day fee income, annualized, as a share of market capitalization on outstanding supply.</div></div><div class="n" id="yield_now"></div></div><div class="ch tall"><canvas id="c_yield"></canvas></div><div class="src">Source: epoch-routed events, charter purchases, stock-pool swap fees; outstanding supply from transfer logs.</div></div>
   </div>
 
   <h2 id="income">Fee income</h2>
@@ -152,8 +154,8 @@ tr.today td{color:var(--water)}
 
   <h2 id="auctions">Auctions</h2>
   <div class="grid">
-    <div class="panel"><span class="i" tabindex="0">i</span><div class="tip">One charter is offered per 12-hour period in a descending-price auction. The price opens at three times the previous clearing price and halves every two hours toward a floor of 1 ETH until a purchase occurs. Proceeds are distributed through the fee engine. Triangles denote purchases executed through a contract.</div><div class="h"><div><div class="t">Charter auction clearing prices</div><div class="d">Clearing price of each charter sold, in ETH.</div></div><div class="n" id="ch_now"></div></div><div class="ch"><canvas id="c_charter"></canvas></div><div class="src">Source: CharterPurchased events on the auction contract; current price from the auction contract.</div></div>
-    <div class="panel"><span class="i" tabindex="0">i</span><div class="tip">Licenses open additional branches, are paid in STANDARD and are burned on purchase. Twenty-five are offered per 12-hour period (24-hour periods at launch), opening at twice the previous clearing price with a floor of approximately two days of one branch’s issuance.</div><div class="h"><div><div class="t">License auction clearing prices and volume</div><div class="d">Period close price in STANDARD and licenses sold per period.</div></div><div class="n" id="lic_now"></div></div><div class="ch"><canvas id="c_license"></canvas></div><div class="src">Source: licenses-purchased events grouped by auction period.</div></div>
+    <div class="panel"><span class="i" tabindex="0">i</span><div class="tip"><span id="ch_tip"></span> One charter is offered per 12-hour period in a descending-price auction. The price opens at three times the previous clearing price and halves every two hours toward a floor of 1 ETH until a purchase occurs. Proceeds are distributed through the fee engine. Triangles denote purchases executed through a contract.</div><div class="h"><div><div class="t">Charter auction clearing prices</div><div class="d">Clearing price of each charter sold, in ETH.</div></div><div class="n" id="ch_now"></div></div><div class="ch"><canvas id="c_charter"></canvas></div><div class="src">Source: CharterPurchased events on the auction contract; current price from the auction contract.</div></div>
+    <div class="panel"><span class="i" tabindex="0">i</span><div class="tip"><span id="lic_tip"></span> Licenses open additional branches, are paid in STANDARD and are burned on purchase. Twenty-five are offered per 12-hour period (24-hour periods at launch), opening at twice the previous clearing price with a floor of approximately two days of one branch’s issuance.</div><div class="h"><div><div class="t">License auction clearing prices and volume</div><div class="d">Period close price in STANDARD and licenses sold per period.</div></div><div class="n" id="lic_now"></div></div><div class="ch"><canvas id="c_license"></canvas></div><div class="src">Source: licenses-purchased events grouped by auction period.</div></div>
   </div>
 
   <h2 id="reserve">Reserve assets and protocol-owned liquidity</h2>
@@ -203,7 +205,8 @@ const fmt = {
 if (window.Chart) {
   Chart.defaults.color = C.muted; Chart.defaults.font.family = getComputedStyle(document.documentElement).getPropertyValue('--mono');
   Chart.defaults.font.size = 10.5; Chart.defaults.borderColor = 'rgba(190,172,232,.12)';
-  Chart.defaults.plugins.legend.labels.boxWidth = 10; Chart.defaults.plugins.legend.labels.boxHeight = 10;
+  Chart.defaults.plugins.legend.labels.boxWidth = 9; Chart.defaults.plugins.legend.labels.boxHeight = 9; Chart.defaults.plugins.legend.labels.padding = 14;
+  Chart.defaults.plugins.legend.align = 'start'; Chart.defaults.plugins.legend.labels.font = {size: 10.5};
   Chart.defaults.plugins.tooltip.backgroundColor = '#1c1829'; Chart.defaults.plugins.tooltip.borderColor = 'rgba(190,172,232,.3)'; Chart.defaults.plugins.tooltip.borderWidth = 1;
   Chart.defaults.elements.bar.borderRadius = 2; Chart.defaults.animation = false;
 }
@@ -259,9 +262,9 @@ const kpis = [
     `Daily issuance equals 700,000 multiplied by the multiplier, ${fmt.n(L.baseIssuance*L.multiplier,0)} today or ${perBranch.toFixed(1)} per branch, allocated evenly across branches. The multiplier rises 0.10 from the second consecutive positive epoch and falls 0.15 per negative epoch, within a range of 0.20 to 1.25. Pending issuance, credited but not minted: ${fmt.n(L.pending,1)}.`],
   ['License payback period', fmt.days(licPayback), ``,
     `Current license price (${fmt.int(L.licensePriceNow)} STANDARD) divided by one branch’s daily issuance (${perBranch.toFixed(1)}). The charter figure divides ${fmt.usd(L.charterPriceNow*L.ethusd,1)} by the USD value of one branch’s daily issuance. Both exclude resolution fees and future multiplier changes.`],
-  ['Charter auction, last clearing', L.charterLastSale.toFixed(2)+' ETH', `${(L.charterRemaining||0)>0?'currently '+L.charterPriceNow.toFixed(2)+' ETH, descending':'period sold out · next opens '+fmt.hm(L.charterNextOpen)+' UTC at '+L.charterNextStart.toFixed(2)+' ETH'}`,
+  ['Charter auction, last clearing', L.charterLastSale.toFixed(2)+' ETH', `${(L.charterRemaining||0)>0?'quote '+L.charterPriceNow.toFixed(2)+' ETH, descending':'next '+fmt.hm(L.charterNextOpen)+' UTC at '+L.charterNextStart.toFixed(2)+' ETH'}`,
     `<b>The most recent charter cleared at ${L.charterLastSale.toFixed(2)} ETH.</b> One charter is offered per ${L.auctionPeriodHours}-hour period in a descending-price auction: the period opened at ${L.charterDayStart.toFixed(2)} ETH (three times the previous clearing price) and the price halves every ${L.charterHalfLife||2} hours toward the ${L.charterFloor.toFixed(2)} ETH floor until a purchase occurs. After the period’s charter is sold the contract continues to quote a declining price, but no charter is available until the next period opens.`],
-  ['License auction, last clearing (STANDARD)', fmt.int(L.licenseLastSale), `${(L.licenseRemaining||0)>0?'currently '+fmt.int(L.licensePriceNow)+', descending':'period sold out · next opens '+fmt.hm(L.licenseNextOpen)+' UTC at '+fmt.int(L.licenseNextStart)}`,
+  ['License auction, last clearing (STANDARD)', fmt.int(L.licenseLastSale), `${(L.licenseRemaining||0)>0?'quote '+fmt.int(L.licensePriceNow)+', descending':'next '+fmt.hm(L.licenseNextOpen)+' UTC at '+fmt.int(L.licenseNextStart)}`,
     `<b>The most recent license cleared at ${fmt.int(L.licenseLastSale)} STANDARD</b>, burned on purchase. Twenty-five are offered per ${L.auctionPeriodHours}-hour period, opening at ${fmt.int(L.licenseDayStart)} (twice the previous clearing price) and halving every ${L.licenseHalfLife||2} hours toward a floor of ${fmt.int(L.licenseFloor)}, approximately two days of one branch’s issuance. Current quote ${fmt.int(L.licensePriceNow)}. Limited to three per charter per 24 hours.`, 'sm'],
   ['Branches outstanding', fmt.int(L.branches), `${dvi('branches')} on ${yd}`,
     `Each charter opens with one branch; licenses add up to nine more, for a maximum of ten per charter. Withdrawals and revocations destroy branches. Reconstructed from events and reconciled to the live census.`],
@@ -296,13 +299,15 @@ document.getElementById('t_epochs').innerHTML = '<tr><th>Epoch</th><th>Settled</
 
 const CH = DATA.charters;
 const chOpen = (L.charterRemaining||0)>0, licOpen = (L.licenseRemaining||0)>0;
-document.getElementById('ch_now').textContent = (chOpen ? `current quote ${L.charterPriceNow.toFixed(2)} ETH, descending` : `period sold out · next opens ${fmt.hm(L.charterNextOpen)} UTC at ${L.charterNextStart.toFixed(2)} ETH`) + ` · ${CH.length} sold · ${L.charterEthLifetime.toFixed(1)} ETH raised`;
+document.getElementById('ch_now').textContent = chOpen ? `quote ${L.charterPriceNow.toFixed(2)} ETH, descending` : `next ${fmt.hm(L.charterNextOpen)} UTC at ${L.charterNextStart.toFixed(2)} ETH`;
 new Chart(c_charter, {type:'line', data:{labels:CH.map(c=>fmt.dt(c.ts).slice(5)), datasets:[
   {label:'Clearing price (ETH)', data:CH.map(c=>c.eth), borderColor:C.gold, backgroundColor:'rgba(255,221,138,.18)', fill:true, pointRadius:CH.map(c=>c.viaContract?4:2.5), pointStyle:CH.map(c=>c.viaContract?'triangle':'circle'), pointBackgroundColor:C.gold, tension:.25},
   ...(chOpen?[{label:'Current quote', data:CH.map((c,i)=>i===CH.length-1?L.charterPriceNow:null), borderColor:C.water, pointRadius:5, pointStyle:'rectRot', pointBackgroundColor:C.water, showLine:false}]:[]),
 ]}, options:{maintainAspectRatio:false, scales:{x:{grid:{display:false}, ticks:{maxTicksLimit:9}}, y:{ticks:{callback:v=>v+' ETH'}, beginAtZero:true}}, plugins:{tooltip:{callbacks:{title:i=>{const c=CH[i[0].dataIndex];return 'charter #'+c.id+' · '+fmt.dt(c.ts)+(c.viaContract?' · via contract':'');}, afterBody:i=>{const c=CH[i[0].dataIndex];return c.buyer?'buyer '+c.buyer.slice(0,10):'';}}}}}});
+document.getElementById('ch_tip').textContent = `${CH.length} charters sold to date for ${L.charterEthLifetime.toFixed(1)} ETH; the period is ${chOpen?'open':'sold out'}.`;
 const LP = DATA.licensePeriods;
-document.getElementById('lic_now').textContent = (licOpen ? `current quote ${fmt.int(L.licensePriceNow)} STANDARD, descending · ${L.licenseRemaining} remaining` : `period sold out · next opens ${fmt.hm(L.licenseNextOpen)} UTC at ${fmt.int(L.licenseNextStart)}`) + ` · ${fmt.n(sum(LP.map(p=>p.burned)),2)} burned over ${LP.length} periods`;
+document.getElementById('lic_now').textContent = licOpen ? `quote ${fmt.int(L.licensePriceNow)}, descending · ${L.licenseRemaining} left` : `next ${fmt.hm(L.licenseNextOpen)} UTC at ${fmt.int(L.licenseNextStart)}`;
+document.getElementById('lic_tip').textContent = `${fmt.n(sum(LP.map(p=>p.burned)),2)} STANDARD burned over ${LP.length} periods; the period is ${licOpen?'open':'sold out'}.`;
 new Chart(c_license, {data:{labels:LP.map(p=>fmt.dt(p.start).slice(5)+' '+(new Date(p.start*1000).getUTCHours()<12?'am':'pm')), datasets:[
   {type:'bar', label:'Licenses sold', data:LP.map(p=>p.sold), backgroundColor:'rgba(185,166,227,.35)', yAxisID:'y1', order:2},
   {type:'line', label:'Period close price (STANDARD)', data:LP.map(p=>p.close), borderColor:C.gold, backgroundColor:C.gold, pointRadius:2, tension:.25, yAxisID:'y', order:1},
@@ -324,23 +329,23 @@ const HD = Object.keys(HIST).filter(d=>HIST[d]&&HIST[d].reserve).sort();
 const comp = (h)=>{if(!h||!h.reserve) return null; const r=h.reserve, o={}; Object.entries(h.lp||{}).forEach(([s,v])=>o[pname(s)]=v.valueUSD); o['USDG']=r.safeUsdg; o['ETH (Safe + vaults)']=(r.safeEth+r.contractionEth+r.expansionEth)*(h.ethusd||L.ethusd); o['Stock held outside pools']=r.safeStockUsd; o['Total']=r.totalUsd; return o;};
 const rc0 = comp(HIST[HD[HD.length-1]]), rc1 = comp(HIST[HD[HD.length-2]]), rc7 = comp(HIST[HD[HD.length-8]]);
 const dcell = (a,b)=>a!=null&&b!=null ? `<td class="${a-b>=0?'pos':'neg'}">${fmt.sgn(a-b)}${fmt.usd(a-b,1)}</td><td class="${a-b>=0?'pos':'neg'}">${fmt.sgn(a-b)}${fmt.pct((a-b)/b,1)}</td>` : '<td>–</td><td>–</td>';
-document.getElementById('resd_n').textContent = HD.length ? `${HD.length} observation${HD.length>1?'s':''} since ${HD[0]}` : '';
+document.getElementById('resd_n').textContent = HD.length ? `${HD.length} obs. since ${HD[0].slice(5)}` : '';
 document.getElementById('t_resd').innerHTML = rc0 ? '<tr><th>Component</th><th>'+HD[HD.length-1]+'</th><th>Share</th><th>Change, 1 day</th><th>%</th><th>Change, 7 days</th><th>%</th></tr>' +
   Object.keys(rc0).map(k=>`<tr class="${k==='Total'?'sr':''}"><td>${k}</td><td>${fmt.usd(rc0[k])}</td><td>${k==='Total'?'':fmt.pct(rc0[k]/rc0.Total,1)}</td>${dcell(rc0[k], rc1&&rc1[k])}${dcell(rc0[k], rc7&&rc7[k])}</tr>`).join('') : '';
 
 const mintAll = sum(S.map(r=>r.mint||0)), bbAll = sum(S.map(r=>r.burnBuyback||0)), depAll = sum(S.map(r=>r.depositBurn||0));
 const br = [['Genesis liquidity mint', 100e6], ['+ withdrawals minted to bankers', mintAll], ['− bought back and burned', -bbAll], ['− deposited to branches (burned to ledger)', -depAll], ['± other', L.totalSupply-(100e6+mintAll-bbAll-depAll)], ['= Minted supply (market capitalization basis)', L.totalSupply, 'tot'],
-  ['− held in the protocol\'s STANDARD/ETH pool', -L.poolStd], ['− Incentives Vault (purchased, undistributed)', -L.incentivesStd], ['= Outstanding supply', L.float, 'tot'], ['− locked in S-Bills', -L.sbillsStd], ['− team wallet', -L.teamStd], ['= Free float', L.float-L.sbillsStd-L.teamStd, 'tot'], ['Minted supply + pending issuance (not yet minted) = fully diluted', L.totalSupply+L.pending], ['Maximum supply after burns', L.maxSupply]];
+  ['− held in the protocol\'s STANDARD/ETH pool', -L.poolStd], ['− Incentives Vault (purchased, undistributed)', -L.incentivesStd], ['= Outstanding supply', L.float, 'tot'], ['− locked in S-Bills', -L.sbillsStd], ['− team wallet', -L.teamStd], ['= Free float', L.float-L.sbillsStd-L.teamStd, 'tot'], ['= Fully diluted (minted + pending issuance)', L.totalSupply+L.pending, 'tot'], ['Maximum supply after burns', L.maxSupply]];
 document.getElementById('bridge').innerHTML = br.map(b=>`<div class="${b[2]||''}">${b[0]}</div><div class="${b[2]||''}">${fmt.n(b[1],2)}</div>`).join('');
 document.getElementById('mc_now').textContent = fmt.usd(mcFloat)+' outstanding · '+fmt.usd(mcTotal)+' minted';
 document.getElementById('exitfee').textContent = 'resolution fee '+fmt.pct(L.exitFeeNow,1);
 document.getElementById('sb_now').textContent = `${fmt.int(L.branches)} branches · ${fmt.int(L.activeCharters)} charters`;
-document.getElementById('px_now').textContent = `$${L.price.toFixed(4)} · ${fmt.usd(mcTotal)} minted · ${fmt.usd(mcFloat)} outstanding`;
+document.getElementById('px_now').textContent = `${fmt.usd(mcTotal)} minted · ${fmt.usd(mcFloat)} outstanding`;
 const y7 = s7.length? inc7*365/7/mcFloat : null;
 document.getElementById('yield_now').textContent = y7!=null ? fmt.pct(y7,1)+' annualized' : '';
 document.getElementById('inc7').textContent = fmt.usd(inc7)+' last 7 days';
 const sp7v = sum(s7.map(r=>r.spVol||0)), sp7f = sum(s7.map(r=>r.spFee||0));
-document.getElementById('sp7').textContent = `${fmt.usd(sp7v,2)} volume · ${fmt.usd(sp7f,1)} fee income, trailing 7 days`;
+document.getElementById('sp7').textContent = `${fmt.usd(sp7v,2)} volume · ${fmt.usd(sp7f,1)} fees, 7 days`;
 
 // ---------- Liquidity hub business ----------
 const stockPools = pools.filter(p=>!L.lp[p].isEth), allPools = pools;
@@ -416,16 +421,16 @@ function draw(){
   ]}, options:{maintainAspectRatio:false, scales:{x:{stacked:true, grid:{display:false}}, y:{position:'left', ticks:{callback:v=>fmt.usd(v,0)}}, y1:{position:'right', stacked:true, grid:{display:false}, ticks:{callback:v=>fmt.usd(v,1)}}}, plugins:{bands:{dates:dl}, tooltip:tt(v=>fmt.usd(v,2))}}});
   mk(c_flows, {type:'bar', data:{labels:lf, datasets:[
     {label:'Withdrawals minted', data:g('mint'), backgroundColor:C.green, stack:'a'},
-    {label:'Incentives Vault distributions', data:g('fromIncentives'), backgroundColor:C.water, stack:'a'},
-    {label:'Buyback and burn (contraction vault)', data:g('burnBuyback').map(v=>-v), backgroundColor:C.red, stack:'a'},
-    {label:'POL buyback to Incentives Vault', data:g('toIncentives').map(v=>-v), backgroundColor:C.peach, stack:'a'},
-    {label:'Deposits to branches (burned to ledger)', data:g('depositBurn').map(v=>-v), backgroundColor:C.dim, stack:'a'},
-    {label:'Net market purchases from pool (sales shown negative)', data:Rf.map(r=>-((r.poolIn||0)-(r.poolOut||0))), backgroundColor:'rgba(185,166,227,.45)', stack:'b'},
+    {label:'Vault distributions', data:g('fromIncentives'), backgroundColor:C.water, stack:'a'},
+    {label:'Buyback and burn', data:g('burnBuyback').map(v=>-v), backgroundColor:C.red, stack:'a'},
+    {label:'POL buyback', data:g('toIncentives').map(v=>-v), backgroundColor:C.peach, stack:'a'},
+    {label:'Deposits (burned)', data:g('depositBurn').map(v=>-v), backgroundColor:C.dim, stack:'a'},
+    {label:'Net market purchases (sales negative)', data:Rf.map(r=>-((r.poolIn||0)-(r.poolOut||0))), backgroundColor:'rgba(185,166,227,.45)', stack:'b'},
   ]}, options:{maintainAspectRatio:false, scales:{x:{stacked:true, grid:{display:false}}, y:{stacked:true, ticks:{callback:v=>fmt.n(v,0)}}}, plugins:{bands:{dates:df}, tooltip:tt(v=>fmt.n(v,2)+' STANDARD')}}});
   const burned = (r)=>(r.licBurn||0)+(r.exitFeeBurn||0)+(r.revokeFeeBurn||0);
   mk(c_issue, {data:{labels:lf, datasets:[
     {type:'bar', label:'Issued to branches', data:g('issuance'), backgroundColor:'rgba(185,166,227,.55)', order:2},
-    {type:'bar', label:'Burned before minting (licenses and resolution fees)', data:Rf.map(burned), backgroundColor:C.gold2, order:2},
+    {type:'bar', label:'Burned before minting', data:Rf.map(burned), backgroundColor:C.gold2, order:2},
     {type:'line', label:'Net issuance', data:Rf.map(r=>(r.issuance||0)-burned(r)), borderColor:C.green, pointRadius:0, tension:.25, order:1},
   ]}, options:{maintainAspectRatio:false, scales:{x:{grid:{display:false}}, y:{ticks:{callback:v=>fmt.n(v,0)}}}, plugins:{bands:{dates:df}, tooltip:tt(v=>fmt.n(v,2)+' STANDARD')}}});
   mk(c_bank, {data:{labels:lf, datasets:[

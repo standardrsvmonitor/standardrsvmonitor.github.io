@@ -1,0 +1,6 @@
+data/dash.json
+data/*.bak*
+data/*.log
+data/cache/*.bak*
+__pycache__/
+.DS_Store

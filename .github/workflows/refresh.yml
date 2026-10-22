@@ -1,0 +1,57 @@
+name: Daily refresh
+
+on:
+  schedule:
+    - cron: "15 0 * * *"   # 00:15 UTC, after the UTC day closes
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pages: write
+  id-token: write
+
+concurrency:
+  group: refresh
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Restore incremental caches
+        uses: actions/cache@v4
+        with:
+          path: data/cache
+          key: sr-cache-${{ github.run_id }}
+          restore-keys: |
+            sr-cache-
+      - name: Pull on-chain and indexer data
+        run: python -I pull.py
+      - name: Build page
+        run: python -I build.py
+      - name: Commit daily snapshot history
+        run: |
+          git config user.name "sr-monitor-bot"
+          git config user.email "actions@users.noreply.github.com"
+          git add data/history.json
+          git diff --cached --quiet || (git commit -m "data: snapshot $(date -u +%Y-%m-%d)" && git push)
+      - name: Stage site
+        run: mkdir -p site && cp index.html site/index.html
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: site
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4

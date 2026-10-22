@@ -126,7 +126,7 @@ tr.today td{color:var(--water)}
   <img src="__HERO__" alt="Standard Reserve: the reserve dam at dusk">
   <div class="title">
     <h1><small>Standard Reserve · Robinhood Chain</small>Protocol Monitor</h1>
-    <div class="asof">as of <b>__ASOF_UTC__ UTC</b> · __ASOF_KST__ KST<br>block __TIP__ · <span id="epochpill" class="pill"></span></div>
+    <div class="asof">as of <b>__ASOF_UTC__ UTC</b><br>block __TIP__ · <span id="epochpill" class="pill"></span></div>
   </div>
 </div>
 <nav class="nav">

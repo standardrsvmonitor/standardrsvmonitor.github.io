@@ -68,8 +68,8 @@ h2 .hint{font-weight:400;letter-spacing:0;text-transform:none;color:var(--dim);f
 .panel .n{font-family:var(--mono);color:var(--gold);font-size:12.5px;font-variant-numeric:tabular-nums;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;flex-shrink:1;text-align:right}
 .panel .h>div:last-child{display:flex;align-items:center;gap:10px;flex-shrink:0;min-width:0}
 .panel .d{color:var(--muted);font-size:12px;margin-top:2px}
-.ch{position:relative;height:300px;margin-top:14px}
-.ch.tall{height:300px}
+.ch{position:relative;height:316px;margin-top:10px}
+.ch.tall{height:316px}
 .src{font-family:var(--mono);font-size:10.5px;color:var(--dim);margin-top:8px}
 table{width:100%;border-collapse:collapse;font-size:12.5px;margin-top:14px;font-variant-numeric:tabular-nums}
 th{font-size:10.5px;letter-spacing:.1em;text-transform:uppercase;color:var(--muted);font-weight:500;text-align:right;padding:6px 8px;border-bottom:1px solid var(--line2);white-space:nowrap}
@@ -206,7 +206,8 @@ if (window.Chart) {
   Chart.defaults.color = C.muted; Chart.defaults.font.family = getComputedStyle(document.documentElement).getPropertyValue('--mono');
   Chart.defaults.font.size = 10.5; Chart.defaults.borderColor = 'rgba(190,172,232,.12)';
   Chart.defaults.plugins.legend.labels.boxWidth = 9; Chart.defaults.plugins.legend.labels.boxHeight = 9; Chart.defaults.plugins.legend.labels.padding = 14;
-  Chart.defaults.plugins.legend.align = 'start'; Chart.defaults.plugins.legend.labels.font = {size: 10.5};
+  Chart.defaults.plugins.legend.align = 'start'; Chart.defaults.plugins.legend.position = 'bottom'; Chart.defaults.plugins.legend.labels.font = {size: 10.5};
+  Chart.defaults.plugins.legend.labels.padding = 18; Chart.defaults.layout.padding = {top: 8, bottom: 0};
   Chart.defaults.plugins.tooltip.backgroundColor = '#1c1829'; Chart.defaults.plugins.tooltip.borderColor = 'rgba(190,172,232,.3)'; Chart.defaults.plugins.tooltip.borderWidth = 1;
   Chart.defaults.elements.bar.borderRadius = 2; Chart.defaults.animation = false;
 }

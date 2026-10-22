@@ -258,8 +258,8 @@ const dvi = (k)=>Y[k]!=null&&Y2[k]!=null ? fmt.sgn(Y[k]-Y2[k])+fmt.int(Y[k]-Y2[k
 const kpis = [
   ['Token price', '$'+L.price.toFixed(4), `${L.priceChange24h!=null?fmt.chg(L.priceChange24h/100)+' 24h':''}${p7?' · '+fmt.chg(L.price/p7-1)+' 7d':''}`,
     `Live price from DexScreener for the STANDARD/ETH pool. The daily history uses GeckoTerminal closing prices.`],
-  ['Market capitalization', fmt.usd(mcTotal), ``,
-    `<b>The figure quoted by DexScreener and GeckoTerminal.</b> Price multiplied by ERC-20 total supply. Minted supply includes ${fmt.n(L.poolStd,1)} STANDARD held in the protocol’s own STANDARD/ETH pool and ${fmt.n(L.incentivesStd,1)} in the Incentives Vault, neither of which is available for sale.`],
+  ['Market capitalization, minted supply', fmt.usd(mcTotal), `DexScreener basis · fully diluted ${fmt.usd(L.price*(L.totalSupply+L.pending))}`,
+    `<b>Price × minted supply (${fmt.n(L.totalSupply,1)}), the figure DexScreener and GeckoTerminal show as both market cap and FDV.</b> Fully diluted on this page adds the ${fmt.n(L.pending,1)} unminted ledger balance owed to bankers, giving ${fmt.usd(L.price*(L.totalSupply+L.pending))}. Minted supply includes ${fmt.n(L.poolStd,1)} STANDARD held in the protocol’s own STANDARD/ETH pool and ${fmt.n(L.incentivesStd,1)} in the Incentives Vault, neither of which is available for sale.`],
   ['Market capitalization, outstanding', fmt.usd(mcFloat), ``,
     `<b>The equity analog of shares outstanding.</b> Minted supply less the protocol’s own pool and the Incentives Vault, the two balances the protocol cannot sell; the whitepaper calls this circulating supply. It includes ${fmt.n(L.sbillsStd,1)} locked in S-Bills and ${fmt.n(L.teamStd,1)} held by the team wallet; free float, which excludes both, is ${fmt.n(L.float-L.sbillsStd-L.teamStd,1)} (${fmt.usd(L.price*(L.float-L.sbillsStd-L.teamStd))}). Fully diluted, adding the ${fmt.n(L.pending,1)} unminted ledger balance, is ${fmt.n(L.totalSupply+L.pending,1)} (${fmt.usd(L.price*(L.totalSupply+L.pending))}).`],
   ['Reserve assets', fmt.usd(L.reserve.totalUsd), `price ${(L.price/backing).toFixed(1)}× backing`,
@@ -293,7 +293,7 @@ const kpis = [
   ['Cumulative burn', fmt.n(L.burnedForever,2), ``,
     `License purchases and fee burns permanently reduce the 1 billion hard cap. Deposits to branches also burn tokens but are re-minted on withdrawal and are excluded here.`],
 ];
-const PRIMARY = ['Token price','Market capitalization','Market capitalization, outstanding','Reserve assets','Fee income, '+yd,'Buybacks, '+yd+' (STANDARD)','Epoch '+L.epoch+' net flow','License payback period'];
+const PRIMARY = ['Token price','Market capitalization, minted supply','Market capitalization, outstanding','Reserve assets','Fee income, '+yd,'Buybacks, '+yd+' (STANDARD)','Epoch '+L.epoch+' net flow','License payback period'];
 const tile = k=>`<div class="kpi"><span class="i" tabindex="0">i</span><div class="tip">${k[3]}</div><div class="l">${k[0]}</div><div class="v ${k[4]||''}">${k[1]}</div><div class="s">${k[2]}</div></div>`;
 document.getElementById('kpis').innerHTML = PRIMARY.map(n=>kpis.find(k=>k[0]===n)).filter(Boolean).map(tile).join('');
 document.getElementById('kpis2').innerHTML = kpis.filter(k=>!PRIMARY.includes(k[0])).map(tile).join('');
@@ -437,7 +437,7 @@ function draw(){
     {label:'Buyback and burn', data:g('burnBuyback').map(v=>-v), backgroundColor:C.red, stack:'a'},
     {label:'POL buyback', data:g('toIncentives').map(v=>-v), backgroundColor:C.peach, stack:'a'},
     {label:'Deposits (converted to ledger)', data:g('depositBurn').map(v=>-v), backgroundColor:C.dim, stack:'a'},
-    {label:'Net market purchases (sales negative)', data:Rf.map(r=>-((r.poolIn||0)-(r.poolOut||0))), backgroundColor:'rgba(185,166,227,.45)', stack:'b'},
+    {label:'Net market flow vs pool (+ bought, − sold)', data:Rf.map(r=>-((r.poolIn||0)-(r.poolOut||0))), backgroundColor:'rgba(185,166,227,.45)', stack:'b'},
   ]}, options:{maintainAspectRatio:false, scales:{x:{stacked:true, grid:{display:false}}, y:{stacked:true, ticks:{callback:v=>fmt.n(v,0)}}}, plugins:{bands:{dates:df}, tooltip:tt(v=>fmt.n(v,2)+' STANDARD')}}});
   const burned = (r)=>(r.licBurn||0)+(r.exitFeeBurn||0)+(r.revokeFeeBurn||0);
   mk(c_issue, {data:{labels:lf, datasets:[

@@ -108,6 +108,7 @@ tr.today td{color:var(--water)}
 .panel>.tip{display:none;position:absolute;right:12px;top:36px;z-index:30;width:320px;background:var(--panel2);border:1px solid var(--line2);border-radius:8px;padding:10px 12px;font-size:12px;color:var(--fg);line-height:1.5;box-shadow:0 10px 28px rgba(0,0,0,.45)}
 .panel>.i:hover + .tip,.panel>.i:focus + .tip{display:block}
 .fold{display:none} .fold.open{display:block}
+.panel .d,.panel .src{display:none} .kpi .s:empty{display:none} .panel .tip .srcnote{display:block;margin-top:6px;color:var(--muted);font-size:11px}
 .bar{display:flex;height:26px;border-radius:7px;overflow:hidden;margin-top:16px;background:var(--panel2)} .bar>div{height:100%}
 .legend2{display:grid;grid-template-columns:auto 1fr auto auto;gap:9px 10px;margin-top:14px;font-size:13px;align-items:center}
 .legend2 i{width:10px;height:10px;border-radius:2px;display:inline-block} .legend2 .v{font-family:var(--mono);text-align:right} .legend2 .p{font-family:var(--mono);color:var(--muted);text-align:right;min-width:40px}
@@ -152,7 +153,7 @@ tr.today td{color:var(--water)}
     <div class="panel w12 tw"><span class="i" tabindex="0">i</span><div class="tip">Net flow is ETH purchased less ETH sold through the pool during the epoch, as reported by the hook; its sign sets the regime. Distributed total comprises trading fees and charter proceeds. The vault allocation is 70%, to the reserve in expansion and to buybacks in contraction. Multiplier after is the issuance multiplier applied from the following epoch.</div><div class="h"><div><div class="t">Epoch settlement ledger</div><div class="d">Net flow determines the regime; distributed fees are the levy on total volume and are therefore always positive.</div></div><div><button class="btn" id="fold_ep">View ledger</button></div></div><div class="fold" id="f_ep"><table id="t_epochs"></table></div></div>
   </div>
 
-  <h2 id="equity">Liquidity business <span class="hint">Progress against the stated objective: a liquidity hub for Robinhood Chain that earns from trading in protocol-owned pools.</span></h2>
+  <h2 id="equity">Liquidity business <span class="hint">Progress toward a liquidity hub that earns from trading in protocol-owned pools.</span></h2>
   <div class="grid">
     <div class="panel w12"><span class="i" tabindex="0">i</span><div class="tip">Fee income and volume are derived from PoolManager swap logs for the reserve’s pools; liquidity from StateView; competing venues from DexScreener token-pair data for the same assets on Robinhood Chain. Share of on-chain trading uses DexScreener’s 24-hour window.</div><div class="h"><div><div class="t">Trading venue economics</div><div class="d">All protocol-owned pools: three tokenized equities and ETH/USDG. Fee income reflects the reserve’s share of in-range liquidity.</div></div></div><div class="stats" id="eq_stats"></div></div>
     <div class="panel w8"><div class="h"><div><div class="t">Pool fee income by pool</div><div class="d">Daily fee income earned by the reserve in each pool, with pool fee income as a trailing seven-day share of total fee income.</div></div><div class="n" id="eq_n"></div></div><div class="ch tall"><canvas id="c_equity"></canvas></div><div class="src">Source: PoolManager swap logs; epoch-routed events; charter purchase events.</div></div>
@@ -252,39 +253,39 @@ const dvi = (k)=>Y[k]!=null&&Y2[k]!=null ? fmt.sgn(Y[k]-Y2[k])+fmt.int(Y[k]-Y2[k
 const kpis = [
   ['Token price', '$'+L.price.toFixed(4), `${L.priceChange24h!=null?fmt.chg(L.priceChange24h/100)+' 24h':''}${p7?' · '+fmt.chg(L.price/p7-1)+' 7d':''}`,
     `Live price from DexScreener for the STANDARD/ETH pool. The daily history uses GeckoTerminal closing prices.`],
-  ['Market capitalization', fmt.usd(mcTotal), `price × ${fmt.n(L.totalSupply,1)} minted supply`,
+  ['Market capitalization', fmt.usd(mcTotal), ``,
     `<b>The figure quoted by DexScreener and GeckoTerminal.</b> Price multiplied by ERC-20 total supply. Minted supply includes ${fmt.n(L.poolStd,1)} STANDARD held in the protocol’s own STANDARD/ETH pool and ${fmt.n(L.incentivesStd,1)} in the Incentives Vault, neither of which is available for sale.`],
-  ['Market capitalization, outstanding', fmt.usd(mcFloat), `price × ${fmt.n(L.float,1)} outstanding (${fmt.pct(L.float/L.totalSupply,0)} of minted)`,
+  ['Market capitalization, outstanding', fmt.usd(mcFloat), ``,
     `<b>The equity analog of shares outstanding.</b> Minted supply less the protocol’s own pool and the Incentives Vault, the two balances the protocol cannot sell. It includes ${fmt.n(L.sbillsStd,1)} locked in S-Bills and ${fmt.n(L.teamStd,1)} held by the team wallet; free float, which excludes both, is ${fmt.n(L.float-L.sbillsStd-L.teamStd,1)} (${fmt.usd(L.price*(L.float-L.sbillsStd-L.teamStd))}). Fully diluted, adding ${fmt.n(L.pending,1)} of pending issuance, is ${fmt.n(L.totalSupply+L.pending,1)} (${fmt.usd(L.price*(L.totalSupply+L.pending))}).`],
-  ['Reserve assets', fmt.usd(L.reserve.totalUsd), `$${backing.toFixed(3)} per outstanding token · price ${(L.price/backing).toFixed(1)}× backing`,
-    `ETH and USDG held in the reserve Safe, ETH in the policy vaults, tokenized equities held outside pools, and the reserve’s Uniswap v4 positions (${fmt.pct(L.reserve.lpUsd/L.reserve.totalUsd,0)} of the total). Excludes the ${fmt.eth(L.reserve.polBuybackEth,0)} S-Bill premium pot and the team wallet. Backing per minted token is $${backingTot.toFixed(3)}.`],
-  ['Fee income, '+yd, fmt.usd(inc(Y)), `7-day average ${fmt.usd(inc7/7)} per day · ${fmt.pct(incAnn/mcFloat,0)} annualized on outstanding`,
+  ['Reserve assets', fmt.usd(L.reserve.totalUsd), `price ${(L.price/backing).toFixed(1)}× backing`,
+    `ETH and USDG held in the reserve Safe, ETH in the policy vaults, tokenized equities held outside pools, and the reserve’s Uniswap v4 positions (${fmt.pct(L.reserve.lpUsd/L.reserve.totalUsd,0)} of the total). Excludes the ${fmt.eth(L.reserve.polBuybackEth,0)} S-Bill premium pot and the team wallet. Backing is $${backing.toFixed(3)} per outstanding token and $${backingTot.toFixed(3)} per minted token.`],
+  ['Fee income, '+yd, fmt.usd(inc(Y)), `7-day average ${fmt.usd(inc7/7)} per day`,
     `The most recent complete UTC day. Comprises STANDARD/ETH trading fees (each epoch’s distributed ETH allocated evenly across its days; the current epoch estimated from tax hook and fee splitter balances), charter auction proceeds, and the reserve’s fee income from its pools, in USD. Cumulative since genesis: ${fmt.usd(incLife)}.`],
-  ['Buybacks, '+yd+' (STANDARD)', fmt.n(bbY,2), `${fmt.usd(bbY*(Y.price||L.price))} · 7-day total ${fmt.n(bb7,2)}`,
+  ['Buybacks, '+yd+' (STANDARD)', fmt.n(bbY,2), `${fmt.usd(bbY*(Y.price||L.price))}`,
     `STANDARD purchased from the pool and burned by the contraction vault, plus the 15% POL allocation purchased into the Incentives Vault. ${fmt.eth(L.reserve.contractionEth,1)} remains in the contraction vault pending deployment.`],
-  ['Epoch '+L.epoch+' net flow', (L.epochNetFlow>=0?'+':'')+L.epochNetFlow.toFixed(1)+' ETH', `${fmt.eth(L.accruedEth||L.feeSplitterEth,1)} collected · settles in ${Math.floor(epLeft/3600)}h ${Math.floor(epLeft%3600/60)}m`,
+  ['Epoch '+L.epoch+' net flow', (L.epochNetFlow>=0?'+':'')+L.epochNetFlow.toFixed(1)+' ETH', `settles in ${Math.floor(epLeft/3600)}h ${Math.floor(epLeft%3600/60)}m`,
     `Net flow is ETH purchased less ETH sold through the pool so far this epoch. Its sign at settlement sets the regime: expansion allocates 70% of fees to the reserve, contraction allocates them to buybacks. Prior epoch ${fmt.sgn(L.previousEpochFlow)}${L.previousEpochFlow.toFixed(1)} ETH; consecutive positive epochs ${L.positiveStreak}. The multiplier settles to ${mUp.toFixed(2)}× if positive and ${mDn.toFixed(2)}× if negative.`],
-  ['Issuance multiplier', L.multiplier.toFixed(2)+'×', `${fmt.n(L.baseIssuance*L.multiplier,0)} per day · ${perBranch.toFixed(1)} per branch`,
-    `Daily issuance equals 700,000 multiplied by the multiplier, allocated evenly across branches. The multiplier rises 0.10 from the second consecutive positive epoch and falls 0.15 per negative epoch, within a range of 0.20 to 1.25. Pending issuance, credited but not minted: ${fmt.n(L.pending,1)}.`],
-  ['License payback period', fmt.days(licPayback), `charter at ${L.charterPriceNow.toFixed(2)} ETH: ${fmt.days(chPayback)}`,
+  ['Issuance multiplier', L.multiplier.toFixed(2)+'×', ``,
+    `Daily issuance equals 700,000 multiplied by the multiplier, ${fmt.n(L.baseIssuance*L.multiplier,0)} today or ${perBranch.toFixed(1)} per branch, allocated evenly across branches. The multiplier rises 0.10 from the second consecutive positive epoch and falls 0.15 per negative epoch, within a range of 0.20 to 1.25. Pending issuance, credited but not minted: ${fmt.n(L.pending,1)}.`],
+  ['License payback period', fmt.days(licPayback), ``,
     `Current license price (${fmt.int(L.licensePriceNow)} STANDARD) divided by one branch’s daily issuance (${perBranch.toFixed(1)}). The charter figure divides ${fmt.usd(L.charterPriceNow*L.ethusd,1)} by the USD value of one branch’s daily issuance. Both exclude resolution fees and future multiplier changes.`],
   ['Charter auction, last clearing', L.charterLastSale.toFixed(2)+' ETH', `${(L.charterRemaining||0)>0?'currently '+L.charterPriceNow.toFixed(2)+' ETH, descending':'period sold out · next opens '+fmt.hm(L.charterNextOpen)+' UTC at '+L.charterNextStart.toFixed(2)+' ETH'}`,
     `<b>The most recent charter cleared at ${L.charterLastSale.toFixed(2)} ETH.</b> One charter is offered per ${L.auctionPeriodHours}-hour period in a descending-price auction: the period opened at ${L.charterDayStart.toFixed(2)} ETH (three times the previous clearing price) and the price halves every ${L.charterHalfLife||2} hours toward the ${L.charterFloor.toFixed(2)} ETH floor until a purchase occurs. After the period’s charter is sold the contract continues to quote a declining price, but no charter is available until the next period opens.`],
   ['License auction, last clearing (STANDARD)', fmt.int(L.licenseLastSale), `${(L.licenseRemaining||0)>0?'currently '+fmt.int(L.licensePriceNow)+', descending':'period sold out · next opens '+fmt.hm(L.licenseNextOpen)+' UTC at '+fmt.int(L.licenseNextStart)}`,
     `<b>The most recent license cleared at ${fmt.int(L.licenseLastSale)} STANDARD</b>, burned on purchase. Twenty-five are offered per ${L.auctionPeriodHours}-hour period, opening at ${fmt.int(L.licenseDayStart)} (twice the previous clearing price) and halving every ${L.licenseHalfLife||2} hours toward a floor of ${fmt.int(L.licenseFloor)}, approximately two days of one branch’s issuance. Current quote ${fmt.int(L.licensePriceNow)}. Limited to three per charter per 24 hours.`, 'sm'],
-  ['Branches outstanding', fmt.int(L.branches), `${dvi('branches')} on ${yd} · ${fmt.int(Y.licCount||0)} licenses purchased`,
+  ['Branches outstanding', fmt.int(L.branches), `${dvi('branches')} on ${yd}`,
     `Each charter opens with one branch; licenses add up to nine more, for a maximum of ten per charter. Withdrawals and revocations destroy branches. Reconstructed from events and reconciled to the live census.`],
-  ['Active charters', fmt.int(L.activeCharters), `${dvi('activeCharters')} on ${yd} · ${L.burnedCharters} burned`,
+  ['Active charters', fmt.int(L.activeCharters), ``,
     `A charter is the NFT that holds a banker’s branches. ${L.chartersMinted} have been minted (1,000 founding charters plus those auctioned). A charter is burned when its last branch is destroyed; ${L.burnedCharters} have been burned. Active equals minted less burned.`],
-  ['Outstanding supply change, '+yd, dF==null?'–':fmt.sgn(dF)+fmt.n(dF,2), Y2.float?`${fmt.pct(dF/Y2.float,2)} · supply ${dv('supply')} · pool ${dv('pool')}`:'',
+  ['Outstanding supply change, '+yd, dF==null?'–':fmt.sgn(dF)+fmt.n(dF,2), Y2.float?`${fmt.pct(dF/Y2.float,2)}`:'',
     `Outstanding supply equals minted supply less the protocol pool less the Incentives Vault. It falls when tokens are sold into the pool or deposited to branches, and rises when withdrawals are minted, the market purchases from the pool, or the Incentives Vault distributes. Buybacks reduce supply and the pool equally and leave outstanding supply unchanged. On ${yd}: minted supply ${dv('supply')}, pool ${dv('pool')}, Incentives Vault ${dv('incentives')}.`],
-  ['S-Bills outstanding', fmt.n(L.sbills.locked,2), `${fmt.pct(L.sbillsStd/L.float,0)} of outstanding · ${(L.sbills.rate*100).toFixed(2)}% per 15-day term`,
+  ['S-Bills outstanding', fmt.n(L.sbills.locked,2), `${(L.sbills.rate*100).toFixed(2)}% per 15-day term`,
     `STANDARD locked in 15-day S-Bills. The term rate drifts between a ${(L.sbills.floor*100).toFixed(0)}% floor and a ${(L.sbills.ceiling*100).toFixed(0)}% ceiling with demand. Premiums are paid from a pot funded by the Incentives Vault.`],
-  ['Resolution fee', fmt.pct(L.exitFeeNow,1), `7-day withdrawal pressure ${fmt.pct(L.exitPressure7d,2)}`,
+  ['Resolution fee', fmt.pct(L.exitFeeNow,1), ``,
     `Fee applied to withdrawals: 2%, rising quadratically to 60% as seven-day withdrawals approach 10% of the ledger. Gross withdrawals over the last seven days: ${fmt.n(L.w7,1)}. Half of each fee is burned and half is recycled to remaining bankers (${fmt.n(L.cumulativeRecycled,1)} cumulative).`],
-  ['Team wallet holdings', fmt.eth(L.teamEth,0), `${fmt.n(L.teamStd,2)} STANDARD · ${dv('teamStd')} on ${yd}`,
+  ['Team wallet holdings', fmt.eth(L.teamEth,0), `${fmt.n(L.teamStd,2)} STANDARD`,
     `The wallet to which the fee splitter allocates 15% of distributed ETH. The STANDARD balance is tracked from transfer logs, so any sale into the pool would be visible here.`],
-  ['Cumulative burn', fmt.n(L.burnedForever,2), `maximum supply ${fmt.n(L.maxSupply,1)} · issued ${fmt.n(L.cumulativeIssued,1)}`,
+  ['Cumulative burn', fmt.n(L.burnedForever,2), ``,
     `License purchases and fee burns permanently reduce the 1 billion hard cap. Deposits to branches also burn tokens but are re-minted on withdrawal and are excluded here.`],
 ];
 const PRIMARY = ['Token price','Market capitalization','Market capitalization, outstanding','Reserve assets','Fee income, '+yd,'Buybacks, '+yd+' (STANDARD)','Epoch '+L.epoch+' net flow','License payback period'];
@@ -429,7 +430,7 @@ function draw(){
     {label:'Buyback and burn (contraction vault)', data:g('burnBuyback').map(v=>-v), backgroundColor:C.red, stack:'a'},
     {label:'POL buyback to Incentives Vault', data:g('toIncentives').map(v=>-v), backgroundColor:C.peach, stack:'a'},
     {label:'Deposits to branches (burned to ledger)', data:g('depositBurn').map(v=>-v), backgroundColor:C.dim, stack:'a'},
-    {label:'Net flow into pool (sales less purchases)', data:Rf.map(r=>-((r.poolIn||0)-(r.poolOut||0))), backgroundColor:'rgba(185,166,227,.45)', stack:'b'},
+    {label:'Net market purchases from pool (sales shown negative)', data:Rf.map(r=>-((r.poolIn||0)-(r.poolOut||0))), backgroundColor:'rgba(185,166,227,.45)', stack:'b'},
   ]}, options:{maintainAspectRatio:false, scales:{x:{stacked:true, grid:{display:false}}, y:{stacked:true, ticks:{callback:v=>fmt.n(v,0)}}}, plugins:{bands:{dates:df}, tooltip:tt(v=>fmt.n(v,2)+' STANDARD')}}});
   const burned = (r)=>(r.licBurn||0)+(r.exitFeeBurn||0)+(r.revokeFeeBurn||0);
   mk(c_issue, {data:{labels:lf, datasets:[
@@ -493,6 +494,9 @@ document.getElementById('t_float').innerHTML = '<tr><th>Date</th><th>Minted supp
 document.getElementById('fmore').textContent = `View all ${frows.length} days`;
 document.getElementById('fmore').addEventListener('click',()=>{const t=document.getElementById('t_float'); t.classList.toggle('open'); document.getElementById('fmore').textContent = t.classList.contains('open')?'View 10 days':`View all ${frows.length} days`;});
 [['fold_ep','f_ep','ledger'],['fold_rs','f_rs','table']].forEach(([b,f,n])=>{const B=document.getElementById(b), F=document.getElementById(f); B.addEventListener('click',()=>{F.classList.toggle('open'); B.textContent=(F.classList.contains('open')?'Hide ':'View ')+n;});});
+document.querySelectorAll('.panel').forEach(pn=>{const d=pn.querySelector(':scope > .h .d'), src=pn.querySelector(':scope > .src'); let tip=pn.querySelector(':scope > .tip');
+  if(!tip && (d||src)){const i=document.createElement('span'); i.className='i'; i.tabIndex=0; i.textContent='i'; tip=document.createElement('div'); tip.className='tip'; pn.prepend(tip); pn.prepend(i);}
+  if(tip){ if(d && d.textContent.trim() && !tip.textContent.includes(d.textContent.trim().slice(0,40))) tip.innerHTML = d.textContent.trim()+' '+tip.innerHTML; if(src && src.textContent.trim()) tip.innerHTML += '<span class="srcnote">'+src.textContent.trim()+'</span>'; }});
 const logRows = Sh.slice().reverse();
 document.getElementById('t_log').innerHTML = '<tr>'+cols.map(c=>'<th>'+c[0]+'</th>').join('')+'</tr>' +
   logRows.map((r,i)=>`<tr class="${r.date===L.date?'today':''}${i>=10?' more':''}">`+cols.map(c=>'<td>'+c[1](r)+'</td>').join('')+'</tr>').join('');

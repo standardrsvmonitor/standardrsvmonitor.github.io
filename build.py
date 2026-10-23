@@ -116,11 +116,27 @@ tr.today td{color:var(--water)}
 .legend2 i{width:10px;height:10px;border-radius:2px;display:inline-block} .legend2 .v{font-family:var(--mono);text-align:right} .legend2 .p{font-family:var(--mono);color:var(--muted);text-align:right;min-width:40px}
 .legend2 .sub{grid-column:2/5;color:var(--muted);font-size:11.5px;margin-top:-6px}
 @media (max-width:600px){
-  .kpi .l{white-space:normal;overflow:visible} .kpi .v{font-size:21px}
-  .stats .v{white-space:normal} .stats .v small{display:block;margin-left:0;margin-top:2px}
-  .nav{flex-wrap:nowrap;overflow-x:auto;scrollbar-width:none} .nav::-webkit-scrollbar{display:none} .nav a{white-space:nowrap}
-  .hero .asof{text-align:left} .panel>.tip{width:min(320px,calc(100vw - 48px))}
-  .legend2{font-size:12px} .bridge{font-size:12px}
+  .wrap{padding-inline:12px;padding-bottom:40px}
+  .hero{height:210px} .hero h1{font-size:26px} .hero h1 small{font-size:10px;letter-spacing:.1em;margin-bottom:5px}
+  .asof{font-size:11px;margin-top:8px}
+  .nav{flex-wrap:nowrap;overflow-x:auto;scrollbar-width:none;padding:6px 12px;gap:0;-webkit-mask-image:linear-gradient(90deg,#000 88%,transparent)} .nav::-webkit-scrollbar{display:none} .nav a{white-space:nowrap;padding:6px 8px}
+  .kpis{gap:8px;margin-block:14px 18px} .kpi{min-height:0;padding:12px 12px 10px} .kpi .l{font-size:9.5px;letter-spacing:.08em;white-space:normal;overflow:visible;line-height:1.3}
+  .kpi .v{font-size:20px;margin-top:4px} .kpi .s{white-space:normal;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;min-height:0;padding-top:4px;font-size:11px}
+  .kpis.small{gap:8px;margin-top:-10px} .kpis.small .kpi{min-height:0;padding:10px 12px 8px} .kpis.small .v{font-size:16px} .kpis.small .s{min-height:0}
+  h2{margin:26px 0 10px} h2 .hint{display:none}
+  .panel{padding:14px 14px 12px;border-radius:10px}
+  .panel .h{flex-wrap:wrap;align-items:flex-start;gap:4px 10px;padding-right:22px;min-height:0}
+  .panel .t{white-space:normal;line-height:1.3;font-size:14.5px}
+  .panel .h>div:last-child{width:100%;justify-content:flex-start;flex-wrap:wrap;gap:8px}
+  .panel .n{white-space:normal;text-align:left;font-size:11.5px;line-height:1.45}
+  .panel>.i{top:14px;right:12px} .panel>.tip{width:calc(100vw - 48px);right:8px;top:36px}
+  .ch{height:390px;margin-top:6px}
+  .stats{grid-template-columns:1fr 1fr;gap:8px} .stats>div{padding:9px 10px} .stats .v{font-size:20px;white-space:normal} .stats .v small{display:block;margin-left:0;margin-top:2px} .stats .s{font-size:10.5px}
+  .legend2{font-size:12px} .bridge{font-size:11.5px}
+  table{font-size:11.5px} th{font-size:9.5px;padding:5px 6px} td{padding:6px 6px}
+  .tw table th:first-child,.tw table td:first-child{position:sticky;left:0;background:var(--panel);z-index:1;box-shadow:4px 0 8px -4px rgba(0,0,0,.6)}
+  .btn{font-size:10.5px;padding:4px 10px}
+}
 }
 .foot{margin-top:40px;color:var(--dim);font-size:12px;font-family:var(--mono);line-height:1.7}
 </style>
@@ -212,12 +228,14 @@ const fmt = {
   chg:(v,d)=>v==null||isNaN(v)?'':`<span class="${v>=0?'up':'dn'}">${v>=0?'+':'−'}${(Math.abs(v)*100).toFixed(d==null?1:d)}%</span>`,
   days:(v)=>v==null||!isFinite(v)?'–':v>=365?(v/365).toFixed(1)+' yrs':Math.round(v)+' days'
 };
+const MOBILE = window.matchMedia('(max-width:600px)').matches;
 if (window.Chart) {
   Chart.defaults.color = C.muted; Chart.defaults.font.family = getComputedStyle(document.documentElement).getPropertyValue('--mono');
   Chart.defaults.font.size = 10.5; Chart.defaults.borderColor = 'rgba(190,172,232,.12)';
   Chart.defaults.plugins.legend.labels.boxWidth = 9; Chart.defaults.plugins.legend.labels.boxHeight = 9; Chart.defaults.plugins.legend.labels.padding = 14;
   Chart.defaults.plugins.legend.align = 'center'; Chart.defaults.plugins.legend.position = 'bottom'; Chart.defaults.plugins.legend.labels.font = {size: 10.5};
-  Chart.defaults.plugins.legend.labels.padding = 18; Chart.defaults.layout.padding = {top: 8, bottom: 0};
+  Chart.defaults.plugins.legend.labels.padding = MOBILE ? 10 : 18; Chart.defaults.layout.padding = {top: 8, bottom: 0};
+  if (MOBILE) { Chart.defaults.font.size = 10; Chart.defaults.plugins.legend.labels.font = {size: 10}; Chart.defaults.scale.ticks.maxTicksLimit = 6; Chart.defaults.scale.ticks.maxRotation = 45; }
   Chart.defaults.interaction = {mode: 'index', intersect: false}; Chart.defaults.plugins.tooltip.mode = 'index'; Chart.defaults.plugins.tooltip.intersect = false; Chart.defaults.elements.point.hitRadius = 12;
   Chart.defaults.plugins.tooltip.backgroundColor = '#1c1829'; Chart.defaults.plugins.tooltip.borderColor = 'rgba(190,172,232,.3)'; Chart.defaults.plugins.tooltip.borderWidth = 1;
   Chart.defaults.elements.bar.borderRadius = 2; Chart.defaults.animation = false;
@@ -329,8 +347,8 @@ const R = L.reserve;
 document.getElementById('res_tot').textContent = fmt.usd(R.totalUsd);
 const pname = (s)=>s==='ETH'?'ETH/USDG pool':s+' pool';
 const lpItems = Object.entries(L.lp).map(([s,v])=>[pname(s), v.valueUSD]);
-const resItems = [...lpItems, ['USDG', R.safeUsdg], ['ETH (Safe + vaults)', (R.safeEth+R.contractionEth+R.expansionEth)*L.ethusd], ['Stock held outside pools', R.safeStockUsd]].filter(x=>x[1]>1);
-new Chart(c_reserve, {type:'bar', data:{labels:resItems.map(x=>x[0]), datasets:[{data:resItems.map(x=>x[1]), backgroundColor:resItems.map((x,i)=>i<lpItems.length?C.peri:x[0].startsWith('USDG')?C.water:x[0].startsWith('ETH')?C.peach:C.green)}]}, options:{indexAxis:'y', maintainAspectRatio:false, plugins:{legend:{display:false}, tooltip:{callbacks:{label:c=>fmt.usd(c.parsed.x)+' · '+fmt.pct(c.parsed.x/R.totalUsd,1)}}}, scales:{x:{ticks:{callback:v=>fmt.usd(v,1)}}, y:{grid:{display:false}}}}});
+const resItems = [...lpItems, ['USDG', R.safeUsdg], ['ETH (Safe + vaults)', (R.safeEth+R.contractionEth+R.expansionEth)*L.ethusd], ['Equities outside pools', R.safeStockUsd]].filter(x=>x[1]>1);
+new Chart(c_reserve, {type:'bar', data:{labels:resItems.map(x=>x[0]), datasets:[{data:resItems.map(x=>x[1]), backgroundColor:resItems.map((x,i)=>i<lpItems.length?C.peri:x[0].startsWith('USDG')?C.water:x[0].startsWith('ETH')?C.peach:C.green)}]}, options:{indexAxis:'y', maintainAspectRatio:false, plugins:{legend:{display:false}, tooltip:{callbacks:{label:c=>fmt.usd(c.parsed.x)+' · '+fmt.pct(c.parsed.x/R.totalUsd,1)}}}, scales:{x:{ticks:{callback:v=>fmt.usd(v,1)}}, y:{grid:{display:false}, ticks:{autoSkip:false}}}}});
 
 const pools = Object.keys(L.lp);
 const ctx = L.poolCtx;
@@ -338,7 +356,7 @@ document.getElementById('t_pools').innerHTML = '<tr><th>Pool</th><th>Tokens held
   pools.map(p=>{const v=L.lp[p], c=ctx[p]||{}; const d1=Sp.slice(-1)[0]||{}; const f7=sum(s7.map(r=>r['spFee_'+p]||0));
     return `<tr><td>${pname(p)}</td><td>${fmt.n(v.stock,1)}</td><td>${fmt.usd(v.usdg,1)}</td><td>$${v.price.toFixed(2)}</td><td>${v.feeTier>=8388608?'session':(v.feeTier/1e4).toFixed(3)+'%'}</td><td>${fmt.usd(v.valueUSD)}</td><td>${fmt.usd(d1['spFee_'+p]||0,2)}</td><td>${fmt.usd(f7,2)}</td><td>${fmt.usd(d1['spVol_'+p]||0,1)}</td><td>${c.pools||'–'}</td><td>${v.share!=null?fmt.pct(v.share,0):'–'}</td><td>${c.totalLiq?fmt.pct(v.valueUSD/c.totalLiq,0):'–'}</td><td>${c.totalVol24?fmt.pct(c.srVol24/c.totalVol24,0):'–'}</td><td>${v.valueUSD?fmt.pct(f7*52/v.valueUSD,0):'–'}</td><td>${c.rank?'#'+c.rank:'–'}</td><td>${c.nextLiq?fmt.usd(c.nextLiq,1)+' · '+c.nextDex:'–'}</td></tr>`;}).join('');
 const HD = Object.keys(HIST).filter(d=>HIST[d]&&HIST[d].reserve).sort();
-const comp = (h)=>{if(!h||!h.reserve) return null; const r=h.reserve, o={}; Object.entries(h.lp||{}).forEach(([s,v])=>o[pname(s)]=v.valueUSD); o['USDG']=r.safeUsdg; o['ETH (Safe + vaults)']=(r.safeEth+r.contractionEth+r.expansionEth)*(h.ethusd||L.ethusd); o['Stock held outside pools']=r.safeStockUsd; o['Total']=r.totalUsd; return o;};
+const comp = (h)=>{if(!h||!h.reserve) return null; const r=h.reserve, o={}; Object.entries(h.lp||{}).forEach(([s,v])=>o[pname(s)]=v.valueUSD); o['USDG']=r.safeUsdg; o['ETH (Safe + vaults)']=(r.safeEth+r.contractionEth+r.expansionEth)*(h.ethusd||L.ethusd); o['Equities outside pools']=r.safeStockUsd; o['Total']=r.totalUsd; return o;};
 const rc0 = comp(HIST[HD[HD.length-1]]), rc1 = comp(HIST[HD[HD.length-2]]), rc7 = comp(HIST[HD[HD.length-8]]);
 const dcell = (a,b)=>a!=null&&b!=null ? `<td class="${a-b>=0?'pos':'neg'}">${fmt.sgn(a-b)}${fmt.usd(a-b,1)}</td><td class="${a-b>=0?'pos':'neg'}">${fmt.sgn(a-b)}${fmt.pct((a-b)/b,1)}</td>` : '<td>–</td><td>–</td>';
 document.getElementById('resd_n').textContent = HD.length ? `${HD.length} obs. since ${HD[0].slice(5)}` : '';

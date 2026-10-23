@@ -205,6 +205,7 @@ tr.today td{color:var(--water)}
   <div class="grid">
     <div class="panel"><span class="i" tabindex="0">i</span><div class="tip">Ledger balance equals issuance plus deposits plus recycled fees, less license purchases, gross withdrawals and revocations. The resolution fee, the exit fee on withdrawals, is 2% and rises to 60% as seven-day exit pressure approaches 10% of the ledger.</div><div class="h"><div><div class="t">Bank deposits, withdrawals and ledger balance</div><div class="d">Daily deposits against gross withdrawals, with bankers’ ledger balance, which is minted only on withdrawal.</div></div><div class="n" id="exitfee"></div></div><div class="ch"><canvas id="c_bank"></canvas></div><div class="src">Source: deposited and withdrawn events. Ledger = issuance + deposits + recycled fees − licenses − gross withdrawals − revocations.</div></div>
     <div class="panel"><span class="i" tabindex="0">i</span><div class="tip">A charter opens with one branch and licenses add up to nine more. Withdrawals and revocations destroy branches; a charter with no remaining branches is burned. The reconstruction matches the live census. The multiplier by epoch is shown in the epoch settlement ledger.</div><div class="h"><div><div class="t">Branch and charter count</div><div class="d">Branches outstanding and active charters, reconstructed from on-chain events.</div></div><div class="n" id="sb_now"></div></div><div class="ch"><canvas id="c_policy"></canvas></div><div class="src">Source: charter-created, branches-opened, withdrawn and revoked events.</div></div>
+    <div class="panel w12 tw"><span class="i" tabindex="0">i</span><div class="tip">Ranked by lifetime emissions from the Standard Reserve indexer leaderboard. Names are the owners’ own primary ENS names on Ethereum mainnet, looked up by reverse record and refreshed weekly; wallets without one are shown by address. Charters are soulbound, so the listed wallet is the original buyer. Share is the banker’s branches as a share of all branches. Rank change compares with the previous epoch’s lifetime ranking.</div><div class="h"><div><div class="t">Top bankers</div><div class="d">Ranked by lifetime emissions, with ENS names where the owner has set one.</div></div><div><span class="n" id="lead_n"></span> <button class="btn" id="lead_more">View top 25</button></div></div><table id="t_lead"></table></div>
     <div class="panel w12 tw" id="log"><span class="i" tabindex="0">i</span><div class="tip">Reserve value is read from on-chain balances and begins on the first day of operation. All other fields are reconstructed from protocol events and transfer logs.</div><div class="h"><div><div class="t">Daily data log</div><div class="d">One observation per UTC day since genesis. The current day is partial.</div></div><div><button class="btn" id="more">View all days</button> <button class="btn" id="csv">Export CSV</button></div></div><table id="t_log"></table></div>
   </div>
 
@@ -339,7 +340,7 @@ const LP = DATA.licensePeriods;
 document.getElementById('lic_now').textContent = licOpen ? `quote ${fmt.int(L.licensePriceNow)}, descending · ${L.licenseRemaining} left` : `next ${fmt.hm(L.licenseNextOpen)} UTC at ${fmt.int(L.licenseNextStart)}`;
 document.getElementById('lic_tip').textContent = `${fmt.n(sum(LP.map(p=>p.burned)),2)} STANDARD burned over ${LP.length} periods; the period is ${licOpen?'open':'sold out'}.`;
 new Chart(c_license, {data:{labels:LP.map(p=>fmt.dt(p.start).slice(5)+' '+(new Date(p.start*1000).getUTCHours()<12?'am':'pm')), datasets:[
-  {type:'bar', label:'Licenses sold', data:LP.map(p=>p.sold), backgroundColor:'rgba(185,166,227,.35)', yAxisID:'y1', order:2},
+  {type:'bar', label:'Licenses sold (branches opened)', data:LP.map(p=>p.sold), backgroundColor:'rgba(185,166,227,.35)', yAxisID:'y1', order:2},
   {type:'line', label:'Period close price (STANDARD)', data:LP.map(p=>p.close), borderColor:C.gold, backgroundColor:C.gold, pointRadius:2, tension:.25, yAxisID:'y', order:1},
 ]}, options:{maintainAspectRatio:false, scales:{x:{grid:{display:false}, ticks:{maxTicksLimit:10}}, y:{position:'left', ticks:{callback:v=>fmt.n(v,1)}}, y1:{position:'right', grid:{display:false}, beginAtZero:true}}, plugins:{tooltip:{callbacks:{afterTitle:i=>{const p=LP[i[0].dataIndex];return 'period '+p.day+' · burned '+fmt.n(p.burned,1)+' STANDARD';}}}}}});
 
@@ -475,6 +476,15 @@ function draw(){
 }
 draw();
 document.querySelectorAll('#range button').forEach(b=>b.addEventListener('click',()=>{N=+b.dataset.n; document.querySelectorAll('#range button').forEach(x=>x.classList.toggle('on',x===b)); draw();}));
+
+// ---------- top bankers ----------
+const LD = DATA.leaders || {rows:[]};
+document.getElementById('lead_n').textContent = `${fmt.int(LD.bankers)} bankers · ${fmt.int(LD.banks)} charters · ${fmt.int(LD.branches)} branches`;
+const who = (l)=>`<a href="https://robin.etherscan.io/address/${l.owner}" target="_blank" rel="noopener" style="color:inherit;text-decoration:none">${l.ens ? l.ens : l.owner.slice(0,6)+'…'+l.owner.slice(-4)}</a>`;
+const rkc = (l)=>l.prevRank==null ? '<td class="mut">–</td>' : (l.prevRank-l.rank===0 ? '<td class="mut">0</td>' : `<td class="${l.prevRank-l.rank>0?'pos':'neg'}">${l.prevRank-l.rank>0?'▲':'▼'} ${Math.abs(l.prevRank-l.rank)}</td>`);
+document.getElementById('t_lead').innerHTML = '<tr><th>Rank</th><th>Banker</th><th>Charters</th><th>Branches</th><th>Share of branches</th><th>Emissions, this epoch</th><th>Emissions, lifetime</th><th>Rank change</th></tr>' +
+  LD.rows.map((l,i)=>`<tr class="${i>=10?'more':''}"><td>${l.rank}</td><td style="text-align:left;font-family:var(--mono)">${who(l)}</td><td>${l.banks}</td><td>${l.branches}</td><td>${fmt.pct(l.branchShare,1)}</td><td>${fmt.n(l.epochEmissions,1)}</td><td>${fmt.n(l.lifetimeEmissions,2)}</td>${rkc(l)}</tr>`).join('');
+document.getElementById('lead_more').addEventListener('click',()=>{const t=document.getElementById('t_lead'); t.classList.toggle('open'); document.getElementById('lead_more').textContent = t.classList.contains('open')?'View top 10':'View top 25';});
 
 // ---------- daily log, since launch ----------
 const resOf = (d)=>HIST[d]&&HIST[d].reserveUsd!=null?HIST[d].reserveUsd:null;

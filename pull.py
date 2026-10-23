@@ -484,6 +484,38 @@ def main():
             "charterNextOpen": ch_next[0], "charterNextStart": ch_next[1], "licenseNextOpen": lic_next[0], "licenseNextStart": lic_next[1],
             "charterHalfLife": int(snap["charterAuction"].get("decayHalfLife", 7200)) / 3600, "licenseHalfLife": int(snap["licenseAuction"].get("decayHalfLife", 7200)) / 3600,
             "accruedEth": live_acc, "taxHookEth": bal.get("taxHook", {}).get("ETH", 0), "mStepUp": int(snap["bank"]["M_STEP_UP_WAD"]) / 1e18, "mStepDown": int(snap["bank"]["M_STEP_DOWN_WAD"]) / 1e18, "mMin": int(snap["bank"]["M_MIN_WAD"]) / 1e18, "mMax": int(snap["bank"]["M_MAX_WAD"]) / 1e18}
+    # ---------- top bankers (indexer leaderboard) with ENS primary names from Ethereum mainnet ----------
+    lbd = get(IX + f"leaderboard?chainId={CHAIN}")
+    bankers = sorted(lbd.get("bankers", []), key=lambda r: -int(r.get("lifetimeEmissions", 0)))
+    ensc = jload(os.path.join(C, "ens.json"), {})
+    ETH_RPC = "https://ethereum-rpc.publicnode.com"
+    def erpc(m, p):
+        r = urllib.request.Request(ETH_RPC, json.dumps({"jsonrpc": "2.0", "id": 1, "method": m, "params": p}).encode(), {"Content-Type": "application/json", "User-Agent": "Mozilla/5.0"})
+        return json.load(urllib.request.urlopen(r, timeout=30)).get("result")
+    def namehash(name):
+        node = b"\x00" * 32
+        for label in reversed(name.split(".")): node = keccak(node + keccak(label.encode()))
+        return node
+    def ens_name(addr):
+        node = namehash(addr[2:].lower() + ".addr.reverse")
+        res = erpc("eth_call", [{"to": "0x00000000000C2E074eC69A0dFb2997BA6C7d2e1e", "data": "0x0178b8bf" + node.hex()}, "latest"])
+        if not res or int(res, 16) == 0: return ""
+        out = erpc("eth_call", [{"to": "0x" + res[-40:], "data": "0x691f3431" + node.hex()}, "latest"])
+        if not out or len(out) < 130: return ""
+        n = int(out[66:130], 16); return bytes.fromhex(out[130:130 + 2 * n]).decode(errors="ignore")
+    leaders = []
+    tot_br = sum(int(r.get("branches", 0)) for r in bankers) or 1
+    for i, r in enumerate(bankers[:25], 1):
+        a = r["owner"].lower(); e = ensc.get(a)
+        if not e or now - e.get("t", 0) > 7 * 86400:
+            try: ensc[a] = {"name": ens_name(a), "t": now}
+            except Exception: ensc.setdefault(a, {"name": "", "t": 0})
+        leaders.append({"rank": i, "owner": a, "ens": ensc[a]["name"], "banks": int(r.get("banks", 0)), "branches": int(r.get("branches", 0)),
+                        "branchShare": int(r.get("branches", 0)) / tot_br, "epochEmissions": int(r.get("epochEmissions", 0)) / 1e18,
+                        "lifetimeEmissions": int(r.get("lifetimeEmissions", 0)) / 1e18, "topBank": r.get("topBank"), "prevRank": (r.get("previousRank") or {}).get("lifetime")})
+    jsave(os.path.join(C, "ens.json"), ensc)
+    out["leaders"] = {"rows": leaders, "bankers": len(bankers), "banks": sum(int(r.get("banks", 0)) for r in bankers), "branches": tot_br}
+    log("leaderboard", len(bankers), "bankers; ENS names in top 25:", sum(1 for l in leaders if l["ens"]))
     hist = jload(os.path.join(D, "history.json"), {})
     hist[today] = {k: v for k, v in live.items() if k not in ("poolCtx", "balances", "lp", "sbills", "reserve")}
     hist[today]["lp"] = {s: {"stock": v["stock"], "usdg": v["usdg"], "valueUSD": v["valueUSD"], "price": v["price"]} for s, v in lp.items()}

@@ -1,10 +1,8 @@
 name: Daily refresh
 
 on:
-  schedule:                 # GitHub cron is best-effort and can skip a slot; three slots make a missed day unlikely
-    - cron: "15 0 * * *"    # 00:15 UTC, after the UTC day closes
-    - cron: "45 0 * * *"
-    - cron: "30 1 * * *"
+  schedule:
+    - cron: "7 * * * *"    # hourly; the job exits early once the page already carries today's UTC date
   workflow_dispatch:
 
 permissions:
@@ -20,12 +18,26 @@ jobs:
   build:
     runs-on: ubuntu-latest
     timeout-minutes: 120
+    outputs:
+      run: ${{ steps.chk.outputs.run }}
     steps:
+      - name: Skip if the live page is already from today
+        id: chk
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then echo "run=1" >> "$GITHUB_OUTPUT"; exit 0; fi
+          if curl -fsS "https://standardrsvmonitor.github.io/?t=$(date +%s)" | grep -q "compiled $(date -u +%F)"; then
+            echo "already refreshed today"; echo "run=0" >> "$GITHUB_OUTPUT"
+          else
+            echo "run=1" >> "$GITHUB_OUTPUT"
+          fi
       - uses: actions/checkout@v4
+        if: steps.chk.outputs.run == '1'
       - uses: actions/setup-python@v5
+        if: steps.chk.outputs.run == '1'
         with:
           python-version: "3.12"
       - name: Restore incremental caches
+        if: steps.chk.outputs.run == '1'
         uses: actions/cache@v4
         with:
           path: data/cache
@@ -33,23 +45,29 @@ jobs:
           restore-keys: |
             sr-cache-
       - name: Pull on-chain and indexer data
+        if: steps.chk.outputs.run == '1'
         run: python -I pull.py
       - name: Build page
+        if: steps.chk.outputs.run == '1'
         run: python -I build.py
       - name: Commit daily snapshot history
+        if: steps.chk.outputs.run == '1'
         run: |
           git config user.name "sr-monitor-bot"
           git config user.email "actions@users.noreply.github.com"
           git add data/history.json
-          git diff --cached --quiet || (git commit -m "data: snapshot $(date -u +%Y-%m-%d)" && git push)
+          git diff --cached --quiet || (git commit -m "data: snapshot $(date -u +%Y-%m-%d)" && git pull --rebase -X theirs origin main && git push)
       - name: Stage site
+        if: steps.chk.outputs.run == '1'
         run: mkdir -p site && cp index.html site/index.html
       - uses: actions/upload-pages-artifact@v3
+        if: steps.chk.outputs.run == '1'
         with:
           path: site
 
   deploy:
     needs: build
+    if: needs.build.outputs.run == '1'
     runs-on: ubuntu-latest
     environment:
       name: github-pages

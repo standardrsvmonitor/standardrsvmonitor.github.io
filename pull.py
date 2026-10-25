@@ -354,6 +354,7 @@ def main():
         b, s, usdg, fee, snd = r[:5]; share = r[5] if len(r) > 5 else 1.0; d = day(T(b))
         days[d]["spVol"] += usdg; days[d]["spFee"] += usdg * fee / 1e6 * share; days[d]["spFeeGross"] += usdg * fee / 1e6; days[d]["spSwaps"] += 1
         days[d]["spVol_" + s] += usdg; days[d]["spFee_" + s] += usdg * fee / 1e6 * share; days[d]["spFeeGross_" + s] += usdg * fee / 1e6
+        days[d]["spVolMine"] += usdg * share; days[d]["spVolMine_" + s] += usdg * share   # volume served by the reserve's own in-range liquidity
         if fee == 0: days[d]["spVolZeroFee"] += usdg
     # issuance accrued per day (ledger), by epoch multiplier
     d0 = dt.datetime.utcfromtimestamp(genesis_ts).date(); dn = dt.datetime.utcfromtimestamp(now).date()

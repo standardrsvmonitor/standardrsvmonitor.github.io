@@ -284,7 +284,7 @@ const kpis = [
   ['Market cap, minted supply', fmt.usd(mcTotal), ``,
     `<b>Price × minted supply (${fmt.n(L.totalSupply,1)}), the figure DexScreener and GeckoTerminal show as both market cap and FDV.</b> Fully diluted on this page adds the ${fmt.n(L.pending,1)} unminted ledger balance owed to bankers, giving ${fmt.usd(L.price*(L.totalSupply+L.pending))}. Minted supply includes ${fmt.n(L.poolStd,1)} STANDARD held in the protocol’s own STANDARD/ETH pool and ${fmt.n(L.incentivesStd,1)} in the Incentives Vault, neither of which is available for sale.`],
   ['Market cap, outstanding', fmt.usd(mcFloat), ``,
-    `<b>The equity analog of shares outstanding.</b> Minted supply less the protocol’s own pool and the Incentives Vault, the two balances the protocol cannot sell; the whitepaper calls this circulating supply. It includes ${fmt.n(L.sbillsStd,1)} locked in S-Bills and ${fmt.n(L.teamStd,1)} held by the team wallet; free float, which excludes both, is ${fmt.n(L.float-L.sbillsStd-L.teamStd,1)} (${fmt.usd(L.price*(L.float-L.sbillsStd-L.teamStd))}). Fully diluted, adding the ${fmt.n(L.pending,1)} unminted ledger balance, is ${fmt.n(L.totalSupply+L.pending,1)} (${fmt.usd(L.price*(L.totalSupply+L.pending))}).`],
+    `<b>The equity analog of shares outstanding.</b> Minted supply less the protocol’s own pool and the Incentives Vault, the two balances the protocol cannot sell; the whitepaper calls this circulating supply. It includes ${fmt.n(L.sbills.locked||0,1)} of S-Bill principal plus the ${fmt.n(Math.max(0,L.sbillsStd-(L.sbills.locked||0)),1)} premium pot held by the S-Bills contract, and ${fmt.n(L.teamStd,1)} held by the team wallet; free float, which excludes all three, is ${fmt.n(L.float-L.sbillsStd-L.teamStd,1)} (${fmt.usd(L.price*(L.float-L.sbillsStd-L.teamStd))}). Fully diluted, adding the ${fmt.n(L.pending,1)} unminted ledger balance, is ${fmt.n(L.totalSupply+L.pending,1)} (${fmt.usd(L.price*(L.totalSupply+L.pending))}).`],
   ['Reserve assets', fmt.usd(L.reserve.totalUsd), `price ${(L.price/backing).toFixed(1)}× backing`,
     `ETH and USDG held in the reserve Safe, ETH in the policy vaults, tokenized equities held outside pools, and the reserve’s Uniswap v4 positions (${fmt.pct(L.reserve.lpUsd/L.reserve.totalUsd,0)} of the total). Excludes the ${fmt.eth(L.reserve.polBuybackEth,0)} S-Bill premium pot and the team wallet. Backing is $${backing.toFixed(3)} per outstanding token and $${backingTot.toFixed(3)} per minted token.`],
   ['Fee income, '+yd, fmt.usd(inc(Y)), `7-day average ${fmt.usd(inc7/7)} per day`,
@@ -370,9 +370,10 @@ document.getElementById('resd_n').textContent = HD.length ? `${HD.length} obs. s
 document.getElementById('t_resd').innerHTML = rc0 ? '<tr><th>Component</th><th>'+HD[HD.length-1]+'</th><th>Share</th><th>Change, 1 day</th><th>%</th><th>Change, 7 days</th><th>%</th></tr>' +
   Object.keys(rc0).map(k=>`<tr class="${k==='Total'?'sr':''}"><td>${k}</td><td>${fmt.usd(rc0[k])}</td><td>${k==='Total'?'':fmt.pct(rc0[k]/rc0.Total,1)}</td>${dcell(rc0[k], rc1&&rc1[k])}${dcell(rc0[k], rc7&&rc7[k])}</tr>`).join('') : '';
 
-const mintAll = sum(S.map(r=>r.mint||0)), bbAll = sum(S.map(r=>r.burnBuyback||0)), depAll = sum(S.map(r=>r.depositBurn||0));
-const br = [['Genesis liquidity mint', 100e6], ['+ withdrawals minted to bankers', mintAll], ['− bought back and burned', -bbAll], ['− deposited to branches (converted to ledger)', -depAll], ['± other', L.totalSupply-(100e6+mintAll-bbAll-depAll)], ['= Minted supply (market capitalization basis)', L.totalSupply, 'tot'],
-  ['− held in the protocol\'s STANDARD/ETH pool', -L.poolStd], ['− Incentives Vault (purchased, undistributed)', -L.incentivesStd], ['= Outstanding supply', L.float, 'tot'], ['− locked in S-Bills', -L.sbillsStd], ['− team wallet', -L.teamStd], ['= Free float', L.float-L.sbillsStd-L.teamStd, 'tot']];
+const mintAll = sum(S.map(r=>r.mint||0)), bbAll = sum(S.map(r=>r.burnBuyback||0)), depAll = sum(S.map(r=>r.depositBurn||0)), othAll = sum(S.map(r=>r.burnOther||0));
+const sbPot = Math.max(0, L.sbillsStd - (L.sbills.locked||0));
+const br = [['Genesis liquidity mint', 100e6], ['+ withdrawals minted to bankers', mintAll], ['− bought back and burned', -bbAll], ['− other token burns', -othAll], ['− deposited to branches (converted to ledger)', -depAll], ['± unclassified', L.totalSupply-(100e6+mintAll-bbAll-othAll-depAll)], ['= Minted supply (market capitalization basis)', L.totalSupply, 'tot'],
+  ['− held in the protocol\'s STANDARD/ETH pool', -L.poolStd], ['− Incentives Vault (purchased, undistributed)', -L.incentivesStd], ['= Outstanding supply', L.float, 'tot'], ['− S-Bill principal, locked', -(L.sbills.locked||0)], ['− S-Bill premium pot, held by the S-Bills contract', -sbPot], ['− team wallet', -L.teamStd], ['= Free float', L.float-L.sbillsStd-L.teamStd, 'tot']];
 document.getElementById('bridge').innerHTML = br.map(b=>`<div class="${b[2]||''}">${b[0]}</div><div class="${b[2]||''}">${fmt.n(b[1],2)}</div>`).join('');
 function renderHeads(){   // panel header figures that depend on live state; re-run by goLive()
   const chOpen=(L.charterRemaining||0)>0, licOpen=(L.licenseRemaining||0)>0;
@@ -461,7 +462,7 @@ function draw(){
   ]}, options:{maintainAspectRatio:false, scales:{x:{stacked:true, grid:{display:false}}, y:{stacked:true, ticks:{callback:v=>fmt.usd(v,1)}}, y1:{position:'right', grid:{display:false}, ticks:{callback:v=>fmt.usd(v,1)}}, y2:{display:false, min:0, max:1}}, plugins:{tooltip:{callbacks:{label:c=>c.dataset.yAxisID==='y2'?c.dataset.label+': '+fmt.pct(c.parsed.y,0):c.dataset.label+': '+fmt.usd(c.parsed.y,1),
     afterBody:items=>{const r=Rf[items[0].dataIndex]; return pools.filter(p=>(r['spVol_'+p]||0)>0).map(p=>{const g=r['spVol_'+p]||0, m=r['spVolMine_'+p]!=null?r['spVolMine_'+p]:g; return `${pname(p)}: pool total ${fmt.usd(g,1)}, served by the reserve ${fmt.pct(g?m/g:null,0)}`;});}}}}}});
   const fd = (r)=>(r.supply!=null&&r.pending!=null) ? r.supply+r.pending : null;   // minted plus ledger
-  const burnLedger = (r)=>(r.licBurn||0)+(r.exitFeeBurn||0)+(r.revokeFeeBurn||0), burnAll = (r)=>burnLedger(r)+(r.burnBuyback||0);
+  const burnLedger = (r)=>(r.licBurn||0)+(r.exitFeeBurn||0)+(r.revokeFeeBurn||0), burnTokens = (r)=>(r.burnBuyback||0)+(r.burnOther||0), burnAll = (r)=>burnLedger(r)+burnTokens(r);
   const dFdAll = Sh.map((r,i)=> i>0&&fd(r)!=null&&fd(Sh[i-1])!=null ? fd(r)-fd(Sh[i-1]) : null), dFd = last(dFdAll, N);
   mk(c_mc, {type:'line', data:{labels:ll, datasets:[
     {label:'Outstanding supply', data:Rl.map(r=>r.float), borderColor:C.gold, backgroundColor:'rgba(255,221,138,.38)', fill:'origin', borderWidth:1.5, pointRadius:0, tension:.25},
@@ -473,6 +474,7 @@ function draw(){
     {label:'Withdrawals minted', data:g('mint'), backgroundColor:C.green, stack:'a'},
     {label:'Incentives Vault distributions', data:g('fromIncentives'), backgroundColor:C.water, stack:'a'},
     {label:'Buyback and burn', data:g('burnBuyback').map(v=>-v), backgroundColor:C.red, stack:'a'},
+    {label:'Other token burns', data:g('burnOther').map(v=>-v), backgroundColor:C.rose, stack:'a'},
     {label:'POL buyback', data:g('toIncentives').map(v=>-v), backgroundColor:C.peach, stack:'a'},
     {label:'Deposits (converted to ledger)', data:g('depositBurn').map(v=>-v), backgroundColor:C.dim, stack:'a'},
     {label:'Net market flow vs pool (+ bought, − sold)', data:Rf.map(r=>-((r.poolIn||0)-(r.poolOut||0))), backgroundColor:'rgba(185,166,227,.45)', stack:'b'},
@@ -482,7 +484,7 @@ function draw(){
   mk(c_issue, {data:{labels:lf, datasets:[
     {type:'bar', label:'Expansion licenses', data:g('licBurn'), backgroundColor:C.gold2, stack:'b', yAxisID:'y', order:3},
     {type:'bar', label:'Resolution and revocation fees, burned half', data:Rf.map(r=>(r.exitFeeBurn||0)+(r.revokeFeeBurn||0)), backgroundColor:C.peach, stack:'b', yAxisID:'y', order:3},
-    {type:'bar', label:'Buybacks and position fees', data:g('burnBuyback'), backgroundColor:C.red, stack:'b', yAxisID:'y', order:3},
+    {type:'bar', label:'Buybacks, position fees and other token burns', data:Rf.map(burnTokens), backgroundColor:C.red, stack:'b', yAxisID:'y', order:3},
     {type:'line', label:'Cumulative burned, share of the 1B cap', data:cumW.map(v=>v/1e9), borderColor:C.water, pointRadius:0, tension:.25, yAxisID:'y1', order:1},
   ]}, options:{maintainAspectRatio:false, scales:{x:{stacked:true, grid:{display:false}}, y:{stacked:true, ticks:{callback:v=>fmt.n(v,0)}}, y1:{position:'right', grid:{display:false}, ticks:{callback:v=>fmt.pct(v,1)}}}, plugins:{bands:{dates:df}, tooltip:{callbacks:{label:c=>c.dataset.yAxisID==='y1'?c.dataset.label+': '+fmt.pct(c.parsed.y,2):c.dataset.label+': '+fmt.n(c.parsed.y,2)+' STANDARD',
     afterBody:items=>{const i=items[0].dataIndex; return [`burned that day ${fmt.n(burnAll(Rf[i]),2)} · cumulative ${fmt.n(cumW[i],2)} STANDARD`];}}}}}});
@@ -543,12 +545,12 @@ const cols = [
   ['Regime', r=>regime[r.date]===undefined?'–':regime[r.date]?'exp':'con', r=>regime[r.date]===undefined?'':regime[r.date]?'expansion':'contraction'],
 ];
 // supply / pool / float table
-const fl = (r,i)=>{const p=i>0?Sh[i-1]:null; const mint=r.mint||0, dep=r.depositBurn||0, bb=r.burnBuyback||0, toInc=r.toIncentives||0, fromInc=r.fromIncentives||0;
+const fl = (r,i)=>{const p=i>0?Sh[i-1]:null; const mint=r.mint||0, dep=r.depositBurn||0, bb=(r.burnBuyback||0)+(r.burnOther||0), toInc=r.toIncentives||0, fromInc=r.fromIncentives||0;
   const mkt=(r.poolIn||0)-((r.poolOut||0)-toInc-bb), prot=toInc+bb;
   return {p, dS:p?r.supply-p.supply:null, dP:p?r.pool-p.pool:null, dI:p?r.incentives-p.incentives:null, dF:p?r.float-p.float:null, mint, dep, bb, mkt, prot};};
 const frows = Sh.map((r,i)=>({r, ...fl(r,i)})).reverse();
 const sc = (v,inv)=>v==null?'<td>–</td>':`<td class="${(inv?-v:v)>0?'pos':(inv?-v:v)<0?'neg':'mut'}">${Math.abs(v)<0.5?'0':fmt.sgn(v)+fmt.n(v,2)}</td>`;
-document.getElementById('t_float').innerHTML = '<tr><th>Date</th><th>Minted supply</th><th>Change</th><th>+ Withdrawals minted</th><th>− Deposits (to ledger)</th><th>− Buybacks burned</th><th>Protocol pool</th><th>Change</th><th>+ Net market sales</th><th>− Buyback purchases</th><th>Incentives Vault change</th><th>Outstanding</th><th>Change</th><th>%</th><th>Price</th></tr>' +
+document.getElementById('t_float').innerHTML = '<tr><th>Date</th><th>Minted supply</th><th>Change</th><th>+ Withdrawals minted</th><th>− Deposits (to ledger)</th><th>− Burned (buybacks and other)</th><th>Protocol pool</th><th>Change</th><th>+ Net market sales</th><th>− Buyback purchases</th><th>Incentives Vault change</th><th>Outstanding</th><th>Change</th><th>%</th><th>Price</th></tr>' +
   frows.map((x,i)=>`<tr class="${x.r.date===L.date?'today':''}${i>=10?' more':''}"><td>${x.r.date}</td><td>${fmt.n(x.r.supply,2)}</td>${sc(x.dS)}${sc(x.mint)}${sc(-x.dep)}${sc(-x.bb)}<td>${fmt.n(x.r.pool,2)}</td>${sc(x.dP,true)}${sc(x.mkt,true)}${sc(-x.prot,true)}${sc(x.dI,true)}<td>${fmt.n(x.r.float,2)}</td>${sc(x.dF)}<td class="${x.dF>0?'pos':x.dF<0?'neg':''}">${x.p?fmt.sgn(x.dF)+fmt.pct(x.dF/x.p.float,2):'–'}</td><td>${x.r.price!=null?'$'+x.r.price.toFixed(4):'–'}</td></tr>`).join('');
 document.getElementById('fmore').textContent = `View all ${frows.length} days`;
 document.getElementById('fmore').addEventListener('click',()=>{const t=document.getElementById('t_float'); t.classList.toggle('open'); document.getElementById('fmore').textContent = t.classList.contains('open')?'View 10 days':`View all ${frows.length} days`;});

@@ -419,7 +419,8 @@ def main():
                "mcTotal": p * T_hist[d] if p else None, "mcFloat": p * flt if p else None}
         row.update({k: round(v, 6) for k, v in x.items()})
         row["burnBuyback"] = round(x["burn_contraction"] + x["burn_polManager"] + x["burn_sbills"], 6)   # tokens bought back and burned
-        row["depositBurn"] = round(x["burn_other"] + x["burn_bank"], 6)                                 # deposits converted to ledger (burned)
+        row["depositBurn"] = round(x["deposits"], 6)                                                     # deposits converted to ledger (burned), from deposited events
+        row["burnOther"] = round(max(0.0, x["burn_other"] + x["burn_bank"] - x["deposits"]), 6)          # wallet burns that are not deposits (counted in the token's burnedForever)
         row.update({"pending": pend_hist[d], "exitFee": fee_hist[d], "sbRate": rate_hist[d], "teamStd": tm_hist[d],
                     "activeCharters": cen_hist[d][0], "burnedCharters": cen_hist[d][1], "branches": cen_hist[d][2]})
         if prev and p and prev.get("price"):

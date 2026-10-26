@@ -145,7 +145,7 @@ tr.today td{color:var(--water)}
   <img src="__HERO__" alt="Standard Reserve: the reserve dam at dusk">
   <div class="title">
     <div><h1><small>Standard Reserve · Robinhood Chain</small>Protocol Monitor</h1>
-    <div class="asof">As of <b>__ASOF_UTC__ UTC</b> · block __TIP__ · <span id="epochpill" class="pill"></span></div></div>
+    <div class="asof" id="asof">As of <b>__ASOF_UTC__ UTC</b> · block __TIP__ · <span id="epochpill" class="pill"></span></div></div>
   </div>
 </div>
 <nav class="nav">
@@ -264,18 +264,20 @@ if (window.Chart) Chart.register(bands);
 const inc7 = sum(s7.map(inc)), incAnn = inc7*365/7, incLife = sum(S.map(r=>(r.routedEth||0)*ethOf(r)+(r.spFee||0)));
 const Y = Sp[Sp.length-1]||{}, Y2 = Sp[Sp.length-2]||{};      // yesterday (last complete UTC day) and the day before
 const yd = Y.date ? new Date(Y.date+'T00:00:00Z').toLocaleDateString('en-GB',{day:'numeric',month:'short',timeZone:'UTC'}) : '';
-const mcFloat = L.price*L.float, mcTotal = L.price*L.totalSupply;
-const epLeft = Math.max(0, L.epochEnd - DATA.pulledAt);
-const backing = L.reserve.totalUsd/L.float, backingTot = L.reserve.totalUsd/L.totalSupply;
-const perBranch = L.baseIssuance*L.multiplier/L.branches;
-const licPayback = L.licensePriceNow/perBranch, chPayback = L.charterPriceNow*L.ethusd/(perBranch*L.price);
+let NOWTS = DATA.pulledAt, LIVE = false;   // NOWTS and L are refreshed in place by goLive() from the indexer and DexScreener
+let mcFloat, mcTotal, epLeft, backing, backingTot, perBranch, licPayback, chPayback, mUp, mDn, burnShare, capRemoved;
+const derive = ()=>{ mcFloat = L.price*L.float; mcTotal = L.price*L.totalSupply; epLeft = Math.max(0, L.epochEnd - NOWTS);
+  backing = L.reserve.totalUsd/L.float; backingTot = L.reserve.totalUsd/L.totalSupply; perBranch = L.baseIssuance*L.multiplier/L.branches;
+  licPayback = L.licensePriceNow/perBranch; chPayback = L.charterPriceNow*L.ethusd/(perBranch*L.price);
+  mUp = (L.positiveStreak||0)+1>=2 ? Math.min(L.mMax, L.multiplier+L.mStepUp) : L.multiplier; mDn = Math.max(L.mMin, L.multiplier-L.mStepDown);
+  burnShare = L.burnedForever/(L.totalSupply+L.burnedForever); capRemoved = 1e9-L.maxSupply; };
+derive();
 const bbY = (Y.burnBuyback||0)+(Y.toIncentives||0), bb7 = sum(s7.map(r=>(r.burnBuyback||0)+(r.toIncentives||0)));
-const mUp = (L.positiveStreak||0)+1>=2 ? Math.min(L.mMax, L.multiplier+L.mStepUp) : L.multiplier, mDn = Math.max(L.mMin, L.multiplier-L.mStepDown);
-const dF = Y.float!=null&&Y2.float!=null ? Y.float-Y2.float : null, p7 = back('price',7);
-const burnShare = L.burnedForever/(L.totalSupply+L.burnedForever), capRemoved = 1e9-L.maxSupply;
-const ledgerRemoved = sum(S.map(r=>(r.licBurn||0)+(r.exitFeeBurn||0)+(r.revokeFeeBurn||0)));
+const dF =Y.float!=null&&Y2.float!=null ? Y.float-Y2.float : null, p7 = back('price',7);
+const ledgerRemoved =sum(S.map(r=>(r.licBurn||0)+(r.exitFeeBurn||0)+(r.revokeFeeBurn||0)));
 const dv = (k)=>Y[k]!=null&&Y2[k]!=null ? fmt.sgn(Y[k]-Y2[k])+fmt.n(Y[k]-Y2[k],2) : '–';
 const dvi = (k)=>Y[k]!=null&&Y2[k]!=null ? fmt.sgn(Y[k]-Y2[k])+fmt.int(Y[k]-Y2[k]) : '–';
+function renderKpis(){ derive();
 const kpis = [
   ['Token price', '$'+L.price.toFixed(4), `${L.priceChange24h!=null?fmt.chg(L.priceChange24h/100)+' 24h':''}${p7?' · '+fmt.chg(L.price/p7-1)+' 7d':''}`,
     `Live price from DexScreener for the STANDARD/ETH pool. The daily history uses GeckoTerminal closing prices.`],
@@ -311,8 +313,8 @@ const kpis = [
     `The whitepaper’s resolution fee, the exit fee charged on withdrawals: 2%, rising quadratically to 60% as seven-day exit pressure approaches 10% of the ledger. Gross withdrawals over the last seven days: ${fmt.n(L.w7,1)}. Half of each fee is burned and half is recycled to remaining bankers (${fmt.n(L.cumulativeRecycled,1)} cumulative).`],
   ['Team wallet holdings', fmt.eth(L.teamEth,0), `${fmt.n(L.teamStd,2)} STANDARD`,
     `The wallet to which the fee splitter routes 15% of fee ETH. The STANDARD balance is tracked from transfer logs, so any sale into the pool would be visible here.`],
-  ['Supply burned', fmt.pct(burnShare,1), `${fmt.n(L.burnedForever,2)} tokens · ${fmt.n(capRemoved,2)} off the hard cap (${fmt.pct(capRemoved/1e9,1)})`,
-    `<b>Tokens burned as a share of minted supply plus tokens burned.</b> Burned tokens are open-market buybacks and the protocol position’s token-side fees, the whitepaper’s token burns (${fmt.n(L.burnedForever,2)} to date). Deposits to branches are conversions that re-enter the ledger and are excluded. Ledger removals that are never minted, expansion licenses and the burned half of resolution and revocation fees (${fmt.n(ledgerRemoved,2)} from events), also reduce the 1 billion hard cap: ${fmt.n(capRemoved,2)} has been removed in total, leaving a maximum supply of ${fmt.n(L.maxSupply,2)}.`],
+  ['Burned forever', fmt.n(capRemoved,2), `${fmt.pct(capRemoved/1e9,1)} of the 1B hard cap · ${fmt.n(L.burnedForever,2)} bought back and burned`,
+    `<b>The protocol’s own “Burned forever” figure: the 1 billion hard cap less the current maximum supply (${fmt.n(L.maxSupply,2)}).</b> It comprises tokens burned, open-market buybacks and the protocol position’s token-side fees (${fmt.n(L.burnedForever,2)}, ${fmt.pct(burnShare,1)} of minted supply plus tokens burned), and ledger removals that are never minted, expansion licenses and the burned half of resolution and revocation fees (${fmt.n(capRemoved-L.burnedForever,2)}). Deposits to branches are conversions that re-enter the ledger and are excluded.`],
 ];
 const PRIMARY = ['Token price','Market cap, minted supply','Market cap, outstanding','Reserve assets','Fee income, '+yd,'Buybacks, '+yd+' (STANDARD)','Epoch '+L.epoch+' net flow','License payback period'];
 const tile = k=>`<div class="kpi"><span class="i" tabindex="0">i</span><div class="tip">${k[3]}</div><div class="l">${k[0]}</div><div class="v ${k[4]||''}">${k[1]}</div><div class="s">${k[2]}</div></div>`;
@@ -320,6 +322,8 @@ document.getElementById('kpis').innerHTML = PRIMARY.map(n=>kpis.find(k=>k[0]===n
 document.getElementById('kpis2').innerHTML = kpis.filter(k=>!PRIMARY.includes(k[0])).map(tile).join('');
 document.getElementById('epochpill').textContent = `Epoch ${L.epoch} · ${L.epochNetFlow>=0?'expansion':'contraction'} to date`;
 document.getElementById('epochpill').className = 'pill '+(L.epochNetFlow>=0?'exp':'con');
+}
+renderKpis();
 
 // ---------- static charts (not range dependent) ----------
 const E2 = E.filter(e=>e.epoch>1);
@@ -370,13 +374,19 @@ const mintAll = sum(S.map(r=>r.mint||0)), bbAll = sum(S.map(r=>r.burnBuyback||0)
 const br = [['Genesis liquidity mint', 100e6], ['+ withdrawals minted to bankers', mintAll], ['− bought back and burned', -bbAll], ['− deposited to branches (converted to ledger)', -depAll], ['± other', L.totalSupply-(100e6+mintAll-bbAll-depAll)], ['= Minted supply (market capitalization basis)', L.totalSupply, 'tot'],
   ['− held in the protocol\'s STANDARD/ETH pool', -L.poolStd], ['− Incentives Vault (purchased, undistributed)', -L.incentivesStd], ['= Outstanding supply', L.float, 'tot'], ['− locked in S-Bills', -L.sbillsStd], ['− team wallet', -L.teamStd], ['= Free float', L.float-L.sbillsStd-L.teamStd, 'tot'], ['= Fully diluted (minted + unminted ledger balance)', L.totalSupply+L.pending, 'tot'], ['Maximum supply after burns', L.maxSupply]];
 document.getElementById('bridge').innerHTML = br.map(b=>`<div class="${b[2]||''}">${b[0]}</div><div class="${b[2]||''}">${fmt.n(b[1],2)}</div>`).join('');
-document.getElementById('mc_now').textContent = fmt.n(L.totalSupply,2)+' minted · '+fmt.n(L.float,2)+' outstanding · '+fmt.n(L.totalSupply+L.pending,2)+' fully diluted';
-document.getElementById('exitfee').textContent = 'resolution fee '+fmt.pct(L.exitFeeNow,1)+' · ledger '+fmt.n(L.pending,1);
-document.getElementById('sb_now').textContent = `${fmt.int(L.branches)} branches · ${fmt.int(L.activeCharters)} charters`;
-document.getElementById('px_now').textContent = `${fmt.usd(mcTotal)} minted · ${fmt.usd(mcFloat)} outstanding`;
-const y7 = s7.length? inc7*365/7/mcFloat : null;
-document.getElementById('yield_now').textContent = y7!=null ? fmt.pct(y7,1)+' annualized' : '';
-document.getElementById('inc7').textContent = fmt.usd(inc7)+' last 7 days';
+function renderHeads(){   // panel header figures that depend on live state; re-run by goLive()
+  const chOpen=(L.charterRemaining||0)>0, licOpen=(L.licenseRemaining||0)>0;
+  document.getElementById('ch_now').textContent = chOpen ? `quote ${L.charterPriceNow.toFixed(2)} ETH, descending` : `next ${fmt.hm(L.charterNextOpen)} UTC at ${L.charterNextStart.toFixed(2)} ETH`;
+  document.getElementById('lic_now').textContent = licOpen ? `quote ${fmt.int(L.licensePriceNow)}, descending · ${L.licenseRemaining} left` : `next ${fmt.hm(L.licenseNextOpen)} UTC at ${fmt.int(L.licenseNextStart)}`;
+  document.getElementById('mc_now').textContent = fmt.n(L.totalSupply,2)+' minted · '+fmt.n(L.float,2)+' outstanding · '+fmt.n(L.totalSupply+L.pending,2)+' fully diluted';
+  document.getElementById('exitfee').textContent = 'resolution fee '+fmt.pct(L.exitFeeNow,1)+' · ledger '+fmt.n(L.pending,1);
+  document.getElementById('sb_now').textContent = `${fmt.int(L.branches)} branches · ${fmt.int(L.activeCharters)} charters`;
+  document.getElementById('px_now').textContent = `${fmt.usd(mcTotal)} minted · ${fmt.usd(mcFloat)} outstanding`;
+  const y7 = s7.length? inc7*365/7/mcFloat : null;
+  document.getElementById('yield_now').textContent = y7!=null ? fmt.pct(y7,1)+' annualized' : '';
+  document.getElementById('inc7').textContent = fmt.usd(inc7)+' last 7 days';
+}
+renderHeads();
 const sp7v = sum(s7.map(r=>r.spVolMine!=null?r.spVolMine:(r.spVol||0))), sp7g = sum(s7.map(r=>r.spVol||0)), sp7f = sum(s7.map(r=>r.spFee||0));
 document.getElementById('sp7').textContent = `${fmt.usd(sp7v,2)} served of ${fmt.usd(sp7g,2)} pool volume · ${fmt.usd(sp7f,1)} fees, 7 days`;
 
@@ -549,6 +559,44 @@ document.getElementById('csv').addEventListener('click',()=>{
   const csv = [cols.map(c=>esc(c[0])).join(',')].concat(Sh.map(r=>cols.map(c=>esc(c[2](r))).join(','))).join('\n');
   const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([csv],{type:'text/csv'})); a.download = 'standard-reserve-daily-'+L.date+'.csv'; a.click();
 });
+
+// ---------- live overlay ----------
+// Headline tiles and panel headers are refreshed in the browser from the indexer and DexScreener (both allow cross-origin reads),
+// so counts such as open branches, the multiplier, auction quotes, the resolution fee and S-Bill terms match the protocol's own page
+// regardless of when this file was compiled. Charts, the reserve and supply figures need the RPC and stay as compiled.
+const COMPILED = '__ASOF_UTC__', STD_ADDR = '0x88ad8DdF1E3898412146a534538d418c6F8A9062';
+async function goLive(){
+  try{
+    const j = (u)=>fetch(u,{cache:'no-store'}).then(r=>{if(!r.ok) throw new Error('HTTP '+r.status); return r.json();});
+    const [h, sb, dx] = await Promise.all([
+      j('https://indexer.standardreserve.xyz/v1/home?chainId=4663'),
+      j('https://indexer.standardreserve.xyz/v1/sbills/history?chainId=4663&range=1d').catch(()=>null),
+      j('https://api.dexscreener.com/tokens/v1/robinhood/'+STD_ADDR).catch(()=>null)]);
+    const s = h && h.snapshot; if(!s || !s.bank || !s.token) return;
+    const W = x=>parseFloat(x)/1e18, I = x=>parseInt(x,10), now = Math.floor(Date.now()/1000);
+    const b=s.bank, t=s.token, c=s.census||{}, la=s.licenseAuction, ca=s.charterAuction;
+    Object.assign(L, {branches:I(b.totalBranches), multiplier:W(b.multiplierWad), epoch:I(b.epochNumber), epochStart:I(b.epochStart), epochEnd:I(b.epochEnd),
+      epochNetFlow:W(s.tax.epochNetFlow), previousEpochFlow:W(b.previousEpochFlow||'0'), positiveStreak:I(b.positiveSignalStreak||'0'),
+      pending:W(b.totalPendingLive), cumulativeIssued:W(b.cumulativeIssued), cumulativeRecycled:W(b.cumulativeRecycled||'0'),
+      burnedForever:W(t.burnedForever), maxSupply:W(t.maxSupply)});
+    if (c.active!=null) Object.assign(L, {activeCharters:I(c.active), burnedCharters:I(c.burned)});
+    if (s.charterNft) L.chartersMinted = I(s.charterNft.nextId)-1;
+    if (la) Object.assign(L, {licensePriceNow:W(la.currentPrice), licenseLastSale:W(la.lastSalePrice), licenseFloor:W(la.dayFloorPrice), licenseDayStart:W(la.dayStartPrice),
+      licenseSoldToday:I(la.soldToday), licenseCap:I(la.dayCap), licenseRemaining:I(la.remainingToday||'0')});
+    if (ca) Object.assign(L, {charterPriceNow:W(ca.currentPrice), charterLastSale:W(ca.lastSalePrice), charterFloor:W(ca.dayFloorPrice), charterDayStart:W(ca.dayStartPrice),
+      charterSoldToday:I(ca.soldToday), charterCap:I(ca.dayCap), charterRemaining:I(ca.remainingToday||'0')});
+    const nxt = a=>{const anchor=I(a.auctionAnchor), per=I(a.AUCTION_DAY), k=Math.floor((now-anchor)/per); return [anchor+(k+1)*per, I(a.startMultiplier)*W(a.lastSalePrice)];};
+    if (la) { const n=nxt(la); L.licenseNextOpen=n[0]; L.licenseNextStart=n[1]; }
+    if (ca) { const n=nxt(ca); L.charterNextOpen=n[0]; L.charterNextStart=n[1]; }
+    if (Array.isArray(s.withdrawnByDay)) { const w7=sum(s.withdrawnByDay.map(W)); const P=w7/Math.max(L.pending+w7,1e7); L.w7=w7; L.exitPressure7d=P; L.exitFeeNow=0.02+0.58*Math.pow(Math.min(P/0.10,1),2); }
+    if (sb && sb.current) { const q=sb.current; L.sbills.rate=W(q.rate); L.sbills.locked=W(q.locked); L.sbills.principal=W(q.principal||q.locked); if(q.floor) L.sbills.floor=W(q.floor); if(q.ceiling) L.sbills.ceiling=W(q.ceiling); }
+    if (dx && dx[0] && dx[0].priceUsd) { const p=dx[0]; L.price=parseFloat(p.priceUsd); L.priceChange24h=(p.priceChange||{}).h24; L.vol24=(p.volume||{}).h24; L.poolLiqUsd=(p.liquidity||{}).usd; }
+    NOWTS = now; LIVE = true; renderKpis(); renderHeads();
+    const hm = new Date(I(s.blockTimestamp)*1000).toISOString().slice(0,16).replace('T',' ');
+    document.getElementById('asof').innerHTML = `Live <b>${hm} UTC</b> · block ${I(s.blockNumber).toLocaleString('en-US')} · <span id="epochpill" class="pill ${L.epochNetFlow>=0?'exp':'con'}">Epoch ${L.epoch} · ${L.epochNetFlow>=0?'expansion':'contraction'} to date</span> · charts, reserve and supply compiled ${COMPILED} UTC`;
+  }catch(e){ console.warn('live overlay unavailable, showing compiled figures', e); }
+}
+goLive(); setInterval(goLive, 300000);
 </script>
 """
 

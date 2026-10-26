@@ -108,6 +108,22 @@ def main():
 
     # ---------- indexer ----------
     home = get(IX + f"home?chainId={CHAIN}"); snap = home["snapshot"]
+    H["taxHook"] = home["contracts"]["taxHook"]   # holds the live epoch's trading fees until they are routed
+
+    # ---------- balances, read at one block; the transfer log and indexer events below are cut at the same block ----------
+    # (balances read at "latest" after a minutes-long log scan picked up transfers the scan never saw, and the supply
+    #  history, rebuilt backwards from these balances, carried the gap: 4,600 STANDARD on 26 Oct 2026)
+    tip = int(rpc("eth_blockNumber", [])["result"], 16); out["tip"] = tip; BT = hex(tip)
+    toks = {"STANDARD": (STD, 18), "USDG": (USDG, 6)}
+    bal = {}
+    for n, a in H.items():
+        row = {"ETH": int(rpc("eth_getBalance", [a, BT])["result"], 16) / 1e18}
+        for t, (ta, dec) in toks.items():
+            r = ecall(ta, "0x70a08231" + pad(a)[2:], BT); v = int(r, 16) / 10 ** dec if r and r != "0x" else 0
+            if v: row[t] = v
+        bal[n] = row
+    bal["poolManager"] = {"STANDARD": int(ecall(STD, "0x70a08231" + pad(PM)[2:], BT), 16) / 1e18}
+    total_supply = int(ecall(STD, "0x18160ddd", BT), 16) / 1e18
     sb = get(IX + f"sbills/history?chainId={CHAIN}")
     lic = get(IX + f"auctions/license/periods?chainId={CHAIN}")
     act = {}
@@ -118,18 +134,17 @@ def main():
             if "events" not in d: log("activity ERR", k, d); break
             ev += d["events"]; cur = d["page"].get("nextCursor")
             if not cur or not d["events"]: break
-        act[k] = ev
+        act[k] = [e for e in ev if int(e.get("blockNumber") or 0) <= tip]
     jsave(os.path.join(C, "activity.json"), act); jsave(os.path.join(C, "home.json"), home)
     jsave(os.path.join(C, "sbills.json"), sb); jsave(os.path.join(C, "license_periods.json"), lic)
     genesis_ts = int(snap["bank"]["genesisTime"])
-    H["taxHook"] = home["contracts"]["taxHook"]   # holds the live epoch's trading fees until they are routed
     log("indexer ok", {k: len(v) for k, v in act.items()})
 
     # ---------- genesis block and anchors ----------
     meta = jload(os.path.join(C, "meta.json"), {})
     if "genesisBlock" not in meta:
         meta["genesisBlock"] = find_block(genesis_ts, 55000000, 70000000); jsave(os.path.join(C, "meta.json"), meta)
-    G = meta["genesisBlock"]; ensure_anchors(G, tip); log("genesis block", G, "anchors", len(ANCH))
+    G = meta["genesisBlock"]; ensure_anchors(G, tip); block_ts(tip); log("genesis block", G, "anchors", len(ANCH))   # anchor the tip so the last hours interpolate
 
     # ---------- STANDARD protocol-side transfers (backfill + incremental) ----------
     tf = jload(os.path.join(C, "transfers.json"), {"last": G - 1, "rows": []})
@@ -148,18 +163,6 @@ def main():
             tf["rows"].append([int(l["blockNumber"], 16), wl.get(f, "other"), wl.get(t, "other"), int(l["data"], 16) / 1e18])
         tf["last"] = tip; jsave(os.path.join(C, "transfers.json"), tf)
     log("transfers rows", len(tf["rows"]))
-
-    # ---------- balances ----------
-    toks = {"STANDARD": (STD, 18), "USDG": (USDG, 6)}
-    bal = {}
-    for n, a in H.items():
-        row = {"ETH": int(rpc("eth_getBalance", [a, "latest"])["result"], 16) / 1e18}
-        for t, (ta, dec) in toks.items():
-            r = ecall(ta, "0x70a08231" + pad(a)[2:]); v = int(r, 16) / 10 ** dec if r and r != "0x" else 0
-            if v: row[t] = v
-        bal[n] = row
-    bal["poolManager"] = {"STANDARD": int(ecall(STD, "0x70a08231" + pad(PM)[2:]), 16) / 1e18}
-    total_supply = int(ecall(STD, "0x18160ddd"), 16) / 1e18
 
     # ---------- reserve LP positions (owned by Safe) -> pools, holdings ----------
     pm = jload(os.path.join(C, "positions.json"), {"last": SEED_BLOCK - 1, "ids": []})
@@ -359,11 +362,14 @@ def main():
     # issuance accrued per day (ledger), by epoch multiplier
     d0 = dt.datetime.utcfromtimestamp(genesis_ts).date(); dn = dt.datetime.utcfromtimestamp(now).date()
     dd = d0
-    while dd <= dn:
-        ds_ = dd.strftime("%Y-%m-%d"); t_mid = int(dt.datetime(dd.year, dd.month, dd.day, 12, tzinfo=dt.timezone.utc).timestamp())
-        k = max(1, (t_mid - genesis_ts) // (epoch_days * 86400) + 1); m = m_by_epoch.get(k, m_by_epoch[max(m_by_epoch)])
-        d_start = t_mid - 43200; frac = (min(now, d_start + 86400) - max(genesis_ts, d_start)) / 86400   # partial genesis day and today
-        days[ds_]["issuance"] += base_issue * m * max(0.0, frac); days[ds_]["multiplier"] = m
+    ep_len = epoch_days * 86400
+    while dd <= dn:   # issuance accrues per second at the multiplier of the epoch in force; epochs turn at genesis time, not midnight
+        ds_ = dd.strftime("%Y-%m-%d"); d_start = int(dt.datetime(dd.year, dd.month, dd.day, tzinfo=dt.timezone.utc).timestamp())
+        t_ = max(genesis_ts, d_start); t_stop = min(now, d_start + 86400)
+        while t_ < t_stop:
+            k = (t_ - genesis_ts) // ep_len + 1; seg = min(t_stop, genesis_ts + k * ep_len) - t_
+            days[ds_]["issuance"] += base_issue * m_by_epoch.get(k, m_by_epoch[max(m_by_epoch)]) * seg / 86400; t_ += seg
+        k_mid = max(1, (d_start + 43200 - genesis_ts) // ep_len + 1); days[ds_]["multiplier"] = m_by_epoch.get(k_mid, m_by_epoch[max(m_by_epoch)])
         dd += dt.timedelta(days=1)
     # token-loop routed per day (epoch routed spread evenly over its days), charter part separated
     for e in epochs:
@@ -396,16 +402,20 @@ def main():
         Tn -= x["mint"] + x["genesisMint"] - x["burn"]; pn -= x["poolIn"] + x["genesisPool"] - x["poolOut"]
         inn -= x["toIncentives"] - x["fromIncentives"]; sbn -= x["sbillIn"] - x["sbillOut"]; tmn -= x["teamIn"] - x["teamOut"]
     # forward ledger: pending = issuance + deposits + recycled exit fees - licenses - gross withdrawals - gross revocations
-    sb_pts = sorted([(int(p["t"]), int(p.get("after", 0)) / 1e18) for p in (sb.get("points") or []) if p.get("t")])
-    pend = 0.0; pend_hist = {}; fee_hist = {}; rate_hist = {}; cen_last = (0, 0, 0); cen_hist = {}
+    sb_pts = sorted([(int(p["t"]), int(p.get("after", 0)) / 1e18, int(p.get("locked", 0)) / 1e18) for p in (sb.get("points") or []) if p.get("t")])
+    wd_ev = [(int(e["timestamp"]), int(e["values"]["gross"]) / 1e18) for e in act["withdrawn"]]
+    sb_c = sb.get("current") or {}; sb_dps = int(sb_c.get("driftPerSecond", 0)) / 1e18 if sb_c.get("drifting") else 0.0; sb_cap = int(sb_c.get("ceiling", 0)) / 1e18 or 1.0
+    pend = 0.0; pend_hist = {}; fee_hist = {}; rate_hist = {}; sbl_hist = {}; cen_last = (0, 0, 0); cen_hist = {}
     for i, d in enumerate(dl):
         x = days[d]
         pend += x["issuance"] + x["deposits"] + x["exitFeeRedis"] + x["revokeFeeBurn"] - x["licBurn"] - x["wdGross"] - x["revokeGross"]
         pend_hist[d] = pend
-        w7_ = sum(days[dd]["wdGross"] for dd in dl[max(0, i - 6):i + 1])
-        P7 = w7_ / max(pend + w7_, 10_000_000); fee_hist[d] = 0.02 + 0.58 * min(P7 / 0.10, 1) ** 2
         d_end = int(dt.datetime.strptime(d, "%Y-%m-%d").replace(tzinfo=dt.timezone.utc).timestamp()) + 86400
-        j = bisect.bisect_right(sb_pts, (d_end, 9e9)); rate_hist[d] = sb_pts[j - 1][1] if j else None
+        t_end = min(now, d_end); pd_ = (t_end - genesis_ts) // 86400   # resolution fee at the day's close, over the contract's seven protocol-day buckets
+        w7_ = sum(g for ts_, g in wd_ev if ts_ < t_end and (ts_ - genesis_ts) // 86400 >= pd_ - 6)
+        P7 = w7_ / max(pend + w7_, 10_000_000); fee_hist[d] = 0.02 + 0.58 * min(P7 / 0.10, 1) ** 2
+        j = bisect.bisect_right(sb_pts, (t_end, 9e9, 9e9)); sbl_hist[d] = sb_pts[j - 1][2] if j else None
+        rate_hist[d] = min(sb_cap, sb_pts[j - 1][1] + sb_dps * (t_end - sb_pts[j - 1][0])) if j else None   # rate at the close, drift since the last update included
         if d in census: cen_last = census[d]
         cen_hist[d] = cen_last
     log("ledger check: pending reconstructed", round(pend), "live", round(int(snap["bank"]["totalPendingLive"]) / 1e18),
@@ -421,7 +431,7 @@ def main():
         row["burnBuyback"] = round(x["burn_contraction"] + x["burn_polManager"] + x["burn_sbills"], 6)   # tokens bought back and burned
         row["depositBurn"] = round(x["deposits"], 6)                                                     # deposits converted to ledger (burned), from deposited events
         row["burnOther"] = round(max(0.0, x["burn_other"] + x["burn_bank"] - x["deposits"]), 6)          # wallet burns that are not deposits (counted in the token's burnedForever)
-        row.update({"pending": pend_hist[d], "exitFee": fee_hist[d], "sbRate": rate_hist[d], "teamStd": tm_hist[d],
+        row.update({"pending": pend_hist[d], "exitFee": fee_hist[d], "sbRate": rate_hist[d], "sbLocked": sbl_hist[d], "teamStd": tm_hist[d],
                     "activeCharters": cen_hist[d][0], "burnedCharters": cen_hist[d][1], "branches": cen_hist[d][2]})
         if prev and p and prev.get("price"):
             row["dPrice"] = (p - prev["price"]) * prev["float"]; row["dSupply"] = (flt - prev["float"]) * p
@@ -454,12 +464,16 @@ def main():
     reserve["totalUsd"] = (safe["ETH"] + reserve["contractionEth"] + reserve["expansionEth"]) * ethusd + reserve["safeUsdg"] + stock_held + reserve["lpUsd"]
     # sbills
     sbc = sb.get("current", {})
-    sbills = {"rate": int(sbc.get("rate", 0)) / 1e18, "locked": int(sbc.get("locked", 0)) / 1e18, "principal": int(sbc.get("principal", 0)) / 1e18,
+    sb_drift = int(sbc.get("driftPerSecond", 0)) / 1e18 if sbc.get("drifting") else 0.0   # the term rate drifts up between deposits; the indexer reports it as of the last update
+    sb_rate = int(sbc.get("rate", 0)) / 1e18 + sb_drift * max(0, now - int(sbc.get("rateUpdatedAt") or now))
+    sb_rate = min(int(sbc.get("ceiling", 0)) / 1e18 or 1.0, sb_rate)
+    sbills = {"rate": sb_rate, "locked": int(sbc.get("locked", 0)) / 1e18, "principal": int(sbc.get("principal", 0)) / 1e18,
               "floor": int(sb.get("start", {}).get("floor", 0)) / 1e18, "ceiling": int(sb.get("start", {}).get("ceiling", 0)) / 1e18,
               "points": [{"t": p.get("t"), "rate": int(p.get("after", 0)) / 1e18, "locked": int(p.get("locked", 0)) / 1e18, "kind": p.get("kind")}
                          for p in (sb.get("points") or sb.get("history") or sb.get("series") or []) if p.get("t")]}
-    # exit fee now: 7-day exit pressure
-    w7 = sum(int(e["values"]["gross"]) for e in act["withdrawn"] if int(e["timestamp"]) >= now - 7 * 86400) / 1e18
+    # exit fee now: 7-day exit pressure over the contract's own buckets (seven protocol days, today included, days roll at genesis time)
+    if isinstance(snap.get("withdrawnByDay"), list): w7 = sum(int(x) for x in snap["withdrawnByDay"]) / 1e18
+    else: w7 = sum(int(e["values"]["gross"]) for e in act["withdrawn"] if (int(e["timestamp"]) - genesis_ts) // 86400 >= (now - genesis_ts) // 86400 - 6) / 1e18
     held = int(snap["bank"].get("totalPendingLive", 0)) / 1e18
     P_ = w7 / max(held + w7, 10_000_000); exit_fee = 0.02 + 0.58 * min(P_ / 0.10, 1) ** 2
     def nxt(a):   # next auction period opening time and price
@@ -524,6 +538,9 @@ def main():
     hist[today]["reserveUsd"] = reserve["totalUsd"]; hist[today]["sbillsRate"] = sbills["rate"]; hist[today]["sbillsLocked"] = sbills["locked"]; hist[today]["reserve"] = reserve
     hist[today]["srLiqShare"] = {s: (v["srLiq"] / v["totalLiq"] if v["totalLiq"] else None) for s, v in pool_ctx.items()}
     jsave(os.path.join(D, "history.json"), hist)
+    # addresses and the compile block, so the page can replay the blocks after it (balances, transfers, indexer events) in the browser
+    out["addrs"] = {**{k: v.lower() for k, v in H.items()}, "STANDARD": STD.lower(), "poolManager": PM.lower(), "charterAuction": CA, "zero": ZERO}
+    out["tipTs"] = block_ts(tip); out["genesisTs"] = genesis_ts; out["foundingCharters"] = founding
     out.update({"live": live, "epochs": epochs, "charters": charters, "licensePeriods": lic_periods, "series": series, "history": hist,
                 "swapsBySender": {}, "elapsed": round(time.time() - t_start)})
     # sender classes for stock pools (last 7d)

@@ -2,7 +2,7 @@ name: Refresh monitor
 
 on:
   schedule:
-    - cron: "13,43 * * * *"    # twice an hour; GitHub fires these late and irregularly, the age check below decides whether to rebuild
+    - cron: "*/5 * * * *"    # GitHub drops and delays scheduled runs, so offer many; the age check below decides whether to rebuild
   workflow_dispatch:
 
 permissions:
@@ -22,7 +22,7 @@ jobs:
       run: ${{ steps.chk.outputs.run }}
       first: ${{ steps.chk.outputs.first }}
     steps:
-      - name: Rebuild unless the live page is younger than 45 minutes
+      - name: Rebuild unless the live page is younger than 30 minutes
         id: chk
         run: |
           # run=1  -> pull, build and deploy (manual dispatch always runs; scheduled runs only when the page is stale)
@@ -33,7 +33,7 @@ jobs:
           echo "live page stamp '${STAMP}' age ${AGE} min"
           FIRST=0; case "$STAMP" in "$(date -u +%F)"*) ;; *) FIRST=1 ;; esac
           if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then FIRST=1; fi
-          if [ "${{ github.event_name }}" = "workflow_dispatch" ] || [ "$AGE" -ge 45 ]; then RUN=1; else RUN=0; echo "page is fresh, skipping"; fi
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ] || [ "$AGE" -ge 30 ]; then RUN=1; else RUN=0; echo "page is fresh, skipping"; fi
           echo "run=$RUN" >> "$GITHUB_OUTPUT"; echo "first=$FIRST" >> "$GITHUB_OUTPUT"
       - uses: actions/checkout@v4
         if: steps.chk.outputs.run == '1'

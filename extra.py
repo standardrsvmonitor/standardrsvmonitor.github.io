@@ -596,28 +596,116 @@ def lp_pnl(x, lp_pools, closes, dates, res_hist, fees_by_day):
     return out
 
 
-def swap_callers(x, sw, reserve_pids):
-    """Classify the contracts that executed swaps in the reserve's pools. A contract with fewer than 20 swaps is occasional (a wallet's own
-    contract or a one-off route) and counts as organic. For the rest, six transactions are sampled: three or more distinct sending wallets
-    make it a router or aggregator (organic); one or two make it a single-operator bot (arbitrage, market-making, other automation)."""
-    import time
-    c = x.jl("swap_callers.json", {})
-    todo = []
-    for pid in reserve_pids:
-        for s, (n, txs) in (sw.get(pid, {}).get("snd") or {}).items():
-            if s in c: continue
-            if n < 20: c[s] = {"wallets": None, "kind": "router", "swaps": n}; continue
-            if txs: todo.append((s, txs[:6]))
-    for s, txs in todo:
-        frm = set()
-        for k in range(0, len(txs), 5):
-            for t in range(6):
-                try: res = x.rpcb([("eth_getTransactionByHash", [h]) for h in txs[k:k + 5]]); break
-                except Exception: time.sleep(5 * (t + 1))
-            else: res = []
-            frm |= {(r or {}).get("from", "").lower() for r in res if r}
-            time.sleep(0.3)
-        c[s] = {"wallets": len(frm), "kind": "router" if len(frm) >= 3 else "bot"}
-        if len(c) % 20 == 0: x.js("swap_callers.json", c)
-    x.js("swap_callers.json", c)
+def counterparties(x, reg, lp_pools, first_day, last_day, max_days=3):
+    """Who trades against the reserve, by UTC day. Fee-exempt swaps (zero fee) are summed exactly. The rest are sampled: 150 draws per pool
+    and day with probability proportional to the volume the reserve's own liquidity served, each sampled transaction read from its receipt
+    (sending wallet, and whether the same transaction trades the same asset the opposite way on another pool). The cache keeps the facts
+    per draw; cpty_classes() assigns classes on every run, so a contract's status updates as evidence accumulates."""
+    import time, random
+    c = x.jl("cpty.json", {"days": {}, "nonce": {}})
+    zero = "0x" + "0" * 40; weth = next((r["base"] if r["bsym"] == "WETH" else r["quote"] for r in reg if "WETH" in (r["bsym"], r["qsym"])), None)
+    mods = collections.defaultdict(list)
+    ids = {"0x" + format(i, "064x") for i in x.jl("positions.json", {"ids": []})["ids"]}   # every position the Safe has held (salt = token id)
+    for b, pid, tl, tu, dl, salt in x.jl("lp_mods.json", {"rows": []})["rows"]:
+        if salt in ids: mods[pid].append((b, tl, tu, int(dl)))
+    d = dt.date.fromisoformat(first_day); end = dt.date.fromisoformat(last_day); todo = []
+    while d <= end:
+        if d.isoformat() not in c["days"]: todo.append(d.isoformat())
+        d += dt.timedelta(1)
+    for ds in todo[:max_days]:
+        t0 = day_end(ds) - 86400; lo, hi = max(0, x.B(t0 - 7200)), min(x.tip, x.B(t0 + 86400 + 7200)); rec = {}   # interpolated blocks; logs are then filtered on their timestamps
+        try:
+            for sym, p in lp_pools.items():
+                pid = p["pool"]; asset = {zero, weth} if p["isEth"] else {p["stockAddr"].lower()}; ai = 0 if (p["isEth"] or not p["usdg0"]) else 1
+                rng = collections.defaultdict(int); mm = sorted(mods.get(pid, [])); k = 0; rows = []; fx = fxf = 0.0
+                for l in sorted(x.getlogs({"address": x.PM, "topics": [x.SW, pid]}, lo, hi), key=lambda l: (int(l["blockNumber"], 16), int(l["logIndex"], 16))):
+                    b = int(l["blockNumber"], 16); ts = int(l.get("blockTimestamp") or "0x0", 16) or x.T(b)   # this RPC often returns 0; then the same interpolation the page uses
+                    while k < len(mm) and mm[k][0] < b: rng[(mm[k][1], mm[k][2])] += mm[k][3]; k += 1
+                    if not t0 <= ts < t0 + 86400: continue
+                    w = words(l["data"]); usd = abs(s256(w[1 - ai])) / 1e6; tick = s256(w[4]); liq = int(w[3], 16); fee = int(w[5], 16)
+                    share = min(1.0, sum(L for (tl, tu), L in rng.items() if tl <= tick < tu and L > 0) / liq) if liq else 0.0
+                    if fee == 0: fx += usd * share; continue
+                    rows.append((usd * share, fee, "0x" + l["topics"][2][-40:], l["transactionHash"], 1 if s256(w[ai]) > 0 else -1))
+                W = [r[0] for r in rows]; nf = sum(W); fee_nf = sum(r[0] * r[1] / 1e6 for r in rows)
+                draws = random.Random(ds + sym).choices(rows, weights=W, k=150) if nf > 0 else []
+                rec[sym] = {"fx": fx, "nf": nf, "fee": fee_nf, "draws": [[r[2], r[3], r[1], r[4]] for r in draws]}
+            # receipts: sending wallet, and opposite-way trades of the same asset on other pools in the same transaction
+            txs = sorted({dr[1] for v in rec.values() for dr in v["draws"]}); info = {}
+            for k in range(0, len(txs), 8):
+                part = txs[k:k + 8]
+                for t in range(6):
+                    try: res = x.rpcb([("eth_getTransactionReceipt", [h]) for h in part]); break
+                    except Exception: time.sleep(5 * (t + 1))
+                else: raise RuntimeError("receipts")
+                for h, r in zip(part, res):
+                    if r: info[h] = {"from": r["from"].lower(), "logs": [(l["address"].lower(), l["topics"], l["data"]) for l in r["logs"]]}
+                time.sleep(0.25)
+            other = {l[1][1] for v in info.values() for l in v["logs"] if l[0] == x.PM.lower() and l[1] and l[1][0] == x.SW}
+            keys = v4_keys(x, sorted(other))
+            cust = collections.defaultdict(set)
+            for r in reg:
+                if not r["v4"]: cust[r["sym"]].add(r["id"])
+            for sym, v in rec.items():
+                p = lp_pools[sym]; asset = {zero, weth} if p["isEth"] else {p["stockAddr"].lower()}
+                for dr in v["draws"]:
+                    snd, h, fee, sg = dr; I = info.get(h); arb = 0
+                    if I:
+                        for a, tp, data in I["logs"]:
+                            if a == x.PM.lower() and tp and tp[0] == x.SW and tp[1] != p["pool"]:
+                                kk = keys.get(tp[1]) or []
+                                if len(kk) >= 2 and kk[0].lower() != kk[1].lower():
+                                    ww = words(data)
+                                    for j in (0, 1):
+                                        if kk[j].lower() in asset and (1 if s256(ww[j]) > 0 else -1) == -sg: arb = 1
+                            elif tp and tp[0] == x.TR and len(tp) > 2 and a in asset:
+                                f_, t_ = "0x" + tp[1][-40:], "0x" + tp[2][-40:]
+                                if (t_ in cust[sym] and sg == 1) or (f_ in cust[sym] and sg == -1): arb = 1   # sold to / bought from another pool
+                    dr[:] = [snd, (I or {}).get("from"), fee, arb]
+            wallets = sorted({dr[1] for v in rec.values() for dr in v["draws"] if dr[1]} - {a for a, n in c["nonce"].items() if n >= 1000})
+            for k in range(0, len(wallets), 10):
+                part = wallets[k:k + 10]
+                for t in range(6):
+                    try: res = x.rpcb([("eth_getTransactionCount", [a, "latest"]) for a in part]); break
+                    except Exception: time.sleep(5 * (t + 1))
+                else: raise RuntimeError("nonces")
+                for a, n in zip(part, res):
+                    if n: c["nonce"][a] = int(n, 16)
+                time.sleep(0.25)
+            c["days"][ds] = rec; x.js("cpty.json", c); x.log("counterparties", ds, {s_: (round(v["nf"]), round(v["fx"])) for s_, v in rec.items()})
+        except Exception as e:
+            x.log("counterparties: stopped at", ds, repr(e)[:200]); break
     return c
+
+
+def cpty_classes(c, tiers=None, hf=1000):
+    """Classes per day and pool from the cached draws: Arb (the transaction also trades the asset the other way on another pool), Bot (a private
+    contract, one whose sending wallets are a single wallet or wallets of similar activity, as a bot operator's rotating wallets are; or a
+    sending wallet with `hf` or more transactions), Org (a wallet with fewer transactions trading through a public router, one whose sending
+    wallets differ tenfold or more in activity), Fx (fee-exempt, exact). Volume and fees are the reserve's share; sampled classes split the
+    non-exempt total in proportion to their draws (fees in proportion to their fee rates)."""
+    nonce = c["nonce"]; via = collections.defaultdict(set)
+    for v in c["days"].values():
+        for p in v.values():
+            for snd, frm, fee, arb in p["draws"]:
+                if frm: via[snd].add(frm)
+    def public(snd):
+        ns = [nonce.get(a, 0) for a in via.get(snd, ())]
+        return len(ns) >= 2 and min(ns) < 0.1 * max(ns)
+    out = {}
+    for d, v in c["days"].items():
+        o = out.setdefault(d, {})
+        for sym, p in v.items():
+            o[f"volFx_{sym}"] = round(p["fx"], 2); o[f"feeFx_{sym}"] = 0.0
+            n = len(p["draws"]); t_ = (tiers or {}).get(sym, 1 << 23)
+            lpf = lambda f: min(f, t_) if t_ < 1 << 23 else f   # providers earn the tier; the rest of a fixed-tier swap fee is Uniswap's protocol fee
+            fr = sum(lpf(dr[2]) for dr in p["draws"]) or 1; adj = fr / (sum(dr[2] for dr in p["draws"]) or 1)
+            cnt = collections.Counter(); fw = collections.Counter()
+            for snd, frm, fee, arb in p["draws"]:
+                fee = lpf(fee)
+                k = "Arb" if arb else ("Bot" if (not public(snd) or nonce.get(frm, 0) >= hf) else "Org")
+                cnt[k] += 1; fw[k] += fee
+            for k in ("Org", "Arb", "Bot"):
+                o[f"vol{k}_{sym}"] = round(p["nf"] * cnt[k] / n, 2) if n else 0.0
+                o[f"fee{k}_{sym}"] = round(p["fee"] * adj * fw[k] / fr, 4) if n else 0.0
+            o[f"cpN_{sym}"] = n
+    return out

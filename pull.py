@@ -232,8 +232,18 @@ def main():
         tick_now = int(r[2 + 64:2 + 128], 16); tick_now = tick_now - (1 << 256) if tick_now >= (1 << 255) else tick_now
         pool_liq = int(ecall(SV, sel("getLiquidity(bytes32)") + pid[2:]), 16)
         mine_liq = sum(l_ for tl_, tu_, l_ in p.get("ranges", []) if tl_ <= tick_now < tu_)
+        f0 = f1 = 0   # fees accrued in the positions and not yet withdrawn: liquidity x fee growth inside the range since the position's last update
+        I24 = lambda v: format(v % (1 << 256), "064x")
+        for q in pos:
+            if q["pool"] != pid: continue
+            fg = ecall(SV, sel("getFeeGrowthInside(bytes32,int24,int24)") + pid[2:] + I24(q["tl"]) + I24(q["tu"]), BT)
+            pi = ecall(SV, sel("getPositionInfo(bytes32,address,int24,int24,bytes32)") + pid[2:] + pad(POSM)[2:] + I24(q["tl"]) + I24(q["tu"]) + u(q["id"]), BT)
+            L_ = int(pi[2:66], 16)
+            f0 += L_ * ((int(fg[2:66], 16) - int(pi[66:130], 16)) % (1 << 256)) >> 128; f1 += L_ * ((int(fg[66:130], 16) - int(pi[130:194], 16)) % (1 << 256)) >> 128
+        ou, os_ = (f0 / 1e6, f1 / 1e18) if p["usdg0"] else (f1 / 1e6, f0 / 1e18)
         lp[p["stock"]] = {"pool": pid, "stock": stock, "usdg": usdg, "price": px, "valueUSD": stock * px + usdg, "positions": p["positions"], "feeTier": p["fee"], "isEth": p["stockAddr"].lower() == ZERO,
-                          "share": (min(1.0, mine_liq / pool_liq) if pool_liq else 0.0), "poolLiqUsd": None}
+                          "share": (min(1.0, mine_liq / pool_liq) if pool_liq else 0.0), "poolLiqUsd": None,
+                          "feesOwed": {"stock": os_, "usdg": ou, "usd": os_ * px + ou}}
         if p["stockAddr"].lower() != ZERO: toks[p["stock"]] = (p["stockAddr"], 18)
     for n, a in H.items():
         for t, (ta, dec) in toks.items():
@@ -378,8 +388,10 @@ def main():
         if t == "team": days[d]["teamIn"] += a
         if f == "team": days[d]["teamOut"] += a
         if f == "polBuyback" or t == "polBuyback": days[d]["polBuybackFlow"] += a if t == "polBuyback" else -a
+    tier = {p_["stock"]: p_["fee"] for p_ in pools.values()}
     for r in sw["rows"]:
         b, s, usdg, fee, snd = r[:5]; share = r[5] if len(r) > 5 else 1.0; d = day(T(b))
+        if tier.get(s, 1 << 23) < 1 << 23: fee = min(fee, tier[s])   # a fixed-tier pool's swap fee includes Uniswap's protocol fee (ETH/USDG: 125 of 625 pips); providers earn the tier
         days[d]["spVol"] += usdg; days[d]["spFee"] += usdg * fee / 1e6 * share; days[d]["spFeeGross"] += usdg * fee / 1e6; days[d]["spSwaps"] += 1
         days[d]["spVol_" + s] += usdg; days[d]["spFee_" + s] += usdg * fee / 1e6 * share; days[d]["spFeeGross_" + s] += usdg * fee / 1e6
         days[d]["spVolMine"] += usdg * share; days[d]["spVolMine_" + s] += usdg * share   # volume served by the reserve's own in-range liquidity
@@ -562,7 +574,7 @@ def main():
                   PM=PM, SW=SW, ML=ML, TR=TR, pad=pad, STD=STD, USDG=USDG, POSM=POSM, SEED_BLOCK=SEED_BLOCK, bal=bal,
                   pos_ids=[q["id"] for q in pos], lp_liq_now=sum(q["liq"] for q in pos), log=log, rpc=rpc, sel=sel, B=ts_block, SV=SV,
                   INIT="0x" + keccak(b"Initialize(bytes32,address,address,uint24,int24,address,uint160,int24)").hex())
-    lp_pools = {p_["stock"]: {"pool": pid_, "isEth": p_["stockAddr"].lower() == ZERO, "stockAddr": p_["stockAddr"], "usdg0": p_["usdg0"]} for pid_, p_ in pools.items()}
+    lp_pools = {p_["stock"]: {"pool": pid_, "isEth": p_["stockAddr"].lower() == ZERO, "stockAddr": p_["stockAddr"], "usdg0": p_["usdg0"], "tier": p_["fee"]} for pid_, p_ in pools.items()}
     closes = extra.pool_closes(x, {**{pid_: SEED_BLOCK for pid_ in pools}, STD_POOL: G})
     today_parts = {"total": reserve["totalUsd"], "eth": (reserve["safeEth"] + reserve["contractionEth"] + reserve["expansionEth"]) * ethusd, "usdg": reserve["safeUsdg"],
                    "stocks": reserve["safeStockUsd"], "lp": {s_: v_["valueUSD"] for s_, v_ in lp.items()}}
@@ -587,6 +599,11 @@ def main():
         for k_ in ("team", "bankers", "sbills", "active", "launch", "other"): row["sell_" + k_] = round(g_.get("sell_" + k_, 0.0), 6)
         if d_ in depth["hist"]: row.update(depth["hist"][d_])
     out["sellers"] = sellers; out["depth"] = {k_: v_ for k_, v_ in depth.items() if k_ != "hist"}; out["checks"] = res_chk
+    ids_ = {"0x" + format(i_, "064x") for i_ in pm["ids"]}   # the reserve's own liquidity changes: a withdrawal or fee collection is a zero or negative change
+    mine_ = [r_ for r_ in jload(os.path.join(C, "lp_mods.json"), {"rows": []})["rows"] if r_[5] in ids_]
+    wd_ = [r_ for r_ in mine_ if int(r_[4]) <= 0]
+    out["lpChanges"] = {"adds": sum(1 for r_ in mine_ if int(r_[4]) > 0), "withdrawals": len(wd_), "lastAdd": day(T(max((r_[0] for r_ in mine_ if int(r_[4]) > 0), default=SEED_BLOCK))),
+                        "lastWithdrawal": day(T(max(r_[0] for r_ in wd_))) if wd_ else None}
     # every venue for each reserve asset; the reserve's position against holding; who executes swaps in the reserve's pools
     reg, keys, vsw, vlq, vcu = extra.venue_scan(x, stock_ds, {p_["pool"] for p_ in lp_pools.values()})
     shares = extra.chain_shares(x, reg, keys, vsw, vlq, vcu, lp_pools, closes, eth_day, dl, res_hist)
@@ -594,21 +611,25 @@ def main():
     for row in series:
         for s_ in lp_pools: fees_day[row["date"]][s_] = row.get("spFee_" + s_, 0.0)
     pnl = extra.lp_pnl(x, lp_pools, closes, dl, res_hist, fees_day)
-    callers = extra.swap_callers(x, vsw, [p_["pool"] for p_ in lp_pools.values()])
-    kind = {s_[:10]: v_["kind"] for s_, v_ in callers.items()}
-    cls = collections.defaultdict(lambda: collections.defaultdict(float))
-    for r_ in sw["rows"]:
-        b_, s_, usdg_, fee_, snd_ = r_[:5]; share_ = r_[5] if len(r_) > 5 else 1.0; d_ = day(T(b_))
-        k_ = "Fx" if fee_ == 0 else ("Org" if kind.get(snd_) == "router" else "Bot")
-        cls[d_][f"vol{k_}_{s_}"] += usdg_; cls[d_][f"fee{k_}_{s_}"] += usdg_ * fee_ / 1e6 * share_
+    for s_ in lp_pools:   # scale the swap-based fee estimate so its cumulative total equals the fees read from the positions today
+        last_ = max((d_ for d_ in pnl if s_ in pnl[d_]), default=None); owed_ = ((lp.get(s_) or {}).get("feesOwed") or {}).get("usd")
+        k_ = owed_ / pnl[last_][s_]["fees"] if last_ and owed_ is not None and pnl[last_][s_]["fees"] else 1.0
+        for d_ in pnl:
+            if s_ in pnl[d_]: pnl[d_][s_]["fees"] *= k_
+        log("pool fees, swap estimate vs positions", s_, round(pnl[last_][s_]["fees"] / k_) if last_ else None, round(owed_ or 0))
+    yday = (dt.datetime.fromtimestamp(x.tip_ts, dt.timezone.utc).date() - dt.timedelta(1)).isoformat()   # complete days only
+    cp = extra.counterparties(x, reg, lp_pools, "2026-10-14", yday)
+    cls = extra.cpty_classes(cp, {s_: p_["tier"] for s_, p_ in lp_pools.items()})
     for row in series:
-        d_ = row["date"]; row.update({k_: v_ for k_, v_ in (shares.get(d_) or {}).items()}); row.update({k_: round(v_, 2) for k_, v_ in cls.get(d_, {}).items()})
+        d_ = row["date"]; row.update({k_: v_ for k_, v_ in (shares.get(d_) or {}).items()}); row.update(cls.get(d_, {}))
+        for s_ in lp_pools:   # the reserve's share of chain volume is the volume its liquidity served, not the whole pool's (it shares the ETH/USDG pool)
+            if row.get("chainVol_" + s_): row["volShare_" + s_] = (row.get("spVolMine_" + s_) or 0) / row["chainVol_" + s_]
         for s_, v_ in (pnl.get(d_) or {}).items(): row.update({f"lpVal_{s_}": v_["lp"], f"holdVal_{s_}": v_["hold"], f"lpCost_{s_}": v_["cost"], f"lpFees_{s_}": v_["fees"]})
     chk_ = [(row["date"], s_, round(row.get("poolVolChain_" + s_) or 0), round(row.get("spVol_" + s_) or 0)) for row in series[-3:-1] for s_ in lp_pools]
-    log("venues", len(reg), "| reserve pool volume, chain scan vs swap cache:", chk_, "| callers", collections.Counter(v_["kind"] for v_ in callers.values()))
+    log("venues", len(reg), "| reserve pool volume, chain scan vs swap cache:", chk_, "| counterparty days", len(cp["days"]))
     hist = jload(os.path.join(D, "history.json"), {})
     hist[today] = {k: v for k, v in live.items() if k not in ("poolCtx", "balances", "lp", "sbills", "reserve")}
-    hist[today]["lp"] = {s: {"stock": v["stock"], "usdg": v["usdg"], "valueUSD": v["valueUSD"], "price": v["price"]} for s, v in lp.items()}
+    hist[today]["lp"] = {s: {"stock": v["stock"], "usdg": v["usdg"], "valueUSD": v["valueUSD"], "price": v["price"], "feesOwedUsd": v["feesOwed"]["usd"]} for s, v in lp.items()}
     hist[today]["reserveUsd"] = reserve["totalUsd"]; hist[today]["sbillsRate"] = sbills["rate"]; hist[today]["sbillsLocked"] = sbills["locked"]; hist[today]["reserve"] = reserve
     hist[today]["srLiqShare"] = {s: (v["srLiq"] / v["totalLiq"] if v["totalLiq"] else None) for s, v in pool_ctx.items()}
     jsave(os.path.join(D, "history.json"), hist)

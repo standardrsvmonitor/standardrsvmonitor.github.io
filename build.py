@@ -88,17 +88,6 @@ td{padding:7px 8px;border-bottom:1px solid var(--line);text-align:right;font-fam
 td:first-child{font-family:var(--sans)}
 tr.sr td{color:var(--gold)}
 #t_pools th{white-space:normal;line-height:1.25;vertical-align:bottom;min-width:56px}
-.bm{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:24px;margin-top:4px}
-.bm .st{position:relative;background:linear-gradient(180deg,var(--panel2),var(--panel));border:1px solid var(--line2);border-radius:10px;padding:12px 12px 8px;min-width:0}
-.bm .st:not(:last-child)::after{content:'';position:absolute;top:50%;right:-20px;width:14px;height:2px;background:var(--gold2)}
-.bm .st:not(:last-child)::before{content:'';position:absolute;top:calc(50% - 5px);right:-24px;border-top:6px solid transparent;border-bottom:6px solid transparent;border-left:7px solid var(--gold2)}
-.bm .bn{font-family:var(--mono);font-size:10px;color:var(--dim)}
-.bm .bl{font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--lav);margin-top:2px;min-height:30px;line-height:1.3}
-.bm .bv{font-family:var(--mono);font-size:21px;color:var(--gold);margin-top:6px;white-space:nowrap;font-variant-numeric:tabular-nums}
-.bm .bs{font-family:var(--mono);font-size:11px;color:var(--fg);margin-top:4px;line-height:1.4;font-variant-numeric:tabular-nums}
-.bm .bt{font-family:var(--mono);font-size:11px;color:var(--muted);margin-top:2px;line-height:1.4;font-variant-numeric:tabular-nums}
-.bm svg{display:block;width:100%;height:34px;margin-top:8px}
-@media (max-width:1180px){.bm{grid-template-columns:1fr;gap:20px}.bm .bl{min-height:0}.bm .st:not(:last-child)::after{top:auto;bottom:-16px;right:auto;left:26px;width:2px;height:12px}.bm .st:not(:last-child)::before{top:auto;bottom:-21px;right:auto;left:21px;border-left:6px solid transparent;border-right:6px solid transparent;border-top:7px solid var(--gold2);border-bottom:0}}
 a.hl{color:inherit;text-decoration:underline;text-decoration-style:dotted;text-underline-offset:3px}a.hl:hover{color:var(--fg)}
 #t_slip th,#t_sellers th,#t_cpty th,#t_pnl th{white-space:normal;line-height:1.25;vertical-align:bottom} #t_slip td,#t_sellers td,#t_cpty td,#t_cpty th{padding:6px 5px} #t_sellers td:nth-child(2){white-space:normal;text-align:left;font-family:var(--sans)} #t_sellers th:nth-child(2){text-align:left}
 tr.today td{color:var(--water)}
@@ -206,8 +195,7 @@ tr.today td{color:var(--water)}
 
   <h2 id="equity">Liquidity business <span class="hint">Progress toward a liquidity hub that earns from trading in protocol-owned pools.</span></h2>
   <div class="grid">
-    <div class="panel w12"><span class="i" tabindex="0">i</span><div class="tip">The sequence Standard Reserve describes in its documentation: trading fees on STANDARD fund the reserve, the reserve seeds markets for tokenized equities, those markets earn trading fees, and under the stated policy that income reaches STANDARD through buybacks and S-Bill premiums. Figures cover the seven complete days to the last complete day unless marked; lines are daily, over 30 days or since the equity pools opened on 14 October. The ETH/USDG pool is a treasury position and is left out. Outside liquidity is other providers’ share of in-range liquidity in the equity pools now. Uncollected fees are read from the reserve’s positions and valued at current prices.</div><div class="h"><div><div class="t">Reserve business model, trailing seven days</div><div class="d">Token trading funds the reserve, the reserve funds equity markets, and those markets earn fees for the reserve and, in time, for STANDARD.</div></div></div><div class="bm" id="bm"></div><div class="src">Source: epoch-routed events and the tax hook; reserve rebuilt from on-chain events; PoolManager Swap and ModifyLiquidity events; StateView fee growth for the reserve’s positions.</div></div>
-    <div class="panel w12"><span class="i" tabindex="0">i</span><div class="tip">Trailing seven-day fee income the reserve earned in its SPCX, SKHY and BABA pools, and trailing seven-day STANDARD trading fees, in USD at each day’s prices. The multiple is the first over the second; above 1.0× the equity pools out-earn the token. The first window is the seven days to 20 October, the pools’ first week. Pool fees are each swap’s fee, weighted by the reserve’s share of in-range liquidity.</div><div class="h"><div><div class="t">Equity pool fees against token trading fees, trailing seven days</div><div class="d">Fee income from the reserve’s three equity pools against STANDARD trading fees, and the multiple between them.</div></div><div class="n" id="cx_now"></div></div><div class="ch tall"><canvas id="c_cross"></canvas></div><div class="src">Source: PoolManager Swap events for the equity pools; epoch-routed events and the tax hook for trading fees.</div></div>
+    <div class="panel w12"><span class="i" tabindex="0">i</span><div class="tip">Fee income and volume are derived from PoolManager swap logs for the reserve’s pools; liquidity from StateView; competing venues from DexScreener token-pair data for the same assets on Robinhood Chain. Share of chain equity volume is the last complete day’s volume served by the reserve’s liquidity in its three equity pools as a share of every on-chain pool for the same equities; the ETH/USDG figure is the same measure, counting only the volume its own liquidity served in a pool it shares with other providers. Yield is trailing seven-day pool fee income annualized over capital in pools. Fee-exempt volume transacts through an arbitrage contract that pays no fee.</div><div class="h"><div><div class="t">Trading venue economics</div><div class="d">All protocol-owned pools: three tokenized equities and ETH/USDG. Fee income reflects the reserve’s share of in-range liquidity.</div></div></div><div class="stats" id="eq_stats"></div></div>
     <div class="panel" id="p_vshare"><span class="i" tabindex="0">i</span><div class="tip">The volume the reserve’s liquidity served in each pool as a share of all trading volume in the same asset on Robinhood Chain, by UTC day. The reserve is the only provider in the equity pools; in the ETH/USDG pool, which other providers share, only the volume its own liquidity served counts. Every pool DexScreener lists that pairs the asset with USDG or ETH is counted: Uniswap v4 pools from their swap events, and other pools (Uniswap v3, Metric, Ramses, Aero, Alandale and others) from token transfers into and out of the pool, counting transactions in which one token goes in and the other comes out. Memecoins quoted in an equity are not venues for the equity and are excluded. Volume is in USD at the USDG leg, or at the day’s closing price.</div><div class="h"><div><div class="t">Share of chain volume by pool, daily</div><div class="d">Volume served by the reserve’s liquidity as a share of all on-chain volume in the same asset.</div></div><div class="n" id="vs_now"></div></div><div class="ch"><canvas id="c_vshare"></canvas></div><div class="src">Source: Uniswap v4 Swap events; ERC-20 Transfer logs of every other listed pool; pool list from DexScreener.</div></div>
     <div class="panel" id="p_lshare"><span class="i" tabindex="0">i</span><div class="tip">The reserve’s position value as a share of all liquidity in pools pairing the same asset with USDG or ETH on Robinhood Chain, at the day’s close. Uniswap v4 pools are valued from every liquidity event since the pool was created, at the closing pool price; other pools from their token balances. Current values match DexScreener’s pool liquidity within 0.1% for every venue except Metric’s main SPCX pool, whose on-chain token balances are about 10% below DexScreener’s figure.</div><div class="h"><div><div class="t">Share of chain liquidity by pool, daily</div><div class="d">The reserve’s position in each pool as a share of all on-chain liquidity in the same asset.</div></div><div class="n" id="ls_now"></div></div><div class="ch"><canvas id="c_lshare"></canvas></div><div class="src">Source: Uniswap v4 ModifyLiquidity and Swap events; ERC-20 balances of every other listed pool; reserve positions rebuilt from liquidity events.</div></div>
     <div class="panel w8"><span class="i" tabindex="0">i</span><div class="tip">Volume the reserve’s liquidity served in its four pools, by who traded, for each complete UTC day. Fee-exempt swaps are summed exactly. The rest is estimated from 150 trades per pool and day, drawn in proportion to size and read from their transaction receipts. Cross-venue arbitrage: the same transaction trades the asset the opposite way on another pool. Other bots: the trade came through a private contract, one operator’s rotating wallets with near-identical activity, or from a wallet with 1,000 or more transactions. Organic users: a wallet with fewer transactions trading through a public router, one used by wallets whose activity differs tenfold or more. Each day’s shares carry a sampling error of up to eight percentage points; seven-day shares about three.</div><div class="h"><div><div class="t">Pool volume by counterparty, daily</div><div class="d">Volume the reserve’s liquidity served, by organic users, arbitrage and other bots.</div></div><div class="n" id="cp_now"></div></div><div class="ch tall"><canvas id="c_cpty"></canvas></div><div class="src">Source: PoolManager Swap events for the reserve’s pools; receipts and sending-wallet transaction counts of 150 sampled trades per pool and day.</div></div>
@@ -487,8 +475,14 @@ const poolLiq = sum(allPools.map(p=>L.lp[p].valueUSD)), poolYield = poolLiq?pool
 const ctxS = stockPools.map(p=>ctx[p]||{}), ctxE = ctx['ETH']||{};
 const srV = sum(ctxS.map(c=>c.srVol24||0)), allV = sum(ctxS.map(c=>c.totalVol24||0)), srL = sum(stockPools.map(p=>L.lp[p].valueUSD)), allL = sum(ctxS.map(c=>c.totalLiq||0));
 const firstEq = (S.find(r=>spv(r,allPools)>0)||{}).date;
-const zf7 = sum(s7.map(r=>r.spVolZeroFee||0)), spAll7 = sum(s7.map(r=>r.spVol||0));
+const zf7 = sum(s7.map(r=>r.spVolZeroFee||0)), spAll7 = sum(s7.map(r=>r.spVolMine!=null?r.spVolMine:(r.spVol||0)));   // fee-exempt swaps trade only in the equity pools, where the reserve serves all volume
 const poolAnn = poolFees7*365/7;
+document.getElementById('eq_stats').innerHTML = [
+  ['Pool fee income, 7 days', fmt.usd(poolFees7), `${fmt.pct(rec7?poolFees7/rec7:null,0)} of recurring revenue`, `equities ${fmt.usd(eqFees7)} · ETH/USDG ${fmt.usd(ethFees7)}`],
+  ['Capital in pools', fmt.usd(poolLiq), `${fmt.pct(poolLiq/L.reserve.totalUsd,0)} of reserve`, `${fmt.pct(poolYield,0)} yield, annualized`],
+  ['Share of chain equity volume', fmt.pct(sum(stockPools.map(p=>Y['chainVol_'+p]||0))?sum(stockPools.map(p=>pvm(Y,p)))/sum(stockPools.map(p=>Y['chainVol_'+p]||0)):null,0), ydS, `ETH/USDG pool ${fmt.pct(Y['volShare_ETH'],0)}`],
+  ['Fee-paying share of volume', fmt.pct(spAll7?1-zf7/spAll7:null,0), `7d`, `${fmt.usd(zf7,1)} fee-exempt`],
+].map(k=>`<div><div class="l">${k[0]}</div><div class="v">${k[1]}<small>${k[2]}</small></div><div class="s">${k[3]}</div></div>`).join('');
 document.getElementById('eq_n').textContent = `${fmt.usd(poolFees7)} trailing 7 days`;
 // chain shares, counterparties and profit and loss (last complete day, trailing seven days)
 const PCOL = {SPCX:'#8fa2f0', SKHY:'#a8c79a', BABA:'#e9b7d4', ETH:'#f3b690'};
@@ -505,33 +499,6 @@ const cpRow = (name, ps)=>{const v=Object.fromEntries(CPK.map(k=>[k, sum(s7.map(
   return CPK.map(k=>`<td>${t?fmt.pct(v[k]/t,0):'–'}</td>`).join('') + `<td>${ft?fmt.pct(fo/ft,0):'–'}</td>`;};
 document.getElementById('t_cpty').innerHTML = '<tr><th>Pool</th><th>Organic</th><th>Arbitrage</th><th>Bots</th><th>Fee-exempt</th><th>Organic fees</th></tr>' +
   pools.map(p=>`<tr><td>${shortP(p)}</td>${cpRow(p,[p])}</tr>`).join('') + `<tr class="sr"><td>All pools</td>${cpRow('all',pools)}</tr>`;
-// business model diagram: the equity pools (the ETH/USDG pool is a treasury position)
-function renderBM(){
-  const E7 = stockPools, sinceLP = Sp.filter(r=>r.date>=LP0), L30 = last(Sp,30);
-  const trRoll = r=>{const w=winEnd(r,7); return w && w[0].date>=ep2 ? sum(w.map(tr)) : null;};
-  const eqRoll = r=>{const w=winEnd(r,7); return w && w[0].date>=LP0 ? sum(w.map(x=>spf(x,E7))) : null;};
-  const ratio = r=>{const a=eqRoll(r), b=trRoll(r); return a!=null&&b ? a/b : null;};
-  const tr7 = sum(s7.map(tr)), trP = Sp.length>=14 ? sum(Sp.slice(-14,-7).map(tr)) : null;
-  const eqCap = r=>sum(E7.map(p=>((r.reserveParts||{}).lp||{})[p]||0)), capNow = sum(E7.map(p=>L.lp[p].valueUSD));
-  const outside = capNow ? sum(E7.map(p=>(1-(L.lp[p].share??1))*L.lp[p].valueUSD))/capNow : null;
-  const vsh = (rows,ps)=>{const c=sum(rows.map(r=>sum(ps.map(p=>r['chainVol_'+p]||0)))); return c ? sum(rows.map(r=>sum(ps.map(p=>pvm(r,p)))))/c : null;};
-  const lsh = r=>{const c=sum(E7.map(p=>r['chainTvl_'+p]||0)); return c ? eqCap(r)/c : null;};
-  const cls = rows=>{const v=Object.fromEntries(CPK.map(k=>[k, sum(rows.map(r=>ck(r,k,E7)))])), t=sum(CPK.map(k=>v[k])); return t ? Object.fromEntries(CPK.map(k=>[k,v[k]/t])) : null;};
-  const cs7 = cls(s7.filter(r=>E7.some(p=>r['cpN_'+p]!=null)));
-  const owedEq = sum(E7.map(p=>Y['lpFees_'+p]||0)), lc = DATA.lpChanges||{}, r30 = Sh.length>30 ? Sh[Sh.length-31].reserveUsd : null;
-  const st = [
-    ['Token trading fees', fmt.usd(tr7), 'STANDARD tax, routed each epoch', trP ? `${fmt.chg(tr7/trP-1,0)} on the prior seven days` : '', L30.map(trRoll)],
-    ['Reserve', fmt.usd(L.reserve.totalUsd), `${fmt.usd(capNow)} in equity pools, ${fmt.pct(capNow/L.reserve.totalUsd,0)}`, r30 ? `${fmt.chg(L.reserve.totalUsd/r30-1,0)} over 30 days` : '', last(Sh,31).map(r=>r.reserveUsd??null)],
-    ['Equity markets', `${E7.length} pools`, `${E7.join(' · ')}, since ${dm(LP0)}`, `outside liquidity in range ${fmt.pct(outside,0)}`, sinceLP.map(eqCap)],
-    ['Share of chain volume', fmt.pct(vsh(s7,E7),0), E7.map(p=>`${p} ${fmt.pct(vsh(s7,[p]),0)}`).join(' · '), `chain liquidity share ${fmt.pct(lsh(Y),0)} on ${dm(Y.date)}`, sinceLP.map(r=>vsh([r],E7))],
-    ['Organic share of flow', cs7 ? fmt.pct(cs7.Org,0) : '–', cs7 ? `arbitrage ${fmt.pct(cs7.Arb,0)} · other bots ${fmt.pct(cs7.Bot,0)}` : '', cs7 ? `fee-exempt contract ${fmt.pct(cs7.Fx,0)}` : '', sinceLP.map(r=>E7.some(p=>r['cpN_'+p]!=null) ? (cls([r])||{}).Org ?? null : null)],
-    ['Equity pool fees', fmt.usd(eqFees7), `${ratio(Y)!=null ? ratio(Y).toFixed(2)+'×' : '–'} token trading fees`, `${fmt.pct(capNow ? eqFees7*365/7/capNow : null,0)} a year on capital`, sinceLP.map(ratio)],
-    ['Returned to STANDARD', lc.withdrawals ? `${lc.withdrawals} withdrawals` : '$0', lc.withdrawals ? `last on ${dm(lc.lastWithdrawal)}` : 'no fees withdrawn from the positions', `${fmt.usd(owedEq)} uncollected since ${dm(LP0)}`, sinceLP.map(r=>sum(E7.map(p=>r['lpFees_'+p]||0)))],
-  ];
-  document.getElementById('bm').innerHTML = st.map((c,i)=>`<div class="st"><div class="bn">${i+1}</div><div class="bl">${c[0]}</div><div class="bv">${c[1]}</div><div class="bs">${c[2]}</div><div class="bt">${c[3]}</div>${spark(c[4])}</div>`).join('');
-  const rY = ratio(Y); document.getElementById('cx_now').textContent = rY!=null ? `${rY.toFixed(2)}× on ${dm(Y.date)}` : '';
-}
-renderBM();
 const pnlOf = (r,p)=>r['lpVal_'+p]!=null ? {lp:r['lpVal_'+p], hold:r['holdVal_'+p], cost:r['lpCost_'+p], fees:r['lpFees_'+p]} : null;
 const PY = pools.map(p=>[p, pnlOf(Y,p)]).filter(x=>x[1]);
 const pt7 = PY.reduce((a,[p,v])=>({lp:a.lp+v.lp, hold:a.hold+v.hold, cost:a.cost+v.cost, fees:a.fees+v.fees}), {lp:0,hold:0,cost:0,fees:0});
@@ -632,15 +599,6 @@ function draw(){
     {type:'line', label:'Organic share of volume', data:Rc.map(r=>{const t=sum(CPK.map(k=>ck(r,k))); return t?ck(r,'Org')/t:null;}), borderColor:C.gold, backgroundColor:C.gold, pointRadius:0, tension:.25, yAxisID:'y1', stack:'l', order:1},
   ]}, options:{maintainAspectRatio:false, scales:{x:{stacked:true, grid:{display:false}}, y:{stacked:true, ticks:{callback:v=>fmt.usd(v,1)}}, y1:{position:'right', grid:{display:false}, min:0, max:1, ticks:{callback:v=>fmt.pct(v,0)}}},
     plugins:{bands:{dates:Rc.map(r=>r.date)}, tooltip:{callbacks:{label:c=>c.dataset.yAxisID==='y1'?c.dataset.label+': '+fmt.pct(c.parsed.y,0):c.dataset.label+': '+fmt.usd(c.parsed.y,1)}}}}});
-  const Rx = Rq.filter(r=>r.date>='2026-10-20'), lx = Rx.map(r=>r.date.slice(5));   // the first window is the pools' first week
-  const eqR = r=>{const w=winEnd(r,7); return w ? sum(w.map(x=>spf(x,stockPools))) : null;}, trR = r=>{const w=winEnd(r,7); return w ? sum(w.map(tr)) : null;};
-  mk(c_cross, {data:{labels:lx, datasets:[
-    {type:'line', label:'STANDARD trading fees', data:Rx.map(trR), borderColor:C.peach, backgroundColor:C.peach, pointRadius:0, tension:.25, yAxisID:'y'},
-    {type:'line', label:'Equity pool fees', data:Rx.map(eqR), borderColor:C.green, backgroundColor:C.green, pointRadius:0, tension:.25, yAxisID:'y'},
-    {type:'line', label:'Multiple, equity pool fees to trading fees', data:Rx.map(r=>{const a=eqR(r), b=trR(r); return a!=null&&b ? a/b : null;}), borderColor:C.gold, backgroundColor:C.gold, pointRadius:0, tension:.25, yAxisID:'y1'},
-    {type:'line', label:'Parity, 1.0×', data:Rx.map(()=>1), borderColor:C.muted, backgroundColor:C.muted, borderWidth:1, pointRadius:0, yAxisID:'y1'},
-  ]}, options:{maintainAspectRatio:false, scales:{x:{grid:{display:false}}, y:{beginAtZero:true, ticks:{callback:v=>fmt.usd(v,0)}}, y1:{position:'right', grid:{display:false}, min:0, suggestedMax:1.2, ticks:{callback:v=>v.toFixed(1)+'×'}}},
-    plugins:{tooltip:{callbacks:{label:c=>c.dataset.yAxisID==='y1' ? `${c.dataset.label}: ${c.parsed.y.toFixed(2)}×` : `${c.dataset.label}: ${fmt.usd(c.parsed.y,1)}`}}}}});
   const plRows = Rq.map(r=>pools.map(p=>{const v=pnlOf(r,p); return v? v.lp+v.fees-v.hold : null;}));
   mk(c_pnl, {type:'line', data:{labels:lq, datasets:[
     ...pools.map((p,i)=>({label:shortP(p), data:plRows.map(x=>x[i]), borderColor:PCOL[p]||C.water, backgroundColor:PCOL[p]||C.water, pointRadius:0, tension:.25})),

@@ -88,6 +88,7 @@ td{padding:7px 8px;border-bottom:1px solid var(--line);text-align:right;font-fam
 td:first-child{font-family:var(--sans)}
 tr.sr td{color:var(--gold)}
 #t_pools th{white-space:normal;line-height:1.25;vertical-align:bottom;min-width:56px}
+#t_slip th,#t_sellers th{white-space:normal;line-height:1.25;vertical-align:bottom} #t_slip td,#t_sellers td{padding:6px 5px} #t_sellers td:nth-child(2){white-space:normal;text-align:left;font-family:var(--sans)} #t_sellers th:nth-child(2){text-align:left}
 tr.today td{color:var(--water)}
 .tw{overflow-x:auto}
 .pos{color:var(--green)} .neg{color:var(--red)} .mut{color:var(--muted)}
@@ -138,7 +139,19 @@ tr.today td{color:var(--water)}
   .tw table th:first-child,.tw table td:first-child{position:sticky;left:0;background:var(--panel);z-index:1;box-shadow:4px 0 8px -4px rgba(0,0,0,.6)}
   .btn{font-size:10.5px;padding:4px 10px}
 }
-}
+.strip{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-top:22px}
+@media (max-width:900px){.strip{grid-template-columns:1fr}}
+.sc{position:relative;background:linear-gradient(180deg,var(--panel2),var(--panel));border:1px solid var(--line2);border-radius:12px;padding:16px 18px 12px;min-width:0}
+.sc .l{font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:var(--lav);padding-right:22px}
+.sc .v{font-family:var(--mono);font-size:30px;color:var(--gold);margin-top:6px;font-variant-numeric:tabular-nums;white-space:nowrap}
+.sc .s{font-family:var(--mono);font-size:12px;color:var(--fg);margin-top:4px;font-variant-numeric:tabular-nums}
+.sc .t{font-family:var(--mono);font-size:11.5px;color:var(--muted);margin-top:2px;font-variant-numeric:tabular-nums}
+.sc svg{display:block;width:100%;height:46px;margin-top:10px}
+.sc .i{position:absolute;top:12px;right:12px;width:16px;height:16px;border-radius:50%;border:1px solid var(--line2);color:var(--dim);font-size:10px;font-family:var(--mono);display:flex;align-items:center;justify-content:center;cursor:help}
+.sc .tip{display:none;position:absolute;right:8px;top:32px;z-index:30;width:300px;background:var(--panel2);border:1px solid var(--line2);border-radius:8px;padding:10px 12px;font-size:12px;color:var(--fg);line-height:1.45;box-shadow:0 10px 28px rgba(0,0,0,.45)}
+.sc .i:hover + .tip,.sc .i:focus + .tip{display:block}
+.stats1{display:grid;grid-template-columns:auto 1fr;gap:4px 14px;margin-top:12px;font-family:var(--mono);font-size:12px} .stats1 div:nth-child(odd){font-family:var(--sans);color:var(--muted)} .stats1 div:nth-child(even){text-align:right}
+@media (max-width:600px){.sc .v{font-size:24px} .sc .tip{width:calc(100vw - 48px)}}
 .foot{margin-top:40px;color:var(--dim);font-size:12px;font-family:var(--mono);line-height:1.7}
 </style>
 
@@ -150,33 +163,39 @@ tr.today td{color:var(--water)}
   </div>
 </div>
 <nav class="nav">
-  <a href="#market">Market</a><a href="#income">Fee income</a><a href="#equity">Liquidity business</a><a href="#auctions">Auctions</a><a href="#reserve">Reserve</a><a href="#supply">Supply</a><a href="#bank">Banking</a><a href="#log">Data log</a>
+  <a href="#market">Market</a><a href="#revenue">Revenue</a><a href="#equity">Liquidity business</a><a href="#auctions">Auctions</a><a href="#reserve">Reserve</a><a href="#supply">Supply</a><a href="#bank">Banking</a><a href="#log">Data log</a>
   <span class="sp"></span>
   <span class="seg" id="range"><button data-n="7">7d</button><button data-n="30" class="on">30d</button><button data-n="0">all</button></span>
 </nav>
 
 <div class="wrap">
+  <div class="strip" id="strip"></div>
   <div class="kpis" id="kpis"></div>
   <div class="kpis small" id="kpis2"></div>
 
   <h2 id="market">Market <span class="hint">Shaded intervals denote contraction epochs.</span></h2>
   <div class="grid">
     <div class="panel w8"><span class="i" tabindex="0">i</span><div class="tip">Price is the GeckoTerminal daily close for the STANDARD/ETH pool. Market capitalization on minted supply corresponds to the figure quoted by DexScreener and GeckoTerminal. Market capitalization on outstanding supply excludes STANDARD held in the protocol’s own pool and in the Incentives Vault. Shaded intervals denote contraction epochs.</div><div class="h"><div><div class="t">Token price and market capitalization</div><div class="d">Daily closing price with market capitalization on minted supply and on outstanding supply.</div></div><div class="n" id="px_now"></div></div><div class="ch tall"><canvas id="c_price"></canvas></div><div class="src">Source: GeckoTerminal daily close for the STANDARD/ETH pool; STANDARD transfer logs for supply and outstanding supply; epoch-settled events for the regime.</div></div>
-    <div class="panel w4"><span class="i" tabindex="0">i</span><div class="tip">Fee income comprises token trading fees, charter auction proceeds and fee income from every reserve pool. The launch epoch is excluded because genesis-day fees distort the first week.</div><div class="h"><div><div class="t">Fee yield</div><div class="d">Trailing seven-day fee income, annualized, as a share of market capitalization on outstanding supply.</div></div><div class="n" id="yield_now"></div></div><div class="ch tall"><canvas id="c_yield"></canvas></div><div class="src">Source: epoch-routed events, charter purchases, stock-pool swap fees; outstanding supply from transfer logs.</div></div>
+    <div class="panel w4"><span class="i" tabindex="0">i</span><div class="tip">Market capitalization on outstanding supply divided by reserve assets, equivalently token price divided by backing per outstanding token. Reserve assets at each day’s close are rebuilt from on-chain events: ETH in the reserve Safe and both policy vaults from Safe transactions, vault buybacks and forwards, epoch routing and the genesis seeding; USDG and equities held by the Safe from token transfers; and the Safe’s Uniswap v4 positions from liquidity events, valued at the day’s closing pool price. Today uses the reserve read at the compile block. Uncollected position fees are excluded. The reserve bought its tokenized equities on 2 and 13 October, before their pools opened on 14 October; until then they are valued at each pool’s first closing price.</div><div class="h"><div><div class="t">Price to backing, daily</div><div class="d">Market capitalization on outstanding supply as a multiple of reserve assets.</div></div><div class="n" id="pb_now"></div></div><div class="ch tall"><canvas id="c_pb"></canvas></div><div class="src">Source: reserve Safe, policy vault, fee splitter and genesis minter events; ERC-20 transfers; Uniswap v4 ModifyLiquidity and Swap events; Coinbase ETH-USD.</div></div>
+    <div class="panel w8"><span class="i" tabindex="0">i</span><div class="tip">STANDARD sold into the protocol’s STANDARD/ETH pool less STANDARD bought from it, from every transfer into and out of the pool; positive values are net sales. A trade is assigned to the wallet that sent STANDARD to the pool or received it; when a router or aggregator stands in between, the same transaction also moves STANDARD between it and a wallet, and that wallet is used. Groups apply in order: the team wallet; bankers, wallets that have bought, deposited into, withdrawn from or checked in a charter; S-Bill holders, wallets that have deposited into S-Bills; high-frequency wallets and bots, with 300 or more pool trades; launch-week buyers, whose first purchase came in the first epoch; and other wallets. Protocol contracts are excluded. The groups sum to net market sales in the supply table.</div><div class="h"><div><div class="t">Net sales into the pool by holder group, daily</div><div class="d">STANDARD sold into the protocol’s STANDARD/ETH pool less STANDARD bought from it.</div></div><div class="n" id="sell_now"></div></div><div class="ch tall"><canvas id="c_sell"></canvas></div><div class="src">Source: every STANDARD Transfer log; charter, deposit, withdrawal, check-in and S-Bill events for group membership.</div></div>
+    <div class="panel w4 tw"><span class="i" tabindex="0">i</span><div class="tip">Wallets with the largest net sales into the pool over the last seven complete days. Net is STANDARD sold less STANDARD bought. Trades through routers are assigned to the wallet on the other side of the router.</div><div class="h"><div><div class="t">Largest net sellers, trailing seven days</div><div class="d">Net STANDARD sold into the pool, by wallet.</div></div></div><table id="t_sellers"></table></div>
+    <div class="panel w8"><span class="i" tabindex="0">i</span><div class="tip">The ETH, in USD, that moves STANDARD’s price two or five percent in the protocol’s STANDARD/ETH pool. Bid depth is what sellers receive taking the price down; ask depth, in the tooltip, is what buyers pay taking it up. The pool’s liquidity is almost entirely one wide protocol position, so the two sides are close to symmetric. Computed from every open liquidity range in the pool, rebuilt from liquidity events, at each day’s closing pool price. The pool fee and the tax are excluded.</div><div class="h"><div><div class="t">STANDARD/ETH market depth, daily</div><div class="d">ETH that sellers receive taking STANDARD’s price down two and five percent, in USD; ask depth in the tooltip.</div></div><div class="n" id="dp_now"></div></div><div class="ch tall"><canvas id="c_depth"></canvas></div><div class="src">Source: Uniswap v4 ModifyLiquidity and Swap events for the STANDARD/ETH pool; Coinbase ETH-USD.</div></div>
+    <div class="panel w4 tw"><span class="i" tabindex="0">i</span><div class="tip">Each trade is simulated against the pool’s open liquidity at the compile block. Price impact is the average execution price against the pool price before costs. Cost is the all-in cost: it adds the pool’s 1% fee and the hook’s tax, 2% on buys and 3% on sells. Sizes are in USD at the compile ETH price. Protocol share is the protocol position’s share of in-range liquidity.</div><div class="h"><div><div class="t">STANDARD/ETH execution cost by size</div><div class="d">Price impact and all-in cost of a market order, by size.</div></div></div><table id="t_slip"></table><div class="stats1" id="slip_s"></div><div class="src">Source: Uniswap v4 StateView and liquidity events for the STANDARD/ETH pool; tax rates from the hook via the indexer.</div></div>
   </div>
 
-  <h2 id="income">Fee income</h2>
+  <h2 id="revenue">Revenue <span class="hint">Recurring revenue is token trading fees plus the reserve’s pool fees. Charter sales are shown separately.</span></h2>
   <div class="grid">
-    <div class="panel w8"><span class="i" tabindex="0">i</span><div class="tip">Token trading fees are known per three-day epoch and are allocated evenly across its days; the current epoch is estimated from ETH held in the tax hook and fee splitter. Charter proceeds are recorded on the sale date. Pool fee income is derived from the fee field of each swap, weighted by the reserve’s share of in-range liquidity.</div><div class="h"><div><div class="t">Fee income by source</div><div class="d">Token trading fees, charter auction proceeds and pool fee income, in USD.</div></div><div class="n" id="inc7"></div></div><div class="ch tall"><canvas id="c_income"></canvas></div><div class="src">Source: SR indexer epoch-routed events, charter purchase events, PoolManager swap logs, Coinbase ETH-USD.</div></div>
-    <div class="panel w4"><span class="i" tabindex="0">i</span><div class="tip">In expansion epochs 70% is allocated to the reserve; in contraction epochs 70% is allocated to buybacks and burns. A further 15% purchases STANDARD into the Incentives Vault and 15% is allocated to the team. Gold denotes charter auction proceeds within the total.</div><div class="h"><div><div class="t">Fee routing by epoch</div><div class="d">ETH routed by the fee engine at each epoch settlement.</div></div></div><div class="ch tall"><canvas id="c_epochs"></canvas></div><div class="src">Source: SR indexer epoch-routed and epoch-settled events.</div></div>
-    <div class="panel w12 tw"><span class="i" tabindex="0">i</span><div class="tip">Net flow is ETH purchased less ETH sold through the pool during the epoch, as reported by the hook; its sign sets the regime. Routed total comprises trading fees and charter proceeds. The vault allocation is 70%, to the reserve in expansion and to buybacks in contraction. Multiplier after is the issuance multiplier applied from the following epoch.</div><div class="h"><div><div class="t">Epoch settlement ledger</div><div class="d">Net flow determines the regime; routed fees are the levy on total volume and are therefore always positive.</div></div><div><button class="btn" id="fold_ep">View ledger</button></div></div><div class="fold" id="f_ep"><table id="t_epochs"></table></div></div>
+    <div class="panel w8"><span class="i" tabindex="0">i</span><div class="tip">Token trading fees are known per three-day epoch and are allocated evenly across its days; the current epoch is estimated from ETH held in the tax hook and fee splitter. Pool fee income is derived from each swap’s fee, weighted by the reserve’s share of in-range liquidity. Together they are recurring revenue. Charter sales are auction proceeds for new charters, recorded on the sale date; they sell new bank capacity and are not recurring.</div><div class="h"><div><div class="t">Revenue by source, daily</div><div class="d">Recurring revenue from token trading fees and pool fees, with charter sales alongside, in USD.</div></div><div class="n" id="inc7"></div></div><div class="ch tall"><canvas id="c_income"></canvas></div><div class="src">Source: SR indexer epoch-routed events, charter purchase events, PoolManager swap logs, Coinbase ETH-USD.</div></div>
+    <div class="panel w4"><span class="i" tabindex="0">i</span><div class="tip">Market capitalization on outstanding supply at each day’s close divided by trailing seven-day recurring revenue, annualized. Charter sales are excluded. Windows that include the launch epoch are omitted because genesis-day fees distort them.</div><div class="h"><div><div class="t">Price to recurring revenue, daily</div><div class="d">Market capitalization on outstanding supply as a multiple of annualized recurring revenue.</div></div><div class="n" id="prr_now"></div></div><div class="ch tall"><canvas id="c_prr"></canvas></div><div class="src">Source: epoch-routed events and PoolManager swap logs for revenue; transfer logs and GeckoTerminal closes for market capitalization.</div></div>
+    <div class="panel"><span class="i" tabindex="0">i</span><div class="tip">In expansion epochs 70% is allocated to the reserve; in contraction epochs 70% is allocated to buybacks and burns. A further 15% purchases STANDARD into the Incentives Vault and 15% is allocated to the team. Gold denotes charter sales within the total.</div><div class="h"><div><div class="t">Income routing by epoch</div><div class="d">Trading fees and charter sales routed by the fee engine at each epoch settlement, in ETH.</div></div></div><div class="ch tall"><canvas id="c_epochs"></canvas></div><div class="src">Source: SR indexer epoch-routed and epoch-settled events.</div></div>
+    <div class="panel tw"><span class="i" tabindex="0">i</span><div class="tip">Pool fee income accrues within the reserve’s liquidity positions and does not pass through the fee engine; it therefore adds to backing and funds no buybacks. Token trading fees and charter proceeds are routed at settlement: 70% to the reserve in expansion epochs or to buybacks in contraction epochs, 15% to POL buybacks and 15% to the team. Each day follows its own epoch’s routing; days of the current epoch are not yet routed. The total equals recurring revenue plus charter sales over the same seven days.</div><div class="h"><div><div class="t">Income allocation, trailing seven days</div><div class="d">Recurring revenue and charter sales by destination.</div></div><div class="n" id="went_n"></div></div><div class="bar" id="went_bar"></div><div class="legend2" id="went_leg"></div><div class="src" id="went_src"></div></div>
+    <div class="panel w12 tw"><span class="i" tabindex="0">i</span><div class="tip">Net flow is ETH purchased less ETH sold through the pool during the epoch, as reported by the hook; its sign sets the regime. Routed total comprises trading fees and charter sales. The vault allocation is 70%, to the reserve in expansion and to buybacks in contraction. Multiplier after is the issuance multiplier applied from the following epoch.</div><div class="h"><div><div class="t">Epoch settlement ledger</div><div class="d">Net flow determines the regime; routed fees are the levy on total volume and are therefore always positive.</div></div><div><button class="btn" id="fold_ep">View ledger</button></div></div><div class="fold" id="f_ep"><table id="t_epochs"></table></div></div>
   </div>
 
   <h2 id="equity">Liquidity business <span class="hint">Progress toward a liquidity hub that earns from trading in protocol-owned pools.</span></h2>
   <div class="grid">
     <div class="panel w12"><span class="i" tabindex="0">i</span><div class="tip">Fee income and volume are derived from PoolManager swap logs for the reserve’s pools; liquidity from StateView; competing venues from DexScreener token-pair data for the same assets on Robinhood Chain. Share of chain equity volume is the 24-hour volume of the reserve’s three equity pools as a share of every pool for the same equities on the chain; the ETH/USDG figure is the same measure for the ETH/USDG pool, in which the reserve supplies part of the liquidity. Yield is trailing seven-day pool fee income annualized over capital in pools. Fee-exempt volume transacts through an arbitrage contract that pays no fee.</div><div class="h"><div><div class="t">Trading venue economics</div><div class="d">All protocol-owned pools: three tokenized equities and ETH/USDG. Fee income reflects the reserve’s share of in-range liquidity.</div></div></div><div class="stats" id="eq_stats"></div></div>
-    <div class="panel w8"><div class="h"><div><div class="t">Pool fee income by pool</div><div class="d">Daily fee income earned by the reserve in each pool, with pool fee income as a trailing seven-day share of total fee income.</div></div><div class="n" id="eq_n"></div></div><div class="ch tall"><canvas id="c_equity"></canvas></div><div class="src">Source: PoolManager swap logs; epoch-routed events; charter purchase events.</div></div>
-    <div class="panel w4 tw"><span class="i" tabindex="0">i</span><div class="tip">Pool fee income accrues within the reserve’s liquidity positions and does not pass through the fee engine; it therefore adds to backing and funds no buybacks. Token trading fees and charter proceeds are routed at settlement: 70% to the reserve in expansion epochs or to buybacks in contraction epochs, 15% to POL buybacks and 15% to the team. Each day follows its own epoch’s routing; days of the current epoch are not yet routed. The total equals fee income by source over the same seven days.</div><div class="h"><div><div class="t">Fee income allocation, trailing seven days</div><div class="d">Allocation of fee income to reserve backing, buybacks and the team.</div></div><div class="n" id="went_n"></div></div><div class="bar" id="went_bar"></div><div class="legend2" id="went_leg"></div><div class="src" id="went_src"></div></div>
+    <div class="panel w12"><div class="h"><div><div class="t">Pool fee income by pool</div><div class="d">Daily fee income earned by the reserve in each pool, with pool fees as a trailing seven-day share of recurring revenue.</div></div><div class="n" id="eq_n"></div></div><div class="ch tall"><canvas id="c_equity"></canvas></div><div class="src">Source: PoolManager swap logs; epoch-routed events.</div></div>
   </div>
 
   <h2 id="auctions">Auctions</h2>
@@ -190,16 +209,16 @@ tr.today td{color:var(--water)}
     <div class="panel w4"><span class="i" tabindex="0">i</span><div class="tip">Comprises ETH and USDG held in the reserve Safe, ETH in the policy vaults, tokenized equities held outside pools, and the Safe’s Uniswap v4 positions. Excludes ETH held by the POL buyback contract and the team wallet.</div><div class="h"><div><div class="t">Reserve composition by asset</div><div class="d">Current reserve holdings, in USD.</div></div><div class="n" id="res_tot"></div></div><div class="ch"><canvas id="c_reserve"></canvas></div><div class="src">Source: Robinhood Chain RPC balances of the reserve Safe, vaults and the Safe's Uniswap v4 positions.</div></div>
     <div class="panel w8"><span class="i" tabindex="0">i</span><div class="tip">Bars are the volume served by the reserve’s own liquidity: each swap’s USDG amount multiplied by the reserve’s share of in-range liquidity at that swap. In the stock pools the reserve is effectively the sole provider, so the bar equals pool volume. The ETH/USDG pool is shared with third-party providers, so its bar is only the reserve’s share; the pool’s total volume and the share served appear in the tooltip. Fee income is weighted the same way. The grey line denotes the share of pool volume transacted at a 0% fee, attributable to a fee-exempt arbitrage contract.</div><div class="h"><div><div class="t">Pool trading volume and fee income</div><div class="d">Daily volume served by the reserve’s liquidity, by pool, with fee income to the reserve and the share of volume transacted at zero fee.</div></div><div class="n" id="sp7"></div></div><div class="ch tall"><canvas id="c_pools"></canvas></div><div class="src">Source: PoolManager swap logs for the reserve’s pools; fee and liquidity from the swap event; the reserve’s in-range liquidity from its positions. Pool totals in the tooltip.</div></div>
     <div class="panel w12 tw"><span class="i" tabindex="0">i</span><div class="tip">Holdings and prices are read from Uniswap v4 StateView and PositionManager; other venues for the same asset from DexScreener. The reserve is the sole liquidity provider in the equity pools but shares the ETH/USDG pool with third-party providers, so fee income reflects its share of in-range liquidity at each swap. Equity pools apply a session fee set by the hook; the ETH/USDG pool applies a fixed tier. Value is the reserve’s position. Volume is the volume served by the reserve’s liquidity, as in the chart above. Yield is trailing seven-day fee income annualized over value. Share of pool is the reserve’s share of in-range liquidity; the chain shares compare the reserve’s pool with every pool for the same asset on Robinhood Chain, using DexScreener’s 24-hour volume. Totals sum the four pools; yield in the total row is on combined value.</div><div class="h"><div><div class="t">Protocol-owned liquidity by pool</div><div class="d">The reserve’s position in each pool and its standing against other venues on the chain.</div></div></div><table id="t_pools"></table><div class="src">Source: Uniswap v4 StateView and PositionManager for holdings; DexScreener token-pairs for the other pools.</div></div>
-    <div class="panel w12 tw"><span class="i" tabindex="0">i</span><div class="tip">Balances are read on-chain at each run. The chain retains no archival state, so the series begins on the first day of operation (22 October 2026) and extends by one observation per run.</div><div class="h"><div><div class="t">Reserve composition, daily change</div><div class="d">Each reserve component against the prior day and seven days earlier.</div></div><div><span class="n" id="resd_n"></span> <button class="btn" id="fold_rs">View table</button></div></div><div class="fold" id="f_rs"><table id="t_resd"></table></div><div class="src">Source: Robinhood Chain RPC balances and Uniswap v4 position values at each run, USD at that run's ETH price and pool prices.</div></div>
+    <div class="panel w12 tw"><span class="i" tabindex="0">i</span><div class="tip">Today is the reserve read at the compile block. Earlier closes are rebuilt from on-chain events, as in the price to backing chart, and valued at each day’s closing pool prices and ETH price.</div><div class="h"><div><div class="t">Reserve composition, daily change</div><div class="d">Each reserve component today against the close one day and seven days earlier.</div></div><div><span class="n" id="resd_n"></span> <button class="btn" id="fold_rs">View table</button></div></div><div class="fold" id="f_rs"><table id="t_resd"></table></div><div class="src">Source: Robinhood Chain RPC balances at the compile block; reserve Safe, vault and liquidity events for earlier closes.</div></div>
   </div>
 
   <h2 id="supply">Supply and market capitalization</h2>
   <div class="grid">
     <div class="panel w4"><span class="i" tabindex="0">i</span><div class="tip">Outstanding supply equals minted supply less STANDARD held in the protocol’s pool less the Incentives Vault. Free float further excludes S-Bill principal, the S-Bill premium pot and the team wallet. DexScreener and GeckoTerminal quote market capitalization on minted supply. Withdrawals are minted from bankers’ ledger balances; deposits are burned into them. Buybacks and other burns tie to the token contract’s burned total.</div><div class="h"><div><div class="t">Supply reconciliation</div><div class="d">From the genesis mint to minted supply, outstanding supply and free float.</div></div></div><div class="bridge" id="bridge"></div><div class="src">Source: STANDARD Transfer logs, deposited and withdrawn events, and balances read at the same block.</div></div>
     <div class="panel w8"><span class="i" tabindex="0">i</span><div class="tip">Issuance does not mint tokens. It credits bankers’ ledger balances, and tokens are minted only when a banker retires a branch. Outstanding supply therefore falls when holders sell into the protocol’s pool or deposit into branches, which converts tokens to ledger, and rises on withdrawals and Incentives Vault distributions. Buybacks burn tokens out of the pool, shrinking the total without touching outstanding supply. Minted supply, the ERC-20 total, is the lower two bands together; minted plus ledger is the full height.</div><div class="h"><div><div class="t">STANDARD supply composition, daily</div><div class="d">Outstanding supply, protocol holdings in the pool and Incentives Vault, and the ledger balance owed to bankers but not yet minted. The full height is every STANDARD that exists or is owed.</div></div><div class="n" id="mc_now"></div></div><div class="ch tall"><canvas id="c_mc"></canvas></div><div class="src">Source: STANDARD transfer logs classified by counterparty; ledger balance from issuance, deposit, license, withdrawal and revocation events.</div></div>
-    <div class="panel"><span class="i" tabindex="0">i</span><div class="tip">Withdrawals minted to bankers and Incentives Vault distributions add to outstanding supply; deposits to branches, which are burned to the ledger, reduce it. Buybacks and POL purchases remove tokens from the pool. Net flow into the pool is sales less purchases.</div><div class="h"><div><div class="t">Outstanding supply flows by source</div><div class="d">Daily movements of STANDARD into and out of outstanding supply.</div></div></div><div class="ch tall"><canvas id="c_flows"></canvas></div><div class="src">Source: STANDARD Transfer logs involving the pool, vaults, S-Bills and the zero address.</div></div>
-    <div class="panel"><span class="i" tabindex="0">i</span><div class="tip">STANDARD leaves supply permanently through three doors. Expansion licenses are paid from bankers’ ledger balances and never minted. Half of every resolution fee on a withdrawal and half of every revocation fee is burned, the other half is recycled to remaining bankers. Buybacks by the contraction vault and the protocol position’s token-side fees burn minted tokens. The line is the running total of all three as a share of the 1 billion hard cap, the protocol’s own “Burned forever” measure.</div><div class="h"><div><div class="t">STANDARD burned by source, daily</div><div class="d">Expansion licenses, the burned half of resolution and revocation fees, and buybacks, with the cumulative total as a share of the 1 billion hard cap.</div></div><div class="n" id="burn_now"></div></div><div class="ch tall"><canvas id="c_issue"></canvas></div><div class="src">Source: licenses-purchased, withdrawn and revoked events; STANDARD transfers to the zero address from the contraction vault, POL manager and S-Bills. Cumulative from events; the tile reads the token contract.</div></div>
-    <div class="panel w12 tw"><span class="i" tabindex="0">i</span><div class="tip">Supply changes when withdrawals are minted (+), deposits are burned to branches (−) and buybacks are burned (−). The pool changes when the market sells into it (+) or purchases from it (−) and when buybacks withdraw tokens (−). A buyback reduces supply and the pool by equal amounts, lowering market capitalization on minted supply while leaving outstanding supply unchanged. S-Bill premiums are paid from a pot held by the S-Bills contract and move tokens within outstanding supply.</div><div class="h"><div><div class="t">Supply, pool and outstanding reconciliation</div><div class="d">Daily reconciliation: outstanding supply equals minted supply less the protocol pool less the Incentives Vault.</div></div><div><button class="btn" id="fmore">View all days</button></div></div><table id="t_float"></table><div class="src">Source: STANDARD Transfer logs classified by counterparty (zero address, PoolManager, contraction vault, POL buyback, Incentives Vault). S-Bill premiums are paid from a pot the S-Bills contract already holds, so they move tokens within outstanding supply and do not appear.</div></div>
+    <div class="panel"><span class="i" tabindex="0">i</span><div class="tip">Outstanding supply rises when withdrawals are minted, when the Incentives Vault distributes, when the market buys from the protocol’s pool, and when the POL manager collects the protocol position’s STANDARD fees and forwards them to the team wallet. It falls when holders sell into the pool, deposit into branches, which burns tokens into the ledger, and when the S-Bills contract burns tokens. Buybacks, POL purchases and the tax hook’s burns take tokens from the pool and leave outstanding supply unchanged. The bars sum to the line, the daily change in outstanding supply.</div><div class="h"><div><div class="t">Outstanding supply flows by source</div><div class="d">Daily movements of STANDARD into and out of outstanding supply, summing to the daily change.</div></div></div><div class="ch tall"><canvas id="c_flows"></canvas></div><div class="src">Source: STANDARD Transfer logs involving the pool, vaults, S-Bills and the zero address.</div></div>
+    <div class="panel"><span class="i" tabindex="0">i</span><div class="tip">STANDARD leaves supply permanently through three doors. Expansion licenses are paid from bankers’ ledger balances and never minted. Half of every resolution fee on a withdrawal and half of every revocation fee is burned, the other half is recycled to remaining bankers. Buybacks by the contraction vault burn minted tokens, as do the S-Bills contract and the tax hook, which burns STANDARD it takes from the pool. The line is the running total of all three as a share of the 1 billion hard cap, the protocol’s own “Burned forever” measure.</div><div class="h"><div><div class="t">STANDARD burned by source, daily</div><div class="d">Expansion licenses, the burned half of resolution and revocation fees, and buybacks, with the cumulative total as a share of the 1 billion hard cap.</div></div><div class="n" id="burn_now"></div></div><div class="ch tall"><canvas id="c_issue"></canvas></div><div class="src">Source: licenses-purchased, withdrawn and revoked events; STANDARD transfers to the zero address. Cumulative from events; the tile reads the token contract.</div></div>
+    <div class="panel w12 tw"><span class="i" tabindex="0">i</span><div class="tip">Minted supply changes when withdrawals are minted (+), deposits are burned into the ledger (−) and tokens are burned (−). The pool changes with net market sales (+ when the market sells, − when it buys) and with the protocol’s own transfers: contraction vault and POL buybacks, and the POL manager’s collection of the protocol position’s fees, which it forwards to the team wallet. A buyback reduces supply and the pool by equal amounts and leaves outstanding supply unchanged. Every row ties.</div><div class="h"><div><div class="t">Supply, pool and outstanding reconciliation</div><div class="d">Daily reconciliation: outstanding supply equals minted supply less the protocol pool less the Incentives Vault.</div></div><div><button class="btn" id="fmore">View all days</button></div></div><table id="t_float"></table><div class="src">Source: STANDARD Transfer logs classified by counterparty. Net market sales equal the sum of the holder groups in the Market section.</div></div>
   </div>
 
   <h2 id="bank">Banking system</h2>
@@ -207,7 +226,7 @@ tr.today td{color:var(--water)}
     <div class="panel"><span class="i" tabindex="0">i</span><div class="tip">Ledger balance equals issuance plus deposits plus recycled fees, less license purchases, gross withdrawals and revocations. The resolution fee, the exit fee on withdrawals, is 2% and rises to 60% as seven-day exit pressure approaches 10% of the ledger.</div><div class="h"><div><div class="t">Bank deposits, withdrawals and ledger balance</div><div class="d">Daily deposits against gross withdrawals, with bankers’ ledger balance, which is minted only on withdrawal.</div></div><div class="n" id="exitfee"></div></div><div class="ch"><canvas id="c_bank"></canvas></div><div class="src">Source: deposited and withdrawn events. Ledger = issuance + deposits + recycled fees − licenses − gross withdrawals − revocations.</div></div>
     <div class="panel"><span class="i" tabindex="0">i</span><div class="tip">A charter opens with one branch and licenses add up to nine more. Withdrawals and revocations destroy branches; a charter with no remaining branches is burned. The reconstruction matches the live census. The multiplier by epoch is shown in the epoch settlement ledger.</div><div class="h"><div><div class="t">Branch and charter count</div><div class="d">Branches outstanding and active charters, reconstructed from on-chain events.</div></div><div class="n" id="sb_now"></div></div><div class="ch"><canvas id="c_policy"></canvas></div><div class="src">Source: charter-created, branches-opened, withdrawn and revoked events.</div></div>
     <div class="panel w12 tw"><span class="i" tabindex="0">i</span><div class="tip">Ranked by lifetime emissions from the Standard Reserve indexer leaderboard. Names are the owners’ own primary ENS names on Ethereum mainnet, looked up by reverse record and refreshed weekly; wallets without one are shown by address. Charters are soulbound, so the listed wallet is the original buyer. Share is the banker’s branches as a share of all branches. Rank change compares with the previous epoch’s lifetime ranking.</div><div class="h"><div><div class="t">Top bankers</div><div class="d">Ranked by lifetime emissions, with ENS names where the owner has set one.</div></div><div><span class="n" id="lead_n"></span> <button class="btn" id="lead_more">View top 25</button></div></div><table id="t_lead"></table></div>
-    <div class="panel w12 tw" id="log"><span class="i" tabindex="0">i</span><div class="tip">Reserve value is read from on-chain balances and begins on the first day of operation. All other fields are reconstructed from protocol events and transfer logs.</div><div class="h"><div><div class="t">Daily data log</div><div class="d">One observation per UTC day since genesis. The current day is partial.</div></div><div><button class="btn" id="more">View all days</button> <button class="btn" id="csv">Export CSV</button></div></div><table id="t_log"></table></div>
+    <div class="panel w12 tw" id="log"><span class="i" tabindex="0">i</span><div class="tip">Every field is reconstructed from protocol events and transfer logs; today’s reserve is read at the compile block. Recurring revenue is token trading fees plus pool fees.</div><div class="h"><div><div class="t">Daily data log</div><div class="d">One observation per UTC day since genesis. The current day is partial.</div></div><div><button class="btn" id="more">View all days</button> <button class="btn" id="csv">Export CSV</button></div></div><table id="t_log"></table></div>
   </div>
 
   <div class="foot">Standard Reserve Protocol Monitor · compiled __ASOF_UTC__ UTC · Sources: Standard Reserve indexer, Robinhood Chain RPC, DexScreener, GeckoTerminal, Coinbase · Artwork: Standard Reserve</div>
@@ -246,7 +265,12 @@ if (window.Chart) {
 const last = (arr,n)=>n?arr.slice(Math.max(0,arr.length-n)):arr;
 const sum = (a)=>a.reduce((x,y)=>x+(y||0),0);
 const ethOf = (r)=>r.eth||L.ethusd;
-const inc = (r)=>(r.tradingFeeEth||0)*ethOf(r)+(r.charterEth||0)*ethOf(r)+(r.spFee||0);
+const tr = (r)=>(r.tradingFeeEth||0)*ethOf(r), chs = (r)=>(r.charterEth||0)*ethOf(r), rec = (r)=>tr(r)+(r.spFee||0);   // recurring revenue: trading fees and pool fees
+const inc = (r)=>rec(r)+chs(r);                                                                                          // recurring revenue plus charter sales
+const burnLedger = (r)=>(r.licBurn||0)+(r.exitFeeBurn||0)+(r.revokeFeeBurn||0), burnTokens = (r)=>(r.burnBuyback||0)+(r.burnOther||0), burnAll = (r)=>burnLedger(r)+burnTokens(r);
+const claims = (r)=>(r.issuance||0)-burnAll(r);                                // net new claims on STANDARD: issuance less everything burned
+const pbOf = (r)=>r&&r.reserveUsd&&r.mcFloat ? r.mcFloat/r.reserveUsd : null;  // price to backing
+const GROUPS = [['team','Team wallet','#e9b7d4'],['bankers','Bankers','#deb553'],['sbills','S-Bill holders','#cdbdf0'],['active','High-frequency wallets and bots','#8fa2f0'],['launch','Launch-week buyers','#f3b690'],['other','Other wallets','#6f6690']];
 const Sh = S.filter(r=>r.date<=L.date);            // every day through today (today partial)
 const ep2 = E.length>1 ? fmt.dt(E[1].start) : '';   // launch epoch excluded from rolling yield (genesis-day fees distort it)
 const Sp = Sh.filter(r=>r.date<L.date);            // complete days only
@@ -264,16 +288,20 @@ if (window.Chart) Chart.register(bands);
 
 // ---------- KPIs ----------
 const inc7 = sum(s7.map(inc)), incAnn = inc7*365/7, incLife = sum(S.map(r=>(r.routedEth||0)*ethOf(r)+(r.spFee||0)));
+const rec7 = sum(s7.map(rec)), chs7 = sum(s7.map(chs));
+const winEnd = (r,n)=>{const i=Sp.indexOf(r); return i>=n-1 ? Sp.slice(i-n+1,i+1) : null;};
+const recRoll = (r)=>{const w=winEnd(r,7); return w && w[0].date>=ep2 ? sum(w.map(rec)) : null;};            // trailing seven-day recurring revenue, launch epoch excluded
+const prrOf = (r)=>{const v=recRoll(r); return v && r.mcFloat ? r.mcFloat/(v*365/7) : null;};             // price to recurring revenue
 const Y = Sp[Sp.length-1]||{}, Y2 = Sp[Sp.length-2]||{};      // yesterday (last complete UTC day) and the day before
 const dm = (d)=>new Date(d+'T00:00:00Z').toLocaleDateString('en-GB',{day:'numeric',month:'short',timeZone:'UTC'});
 const yd = Y.date ? dm(Y.date) : '';
 let NOWTS = DATA.pulledAt, LIVE = false;   // NOWTS and L are refreshed in place by goLive() from the indexer and DexScreener
-let mcFloat, mcTotal, epLeft, backing, backingTot, perBranch, licPayback, chPayback, mUp, mDn, burnShare, capRemoved, p7;
+let mcFloat, mcTotal, epLeft, backing, backingTot, perBranch, licPayback, chPayback, mUp, mDn, burnShare, capRemoved, p7, pbNow;
 const derive = ()=>{ mcFloat = L.price*L.float; mcTotal = L.price*L.totalSupply; epLeft = Math.max(0, L.epochEnd - NOWTS);
   backing = L.reserve.totalUsd/L.float; backingTot = L.reserve.totalUsd/L.totalSupply; perBranch = L.baseIssuance*L.multiplier/L.branches;
   licPayback = L.licenseLastSale/perBranch; chPayback = L.charterLastSale*L.ethusd/(perBranch*L.price);
   mUp = (L.positiveStreak||0)+1>=2 ? Math.min(L.mMax, L.multiplier+L.mStepUp) : L.multiplier; mDn = Math.max(L.mMin, L.multiplier-L.mStepDown);
-  burnShare = L.burnedForever/(L.totalSupply+L.burnedForever); capRemoved = 1e9-L.maxSupply; p7 = back('price',7); };
+  burnShare = L.burnedForever/(L.totalSupply+L.burnedForever); capRemoved = 1e9-L.maxSupply; p7 = back('price',7); pbNow = mcFloat/L.reserve.totalUsd; };
 derive();
 const bbY = (Y.burnBuyback||0)+(Y.toIncentives||0), bb7 = sum(s7.map(r=>(r.burnBuyback||0)+(r.toIncentives||0)));
 const dF =Y.float!=null&&Y2.float!=null ? Y.float-Y2.float : null;
@@ -288,10 +316,10 @@ const kpis = [
     `<b>Price × minted supply (${fmt.n(L.totalSupply,1)}), the figure DexScreener and GeckoTerminal show as both market cap and FDV.</b> Adding the ${fmt.n(L.pending,1)} unminted ledger balance owed to bankers gives ${fmt.usd(L.price*(L.totalSupply+L.pending))}. Minted supply includes ${fmt.n(L.poolStd,1)} STANDARD held in the protocol’s own STANDARD/ETH pool and ${fmt.n(L.incentivesStd,1)} in the Incentives Vault, neither of which is available for sale.`],
   ['Market cap, outstanding', fmt.usd(mcFloat), ``,
     `<b>The equity analog of shares outstanding.</b> Minted supply less the protocol’s own pool and the Incentives Vault, the two balances the protocol cannot sell; the whitepaper calls this circulating supply. It includes ${fmt.n(L.sbills.locked||0,1)} of S-Bill principal plus the ${fmt.n(Math.max(0,L.sbillsStd-(L.sbills.locked||0)),1)} premium pot held by the S-Bills contract, and ${fmt.n(L.teamStd,1)} held by the team wallet; free float, which excludes all three, is ${fmt.n(L.float-L.sbillsStd-L.teamStd,1)} (${fmt.usd(L.price*(L.float-L.sbillsStd-L.teamStd))}).`],
-  ['Reserve assets', fmt.usd(L.reserve.totalUsd), `price ${(L.price/backing).toFixed(1)}× backing`,
+  ['Reserve assets', fmt.usd(L.reserve.totalUsd), `price ${pbNow.toFixed(2)}× backing`,
     `ETH and USDG held in the reserve Safe, ETH in the policy vaults, tokenized equities held outside pools, and the reserve’s Uniswap v4 positions (${fmt.pct(L.reserve.lpUsd/L.reserve.totalUsd,0)} of the total). Excludes ${fmt.eth(L.reserve.polBuybackEth,1)} held by the POL buyback contract for STANDARD purchases, and the team wallet. Backing is $${backing.toFixed(3)} per outstanding token and $${backingTot.toFixed(3)} per minted token.`],
-  ['Fee income, '+yd, fmt.usd(inc(Y)), `7-day average ${fmt.usd(inc7/7)} per day`,
-    `The most recent complete UTC day. Comprises STANDARD/ETH trading fees (each epoch’s distributed ETH allocated evenly across its days; the current epoch estimated from tax hook and fee splitter balances), charter auction proceeds, and the reserve’s fee income from its pools, in USD. Cumulative since genesis: ${fmt.usd(incLife)}.`],
+  ['Recurring revenue, '+yd, fmt.usd(rec(Y)), `charter sales ${fmt.usd(chs(Y))}`,
+    `The most recent complete UTC day. Recurring revenue is STANDARD/ETH trading fees (each epoch’s routed ETH allocated evenly across its days; the current epoch estimated from tax hook and fee splitter balances) plus the reserve’s fee income from its pools. Charter sales, proceeds from auctioning new charters, are shown separately. Seven-day average ${fmt.usd(rec7/7)} per day of recurring revenue.`],
   ['Buybacks, '+yd+' (STANDARD)', fmt.n(bbY,2), `${fmt.usd(bbY*(Y.price||L.price))}`,
     `STANDARD purchased from the pool and burned by the contraction vault, plus the 15% POL allocation purchased into the Incentives Vault. ${fmt.eth(L.reserve.contractionEth,1)} remains in the contraction vault pending deployment.`],
   ['Epoch '+L.epoch+' net flow', fmt.sx(L.epochNetFlow,1)+' ETH', `settles in ${Math.floor(epLeft/3600)}h ${Math.floor(epLeft%3600/60)}m`,
@@ -319,12 +347,38 @@ const kpis = [
   ['Burned forever', fmt.n(capRemoved,2), `${fmt.pct(capRemoved/1e9,1)} of the 1B hard cap · ${fmt.n(L.burnedForever,2)} bought back and burned`,
     `<b>The protocol’s own “Burned forever” figure: the 1 billion hard cap less the current maximum supply (${fmt.n(L.maxSupply,2)}).</b> It comprises tokens burned, open-market buybacks and the protocol position’s token-side fees (${fmt.n(L.burnedForever,2)}, ${fmt.pct(burnShare,1)} of minted supply plus tokens burned), and ledger removals that are never minted, expansion licenses and the burned half of resolution and revocation fees (${fmt.n(capRemoved-L.burnedForever,2)}). Deposits to branches are conversions that re-enter the ledger and are excluded.`],
 ];
-const PRIMARY = ['Token price','Market cap, minted supply','Market cap, outstanding','Reserve assets','Fee income, '+yd,'Buybacks, '+yd+' (STANDARD)','Epoch '+L.epoch+' net flow','License payback period'];
+const PRIMARY = ['Token price','Market cap, minted supply','Market cap, outstanding','Reserve assets','Recurring revenue, '+yd,'Buybacks, '+yd+' (STANDARD)','Epoch '+L.epoch+' net flow','License payback period'];
 const tile = k=>`<div class="kpi"><span class="i" tabindex="0">i</span><div class="tip">${k[3]}</div><div class="l">${k[0]}</div><div class="v ${k[4]||''}">${k[1]}</div><div class="s">${k[2]}</div></div>`;
 document.getElementById('kpis').innerHTML = PRIMARY.map(n=>kpis.find(k=>k[0]===n)).filter(Boolean).map(tile).join('');
 document.getElementById('kpis2').innerHTML = kpis.filter(k=>!PRIMARY.includes(k[0])).map(tile).join('');
 document.getElementById('epochpill').textContent = `Epoch ${L.epoch} · ${L.epochNetFlow>=0?'expansion':'contraction'} to date`;
 document.getElementById('epochpill').className = 'pill '+(L.epochNetFlow>=0?'exp':'con');
+renderStrip();
+}
+const spark = (vals, bars)=>{const w=300, h=46, p=3, xs=vals.filter(v=>v!=null); if(!xs.length) return '';
+  let lo=Math.min(...xs, bars?0:Infinity), hi=Math.max(...xs, bars?0:-Infinity); if(hi===lo){hi+=1; lo-=1;}
+  const X=i=>p+(w-2*p)*(vals.length>1?i/(vals.length-1):.5), Yp=y=>h-p-(h-2*p)*(y-lo)/(hi-lo);
+  if (bars) { const bw=Math.max(1,(w-2*p)/vals.length*.7), z=Yp(0);
+    return `<svg viewBox="0 0 ${w} ${h}" preserveAspectRatio="none">`+vals.map((y,i)=>y==null?'':`<rect x="${(X(i)-bw/2).toFixed(1)}" y="${Math.min(Yp(y),z).toFixed(1)}" width="${bw.toFixed(1)}" height="${Math.max(.5,Math.abs(Yp(y)-z)).toFixed(1)}" fill="${y<0?C.green:C.peach}"/>`).join('')+`<line x1="${p}" x2="${w-p}" y1="${z.toFixed(1)}" y2="${z.toFixed(1)}" stroke="${C.dim}" stroke-width="1" vector-effect="non-scaling-stroke"/></svg>`; }
+  const pts=vals.map((y,i)=>y==null?null:`${X(i).toFixed(1)},${Yp(y).toFixed(1)}`).filter(Boolean).join(' ');
+  return `<svg viewBox="0 0 ${w} ${h}" preserveAspectRatio="none"><polyline points="${pts}" fill="none" stroke="${C.gold}" stroke-width="1.8" vector-effect="non-scaling-stroke"/></svg>`;};
+function renderStrip(){
+  const L30 = last(Sp, 30), d30 = Sp.length>30 ? Sp[Sp.length-31] : null;
+  const r30 = d30 ? recRoll(d30) : null;
+  const i7 = sum(s7.map(r=>r.issuance||0)), b7 = sum(s7.map(burnAll)), c7 = i7-b7, c30 = sum(L30.map(claims));
+  const P = last(Sh, 31), pb30 = Sh.length>30 ? pbOf(Sh[Sh.length-31]) : null;
+  const cards = [
+    ['Recurring revenue, trailing seven days', fmt.usd(rec7), `${fmt.usd(rec7*365/7)} annualized · charter sales ${fmt.usd(chs7)} excluded`,
+      r30 ? `${fmt.chg(rec7/r30-1,0)} against the seven days to ${dm(d30.date)}` : '', spark(L30.map(recRoll)),
+      `Token trading fees plus the reserve’s pool fees over the seven complete days to ${yd}, annualized at 365/7. Charter sales, proceeds from auctioning new charters, are excluded. The line is the trailing seven-day figure on each of the last 30 days.`],
+    ['Net new STANDARD claims, trailing seven days', fmt.sgn(c7)+fmt.n(c7,2), `issued ${fmt.n(i7,2)} · burned ${fmt.n(b7,2)}`,
+      `${fmt.sgn(c30)}${fmt.n(c30,2)} over the last 30 days`, spark(L30.map(claims), true),
+      `Issuance credited to bankers less everything burned: expansion licenses, the burned half of resolution and revocation fees, buybacks and other token burns. It equals the change in minted supply plus the unminted ledger balance, the total claim on STANDARD. Negative means the claim shrank. Bars are daily over the last 30 days, green where burns exceeded issuance.`],
+    ['Price to backing', pbNow.toFixed(2)+'×', `backing $${backing.toFixed(3)} per outstanding token · reserve ${fmt.usd(L.reserve.totalUsd)}`,
+      pb30!=null ? `${pb30.toFixed(2)}× on ${dm(Sh[Sh.length-31].date)}` : '', spark(P.map(pbOf)),
+      `Market capitalization on outstanding supply divided by reserve assets, equivalently token price over backing per outstanding token. Live price and outstanding supply; the reserve as read at the compile block. Earlier days use reserve closes rebuilt from on-chain events. The line covers the last 30 days.`],
+  ];
+  document.getElementById('strip').innerHTML = cards.map(c=>`<div class="sc"><span class="i" tabindex="0">i</span><div class="tip">${c[5]}</div><div class="l">${c[0]}</div><div class="v">${c[1]}</div><div class="s">${c[2]}</div><div class="t">${c[3]}</div>${c[4]}</div>`).join('');
 }
 renderKpis();
 
@@ -371,18 +425,17 @@ const pt = {usdg:sum(prow.map(x=>x.v.usdg||0)), val:sum(prow.map(x=>x.v.valueUSD
 document.getElementById('t_pools').innerHTML = `<tr><th>Pool</th><th>Tokens</th><th>USDG</th><th>Price</th><th>Fee tier</th><th>Value</th><th>Fees, ${ydS.replace(' ','&nbsp;')}</th><th>Fees, 7d</th><th>Volume, ${ydS.replace(' ','&nbsp;')}</th><th>Yield</th><th>Share of pool</th><th>Share of chain liquidity</th><th>Share of chain volume</th><th>Venues</th><th>Rank</th><th>Largest other venue</th></tr>` +
   prow.map(({p,v,c,f1,f7,v1})=>`<tr><td>${p==='ETH'?'ETH/USDG':p}</td><td>${fmt.n(v.stock,1)}</td><td>${fmt.usd(v.usdg,1)}</td><td>$${v.price.toFixed(2)}</td><td>${v.feeTier>=8388608?'session':(v.feeTier/1e4).toFixed(3)+'%'}</td><td>${fmt.usd(v.valueUSD)}</td><td>${fmt.usd(f1,1)}</td><td>${fmt.usd(f7,1)}</td><td>${fmt.usd(v1,1)}</td><td>${v.valueUSD?fmt.pct(f7*365/7/v.valueUSD,0):'–'}</td><td>${v.share!=null?fmt.pct(v.share,0):'–'}</td><td>${c.totalLiq?fmt.pct(v.valueUSD/c.totalLiq,0):'–'}</td><td>${c.totalVol24?fmt.pct(c.srVol24/c.totalVol24,0):'–'}</td><td>${c.pools||'–'}</td><td>${c.rank?'#'+c.rank:'–'}</td><td>${c.nextLiq?fmt.usd(c.nextLiq,1)+' · '+c.nextDex:'–'}</td></tr>`).join('') +
   `<tr class="sr"><td>Total</td><td>–</td><td>${fmt.usd(pt.usdg,1)}</td><td>–</td><td>–</td><td>${fmt.usd(pt.val)}</td><td>${fmt.usd(pt.f1,1)}</td><td>${fmt.usd(pt.f7,1)}</td><td>${fmt.usd(pt.v1,1)}</td><td>${pt.val?fmt.pct(pt.f7*365/7/pt.val,0):'–'}</td><td>–</td><td>–</td><td>–</td><td>–</td><td>–</td><td>–</td></tr>`;
-const HD = Object.keys(HIST).filter(d=>HIST[d]&&HIST[d].reserve).sort();
-const comp = (h)=>{if(!h||!h.reserve) return null; const r=h.reserve, o={}; Object.entries(h.lp||{}).forEach(([s,v])=>o[pname(s)]=v.valueUSD); o['USDG']=r.safeUsdg; o['ETH (Safe + vaults)']=(r.safeEth+r.contractionEth+r.expansionEth)*(h.ethusd||L.ethusd); o['Equities outside pools']=r.safeStockUsd; o['Total']=r.totalUsd; return o;};
-const rc0 = comp(HIST[HD[HD.length-1]]), rc1 = comp(HIST[HD[HD.length-2]]), rc7 = comp(HIST[HD[HD.length-8]]);
-const dcell = (a,b)=>a!=null&&b!=null ? `<td class="${a-b>=0?'pos':'neg'}">${fmt.sgn(a-b)}${fmt.usd(a-b,1)}</td><td class="${a-b>=0?'pos':'neg'}">${fmt.sgn(a-b)}${fmt.pct((a-b)/b,1)}</td>` : '<td>–</td><td>–</td>';
-document.getElementById('resd_n').textContent = HD.length ? `${HD.length} obs. since ${HD[0].slice(5)}` : '';
-document.getElementById('t_resd').innerHTML = rc0 ? '<tr><th>Component</th><th>'+HD[HD.length-1]+'</th><th>Share</th><th>Change, 1 day</th><th>%</th><th>Change, 7 days</th><th>%</th></tr>' +
+const comp = (r)=>{const q=r&&r.reserveParts; if(!q) return null; const o={}; Object.entries(q.lp||{}).forEach(([k,v])=>o[pname(k)]=v); o['USDG']=q.usdg; o['ETH (Safe + vaults)']=q.eth; o['Equities outside pools']=q.stocks; o['Total']=q.total; return o;};
+const RT = Sh[Sh.length-1], rc0 = comp(RT), rc1 = comp(Sh[Sh.length-2]), rc7 = comp(Sh[Sh.length-8]);
+const dcell = (a,b)=>a!=null&&b!=null ? `<td class="${a-b>=0?'pos':'neg'}">${fmt.sgn(a-b)}${fmt.usd(a-b,1)}</td><td class="${a-b>=0?'pos':'neg'}">${b?fmt.sgn(a-b)+fmt.pct((a-b)/b,1):'–'}</td>` : '<td>–</td><td>–</td>';
+document.getElementById('resd_n').textContent = `${Sh.filter(r=>r.reserveParts).length} days of closes`;
+document.getElementById('t_resd').innerHTML = rc0 ? '<tr><th>Component</th><th>Today</th><th>Share</th><th>Change, 1 day</th><th>%</th><th>Change, 7 days</th><th>%</th></tr>' +
   Object.keys(rc0).map(k=>`<tr class="${k==='Total'?'sr':''}"><td>${k}</td><td>${fmt.usd(rc0[k])}</td><td>${k==='Total'?'':fmt.pct(rc0[k]/rc0.Total,1)}</td>${dcell(rc0[k], rc1&&rc1[k])}${dcell(rc0[k], rc7&&rc7[k])}</tr>`).join('') : '';
 
 function renderBridge(){   // re-run by goLive() once the blocks after the compile are replayed
   const mintAll = sum(S.map(r=>r.mint||0)), bbAll = sum(S.map(r=>r.burnBuyback||0)), depAll = sum(S.map(r=>r.depositBurn||0)), othAll = sum(S.map(r=>r.burnOther||0));
   const sbLock = L.sbills.locked||0, sbPot = Math.max(0, L.sbillsStd - sbLock), resid = L.totalSupply-(100e6+mintAll-bbAll-othAll-depAll);
-  const br = [['Genesis liquidity mint', 100e6], ['+ Withdrawals minted', mintAll], ['− Buybacks burned', -bbAll], ['− Other burns', -othAll], ['− Deposits to ledger', -depAll],
+  const br = [['Genesis liquidity mint', 100e6], ['+ Withdrawals minted', mintAll], ['− Buybacks burned', -bbAll], ['− Tax hook burns', -othAll], ['− Deposits to ledger', -depAll],
     ...(Math.abs(resid)>=0.5?[['± Unreconciled', resid]]:[]), ['= Minted supply', L.totalSupply, 'tot'],
     ['− Protocol STANDARD/ETH pool', -L.poolStd], ['− Incentives Vault', -L.incentivesStd], ['= Outstanding supply', L.float, 'tot'],
     ['− S-Bill principal', -sbLock], ['− S-Bill premium pot', -sbPot], ['− Team wallet', -L.teamStd], ['= Free float', L.float-L.sbillsStd-L.teamStd, 'tot']];
@@ -398,9 +451,9 @@ function renderHeads(){   // panel header figures that depend on live state; re-
   document.getElementById('sb_now').textContent = `${fmt.int(L.branches)} branches · ${fmt.int(L.activeCharters)} charters`;
   document.getElementById('burn_now').textContent = `${fmt.n(capRemoved,2)} burned forever · ${fmt.pct(capRemoved/1e9,1)} of the 1B cap`;
   document.getElementById('px_now').textContent = `${fmt.usd(mcTotal)} minted · ${fmt.usd(mcFloat)} outstanding`;
-  const y7 = s7.length && Y.mcFloat ? inc7*365/7/Y.mcFloat : null;   // same basis as the chart's last point
-  document.getElementById('yield_now').textContent = y7!=null ? `${fmt.pct(y7,1)} annualized, ${yd}` : '';
-  document.getElementById('inc7').textContent = s7.length ? `${fmt.usd(inc7)}, ${dm(s7[0].date)} to ${dm(s7[s7.length-1].date)}` : '';
+  document.getElementById('pb_now').textContent = `${pbNow.toFixed(2)}× · backing $${backing.toFixed(3)}`;
+  document.getElementById('inc7').textContent = s7.length ? `recurring ${fmt.usd(rec7)} · charter sales ${fmt.usd(chs7)}, ${dm(s7[0].date)} to ${dm(s7[s7.length-1].date)}` : '';
+  const prY = prrOf(Y); document.getElementById('prr_now').textContent = prY!=null ? `${prY.toFixed(1)}× on ${yd}` : '';
 }
 renderHeads();
 const sp7v = sum(s7.map(r=>r.spVolMine!=null?r.spVolMine:(r.spVol||0))), sp7g = sum(s7.map(r=>r.spVol||0)), sp7f = sum(s7.map(r=>r.spFee||0));
@@ -418,7 +471,7 @@ const firstEq = (S.find(r=>spv(r,allPools)>0)||{}).date;
 const zf7 = sum(s7.map(r=>r.spVolZeroFee||0)), spAll7 = sum(s7.map(r=>r.spVol||0));
 const poolAnn = poolFees7*365/7;
 document.getElementById('eq_stats').innerHTML = [
-  ['Pool fee income, 7 days', fmt.usd(poolFees7), `${fmt.pct(inc7?poolFees7/inc7:null,0)} of fee income`, `equities ${fmt.usd(eqFees7)} · ETH/USDG ${fmt.usd(ethFees7)}`],
+  ['Pool fee income, 7 days', fmt.usd(poolFees7), `${fmt.pct(rec7?poolFees7/rec7:null,0)} of recurring revenue`, `equities ${fmt.usd(eqFees7)} · ETH/USDG ${fmt.usd(ethFees7)}`],
   ['Capital in pools', fmt.usd(poolLiq), `${fmt.pct(poolLiq/L.reserve.totalUsd,0)} of reserve`, `${fmt.pct(poolYield,0)} yield, annualized`],
   ['Share of chain equity volume', fmt.pct(allV?srV/allV:null,0), `24h`, `ETH/USDG pool ${fmt.pct(ctxE.totalVol24?ctxE.srVol24/ctxE.totalVol24:null,0)}`],
   ['Fee-paying share of volume', fmt.pct(spAll7?1-zf7/spAll7:null,0), `7d`, `${fmt.usd(zf7,1)} fee-exempt`],
@@ -440,7 +493,24 @@ const wTot = sum(went.map(w=>w[1]));
 document.getElementById('went_bar').innerHTML = went.map(w=>`<div style="width:${(100*w[1]/wTot).toFixed(2)}%;background:${w[2]}" title="${w[0]}"></div>`).join('');
 document.getElementById('went_leg').innerHTML = went.map(w=>`<i style="background:${w[2]}"></i><span>${w[0]}</span><span class="v">${fmt.usd(w[1])}</span><span class="p">${fmt.pct(w[1]/wTot,0)}</span><span class="sub">${w[3]}</span>`).join('');
 document.getElementById('went_n').textContent = fmt.usd(wTot);
-document.getElementById('went_src').textContent = s7.length ? `Total ${fmt.usd(wTot)}, equal to fee income for ${dm(s7[0].date)} to ${dm(s7[s7.length-1].date)}. ${fmt.n(bb7,2)} STANDARD bought back in the same days.` : '';
+document.getElementById('went_src').textContent = s7.length ? `Total ${fmt.usd(wTot)}: recurring revenue ${fmt.usd(rec7)} and charter sales ${fmt.usd(chs7)} for ${dm(s7[0].date)} to ${dm(s7[s7.length-1].date)}. ${fmt.n(bb7,2)} STANDARD bought back in the same days.` : '';
+
+// ---------- holder groups, sellers, depth (compiled) ----------
+const GN = Object.fromEntries(GROUPS.map(g=>[g[0], g[1]]));
+const ms7 = sum(s7.map(r=>r.mktNet||0)), gs7 = GROUPS.map(([k,n])=>[n, sum(s7.map(r=>r['sell_'+k]||0))]).sort((a,b)=>b[1]-a[1]);
+document.getElementById('sell_now').textContent = s7.length ? `${fmt.sgn(ms7)}${fmt.n(ms7,2)} net, ${dm(s7[0].date)} to ${dm(s7[s7.length-1].date)} · ${gs7[0][0].toLowerCase()} ${fmt.sgn(gs7[0][1])}${fmt.n(gs7[0][1],2)}` : '';
+const SL = DATA.sellers || [];
+const shortA = a=>`<a href="https://robin.etherscan.io/address/${a}" target="_blank" rel="noopener" style="color:inherit;text-decoration:none">${a.slice(0,6)}…${a.slice(-4)}</a>`;
+document.getElementById('t_sellers').innerHTML = '<tr><th>Wallet</th><th>Group</th><th>Net sold</th><th>Sells</th><th>Buys</th></tr>' +
+  SL.map(x=>`<tr><td style="font-family:var(--mono)">${shortA(x.addr)}</td><td style="text-align:left">${GN[x.group]||x.group}</td><td>${fmt.n(x.net,2)}</td><td>${x.sells}</td><td>${x.buys}</td></tr>`).join('');
+const DP = DATA.depth || null;
+if (DP) {
+  document.getElementById('dp_now').textContent = `${fmt.usd(DP.bid2)} bid · ${fmt.usd(DP.ask2)} ask within 2%`;
+  const pc = v=>v==null?'–':fmt.pct(v,1);
+  document.getElementById('t_slip').innerHTML = '<tr><th>Size</th><th>Buy impact</th><th>Buy cost</th><th>Sell impact</th><th>Sell cost</th></tr>' +
+    DP.slip.map(x=>`<tr><td>${fmt.usd(x.usd,0)}</td><td>${pc(x.buyImpact)}</td><td>${pc(x.buyAllIn)}</td><td>${pc(x.sellImpact)}</td><td>${pc(x.sellAllIn)}</td></tr>`).join('');
+  document.getElementById('slip_s').innerHTML = [['Pool fee and tax', `${fmt.pct(DP.fee,0)} · ${fmt.pct(DP.taxBuy,0)} buy, ${fmt.pct(DP.taxSell,0)} sell`], ['Depth within 5%', `${fmt.usd(DP.bid5)} bid · ${fmt.usd(DP.ask5)} ask`], ['Protocol share of in-range liquidity', fmt.pct(DP.protocolShare,0)], ['Open liquidity ranges', fmt.int(DP.positions)]].map(x=>`<div>${x[0]}</div><div>${x[1]}</div>`).join('');
+}
 
 // ---------- range-dependent charts ----------
 let N = 30, charts = [];
@@ -457,21 +527,37 @@ function draw(){
     {type:'line', label:'Market capitalization, minted supply', data:Rl.map(r=>r.mcTotal), borderColor:C.water, pointRadius:0, tension:.25, yAxisID:'y1'},
     {type:'line', label:'Market capitalization, outstanding', data:Rl.map(r=>r.mcFloat), borderColor:C.peri, pointRadius:0, tension:.25, yAxisID:'y1'},
   ]}, options:{maintainAspectRatio:false, plugins:{bands:{dates:dl}, tooltip:{callbacks:{label:c=>c.dataset.yAxisID==='y1'?c.dataset.label+': '+fmt.usd(c.parsed.y,2):c.dataset.label+': $'+c.parsed.y.toFixed(4)}}}, scales:{x:{grid:{display:false}, ticks:{maxTicksLimit:10}}, y:{position:'left', ticks:{callback:v=>'$'+v.toFixed(2)}}, y1:{position:'right', grid:{display:false}, beginAtZero:true, ticks:{callback:v=>fmt.usd(v,0)}}}}});
-  const roll = Rf.map((r,i)=>{const idx=Sp.indexOf(r); const win=Sp.slice(Math.max(0,idx-6),idx+1); return (win.length===7&&win[0].date>=ep2)?sum(win.map(inc)):null;});
-  mk(c_yield, {data:{labels:lf, datasets:[
-    {type:'bar', label:'Fee income, trailing 7 days', data:roll, backgroundColor:'rgba(185,166,227,.35)', yAxisID:'y', order:2},
-    {type:'line', label:'Annualized yield on market capitalization, outstanding', data:roll.map((v,i)=>v!=null&&Rf[i].mcFloat?v*365/7/Rf[i].mcFloat:null), borderColor:C.gold, pointRadius:0, tension:.25, yAxisID:'y1', order:1},
-  ]}, options:{maintainAspectRatio:false, plugins:{bands:{dates:df}, tooltip:{callbacks:{label:c=>c.dataset.yAxisID==='y1'?c.dataset.label+': '+fmt.pct(c.parsed.y,1):c.dataset.label+': '+fmt.usd(c.parsed.y,1)}}}, scales:{x:{grid:{display:false}, ticks:{maxTicksLimit:8}}, y:{position:'left', ticks:{callback:v=>fmt.usd(v,0)}}, y1:{position:'right', grid:{display:false}, beginAtZero:true, ticks:{callback:v=>fmt.pct(v,0)}}}}});
-  const eqRoll = Rf.map(r=>{const idx=Sp.indexOf(r); const win=Sp.slice(Math.max(0,idx-6),idx+1); const t=sum(win.map(inc)); return (win.length===7&&t&&win[0].date>=ep2)?sum(win.map(w=>spf(w,allPools)))/t:null;});
+  mk(c_pb, {type:'line', data:{labels:ll, datasets:[
+    {label:'Price to backing', data:Rl.map(pbOf), borderColor:C.gold, backgroundColor:'rgba(255,221,138,.10)', fill:true, pointRadius:0, tension:.25},
+  ]}, options:{maintainAspectRatio:false, plugins:{legend:{display:false}, bands:{dates:dl}, tooltip:{callbacks:{label:c=>'Price to backing: '+c.parsed.y.toFixed(2)+'×',
+    afterBody:items=>{const r=Rl[items[0].dataIndex]; return r.reserveUsd&&r.float ? [`price $${(r.price||0).toFixed(4)} · backing $${(r.reserveUsd/r.float).toFixed(4)} per outstanding token`, `reserve ${fmt.usd(r.reserveUsd)} · outstanding ${fmt.n(r.float,2)}`, ...(r.date<'2026-10-14'&&r.reserveParts&&r.reserveParts.stocks>0?['equities at their pools’ first close, 14 Oct']:[])] : [];}}}},
+    scales:{x:{grid:{display:false}, ticks:{maxTicksLimit:8}}, y:{beginAtZero:true, ticks:{callback:v=>v.toFixed(1)+'×'}}}}});
+  mk(c_prr, {type:'line', data:{labels:lf, datasets:[
+    {label:'Price to recurring revenue', data:Rf.map(prrOf), borderColor:C.gold, backgroundColor:'rgba(255,221,138,.10)', fill:true, pointRadius:0, tension:.25, spanGaps:false},
+  ]}, options:{maintainAspectRatio:false, plugins:{legend:{display:false}, bands:{dates:df}, tooltip:{callbacks:{label:c=>'Price to recurring revenue: '+c.parsed.y.toFixed(1)+'×',
+    afterBody:items=>{const r=Rf[items[0].dataIndex], v=recRoll(r); return v!=null ? [`market capitalization, outstanding ${fmt.usd(r.mcFloat)}`, `recurring revenue ${fmt.usd(v)} over seven days, ${fmt.usd(v*365/7)} annualized`] : [];}}}},
+    scales:{x:{grid:{display:false}, ticks:{maxTicksLimit:8}}, y:{beginAtZero:true, ticks:{callback:v=>v.toFixed(1)+'×'}}}}});
+  mk(c_sell, {data:{labels:lf, datasets:[
+    ...GROUPS.map(([k,n,c])=>({type:'bar', label:n, data:Rf.map(r=>r['sell_'+k]||0), backgroundColor:c, stack:'s', order:2})),
+    {type:'line', label:'Net market sales', data:Rf.map(r=>r.mktNet||0), borderColor:C.gold, backgroundColor:C.gold, pointRadius:2, tension:.25, stack:'line', order:1},
+  ]}, options:{maintainAspectRatio:false, scales:{x:{stacked:true, grid:{display:false}}, y:{stacked:true, ticks:{callback:v=>fmt.n(v,0)}}}, plugins:{bands:{dates:df}, tooltip:{callbacks:{label:c=>c.dataset.label+': '+fmt.sgn(c.parsed.y)+fmt.n(c.parsed.y,2)+' STANDARD',
+    footer:items=>{const r=Rf[items[0].dataIndex]; return r.price ? `net ${fmt.usd((r.mktNet||0)*r.price)} at the day’s close; positive is net selling` : '';}}}}}});
+  mk(c_depth, {type:'line', data:{labels:ll, datasets:[
+    {label:'Bid depth within 2%', data:Rl.map(r=>r.bid2??null), borderColor:C.gold, backgroundColor:'rgba(255,221,138,.12)', fill:'origin', pointRadius:0, tension:.25},
+    {label:'Bid depth within 5%', data:Rl.map(r=>r.bid5??null), borderColor:C.peri, pointRadius:0, tension:.25},
+  ]}, options:{maintainAspectRatio:false, plugins:{bands:{dates:dl}, tooltip:{callbacks:{label:c=>c.dataset.label+': '+fmt.usd(c.parsed.y,1),
+    afterBody:items=>{const r=Rl[items[0].dataIndex]; return r.ask2!=null ? [`ask depth ${fmt.usd(r.ask2,1)} within 2% · ${fmt.usd(r.ask5,1)} within 5%`] : [];}}}}, scales:{x:{grid:{display:false}, ticks:{maxTicksLimit:8}}, y:{beginAtZero:true, ticks:{callback:v=>fmt.usd(v,0)}}}}});
+  const eqRoll = Rf.map(r=>{const w=winEnd(r,7), t=w?sum(w.map(rec)):0; return (w&&t&&w[0].date>=ep2)?sum(w.map(x=>spf(x,allPools)))/t:null;});
   mk(c_equity, {data:{labels:lf, datasets:[
     ...allPools.map((p,i)=>({type:'bar', label:pname(p)+' fees', data:Rf.map(r=>r['spFee_'+p]||0), backgroundColor:p==='ETH'?C.peach:[C.peri,C.lav,C.rose,C.water,C.green][i%5], stack:'a', yAxisID:'y', order:2})),
-    {type:'line', label:'Pool fee income as a share of total, trailing 7 days', data:eqRoll, borderColor:C.gold, pointRadius:0, tension:.25, yAxisID:'y1', order:1},
+    {type:'line', label:'Pool fees as a share of recurring revenue, trailing 7 days', data:eqRoll, borderColor:C.gold, pointRadius:0, tension:.25, yAxisID:'y1', order:1},
   ]}, options:{maintainAspectRatio:false, scales:{x:{stacked:true, grid:{display:false}}, y:{stacked:true, ticks:{callback:v=>fmt.usd(v,1)}}, y1:{position:'right', grid:{display:false}, min:0, max:1, ticks:{callback:v=>fmt.pct(v,0)}}}, plugins:{bands:{dates:df}, tooltip:{callbacks:{label:c=>c.dataset.yAxisID==='y1'?c.dataset.label+': '+fmt.pct(c.parsed.y,1):c.dataset.label+': '+fmt.usd(c.parsed.y,1)}}}}});
   mk(c_income, {type:'bar', data:{labels:lf, datasets:[
-    {label:'Token trading fees', data:Rf.map(r=>(r.tradingFeeEth||0)*ethOf(r)), backgroundColor:C.lav, stack:'a'},
-    {label:'Charter auction proceeds', data:Rf.map(r=>(r.charterEth||0)*ethOf(r)), backgroundColor:C.gold2, stack:'a'},
-    {label:'Pool fee income', data:g('spFee'), backgroundColor:C.peach, stack:'a'},
-  ]}, options:{maintainAspectRatio:false, scales:{x:{stacked:true,grid:{display:false}}, y:{stacked:true, ticks:{callback:v=>fmt.usd(v,0)}}}, plugins:{bands:{dates:df}, tooltip:tt(v=>fmt.usd(v,1))}}});
+    {label:'Token trading fees', data:Rf.map(tr), backgroundColor:C.lav, stack:'r'},
+    {label:'Pool fee income', data:g('spFee'), backgroundColor:C.peach, stack:'r'},
+    {label:'Charter sales', data:Rf.map(chs), backgroundColor:C.gold2, stack:'c'},
+  ]}, options:{maintainAspectRatio:false, scales:{x:{stacked:true,grid:{display:false}}, y:{stacked:true, ticks:{callback:v=>fmt.usd(v,0)}}}, plugins:{bands:{dates:df}, tooltip:{callbacks:{label:c=>c.dataset.label+': '+fmt.usd(c.parsed.y,1),
+    footer:items=>{const r=Rf[items[0].dataIndex]; return `recurring revenue ${fmt.usd(rec(r),1)} · charter sales ${fmt.usd(chs(r),1)}`;}}}}}});
   const pcol = [C.peri, C.lav, C.rose, C.water, C.green, C.gold2];
   mk(c_pools, {data:{labels:lf, datasets:[
     ...pools.map((p,i)=>({type:'bar', label:pname(p)+' volume, reserve share', data:Rf.map(r=>r['spVolMine_'+p]!=null?r['spVolMine_'+p]:(r['spVol_'+p]||0)), backgroundColor:p==='ETH'?C.peach:pcol[i%pcol.length], stack:'v', yAxisID:'y', order:2})),
@@ -480,7 +566,6 @@ function draw(){
   ]}, options:{maintainAspectRatio:false, scales:{x:{stacked:true, grid:{display:false}}, y:{stacked:true, ticks:{callback:v=>fmt.usd(v,1)}}, y1:{position:'right', grid:{display:false}, ticks:{callback:v=>fmt.usd(v,1)}}, y2:{display:false, min:0, max:1}}, plugins:{tooltip:{callbacks:{label:c=>c.dataset.yAxisID==='y2'?c.dataset.label+': '+fmt.pct(c.parsed.y,0):c.dataset.label+': '+fmt.usd(c.parsed.y,1),
     afterBody:items=>{const r=Rf[items[0].dataIndex]; return pools.filter(p=>(r['spVol_'+p]||0)>0).map(p=>{const g=r['spVol_'+p]||0, m=r['spVolMine_'+p]!=null?r['spVolMine_'+p]:g; return `${pname(p)}: pool total ${fmt.usd(g,1)}, served by the reserve ${fmt.pct(g?m/g:null,0)}`;});}}}}}});
   const fd = (r)=>(r.supply!=null&&r.pending!=null) ? r.supply+r.pending : null;   // minted plus ledger
-  const burnLedger = (r)=>(r.licBurn||0)+(r.exitFeeBurn||0)+(r.revokeFeeBurn||0), burnTokens = (r)=>(r.burnBuyback||0)+(r.burnOther||0), burnAll = (r)=>burnLedger(r)+burnTokens(r);
   const dFdAll = Sh.map((r,i)=> i>0&&fd(r)!=null&&fd(Sh[i-1])!=null ? fd(r)-fd(Sh[i-1]) : null), dFd = last(dFdAll, N);
   mk(c_mc, {type:'line', data:{labels:ll, datasets:[
     {label:'Outstanding supply', data:Rl.map(r=>r.float), borderColor:C.gold, backgroundColor:'rgba(255,221,138,.38)', fill:'origin', borderWidth:1.5, pointRadius:0, tension:.25},
@@ -488,21 +573,27 @@ function draw(){
     {label:'Ledger balance owed to bankers, unminted', data:Rl.map(r=>r.pending), borderColor:C.water, backgroundColor:'rgba(205,189,240,.22)', fill:'-1', borderWidth:1.5, pointRadius:0, tension:.25},
   ]}, options:{maintainAspectRatio:false, scales:{x:{grid:{display:false}}, y:{stacked:true, beginAtZero:true, ticks:{callback:v=>fmt.n(v,0)}}}, plugins:{bands:{dates:dl}, tooltip:{callbacks:{label:c=>c.dataset.label+': '+fmt.n(c.parsed.y,2),
     footer:items=>{const r=Rl[items[0].dataIndex]; return 'Total '+fmt.n((r.supply||0)+(r.pending||0),2)+' STANDARD, of which '+fmt.n(r.supply||0,2)+' exists as tokens';}}}}}});
-  mk(c_flows, {type:'bar', data:{labels:lf, datasets:[
-    {label:'Withdrawals minted', data:g('mint'), backgroundColor:C.green, stack:'a'},
-    {label:'Incentives Vault distributions', data:g('fromIncentives'), backgroundColor:C.water, stack:'a'},
-    {label:'Buyback and burn', data:g('burnBuyback').map(v=>-v), backgroundColor:C.red, stack:'a'},
-    {label:'Other token burns', data:g('burnOther').map(v=>-v), backgroundColor:C.rose, stack:'a'},
-    {label:'POL buyback', data:g('toIncentives').map(v=>-v), backgroundColor:C.peach, stack:'a'},
-    {label:'Deposits (converted to ledger)', data:g('depositBurn').map(v=>-v), backgroundColor:C.dim, stack:'a'},
-    {label:'Net market flow vs pool (+ bought, − sold)', data:Rf.map(r=>-((r.poolIn||0)-(r.poolOut||0))), backgroundColor:'rgba(185,166,227,.45)', stack:'b'},
-  ]}, options:{maintainAspectRatio:false, scales:{x:{stacked:true, grid:{display:false}}, y:{stacked:true, ticks:{callback:v=>fmt.n(v,0)}}}, plugins:{bands:{dates:df}, tooltip:tt(v=>fmt.n(v,2)+' STANDARD')}}});
+  // outstanding supply flows: named movements plus protocol-contract inventory, summing to the day's change in outstanding supply
+  const ofl = (r)=>{const i=Sh.indexOf(r), p=i>0?Sh[i-1]:null; if(!p) return null;
+    const dF=r.float-p.float, W=(r.mint||0), Dist=(r.fromIncentives||0), Fees=(r.feesToTeam||0), Mk=-(r.mktNet||0), Dep=-(r.depositBurn||0), Ob=-((r.burn||0)-(r.depositBurn||0)-(r.burn_contraction||0)-(r.burnOther||0));   // tax hook burns come out of the pool, not outstanding supply
+    return {dF, W, Dist, Fees, Mk, Dep, Ob, Oth:dF-(W+Dist+Fees+Mk+Dep+Ob)};};
+  const OF = Rf.map(ofl), of = (k)=>OF.map(o=>o?o[k]:null);
+  mk(c_flows, {data:{labels:lf, datasets:[
+    {type:'bar', label:'Withdrawals minted', data:of('W'), backgroundColor:C.green, stack:'a', order:2},
+    {type:'bar', label:'Incentives Vault distributions', data:of('Dist'), backgroundColor:C.water, stack:'a', order:2},
+    {type:'bar', label:'Position fees to the team wallet', data:of('Fees'), backgroundColor:C.rose, stack:'a', order:2},
+    {type:'bar', label:'Net market purchases from the pool', data:of('Mk'), backgroundColor:'rgba(185,166,227,.55)', stack:'a', order:2},
+    {type:'bar', label:'Deposits (converted to ledger)', data:of('Dep'), backgroundColor:C.dim, stack:'a', order:2},
+    {type:'bar', label:'S-Bill burns', data:of('Ob'), backgroundColor:C.red, stack:'a', order:2},
+    ...(OF.some(o=>o&&Math.abs(o.Oth)>=0.5)?[{type:'bar', label:'Protocol contracts, other', data:of('Oth'), backgroundColor:C.peach, stack:'a', order:2}]:[]),
+    {type:'line', label:'Change in outstanding supply', data:of('dF'), borderColor:C.gold, backgroundColor:C.gold, pointRadius:2, tension:.25, stack:'line', order:1},
+  ]}, options:{maintainAspectRatio:false, scales:{x:{stacked:true, grid:{display:false}}, y:{stacked:true, ticks:{callback:v=>fmt.n(v,0)}}}, plugins:{bands:{dates:df}, tooltip:tt(v=>fmt.sgn(v)+fmt.n(v,2)+' STANDARD')}}});
   const cumAll = []; { let c=0; Sp.forEach(r=>{c+=burnAll(r); cumAll.push(c);}); }
   const cumW = last(cumAll, N);
   mk(c_issue, {data:{labels:lf, datasets:[
     {type:'bar', label:'Expansion licenses', data:g('licBurn'), backgroundColor:C.gold2, stack:'b', yAxisID:'y', order:3},
     {type:'bar', label:'Resolution and revocation fees, burned half', data:Rf.map(r=>(r.exitFeeBurn||0)+(r.revokeFeeBurn||0)), backgroundColor:C.peach, stack:'b', yAxisID:'y', order:3},
-    {type:'bar', label:'Buybacks, position fees and other token burns', data:Rf.map(burnTokens), backgroundColor:C.red, stack:'b', yAxisID:'y', order:3},
+    {type:'bar', label:'Buybacks and other token burns', data:Rf.map(burnTokens), backgroundColor:C.red, stack:'b', yAxisID:'y', order:3},
     {type:'line', label:'Cumulative burned, share of the 1B cap', data:cumW.map(v=>v/1e9), borderColor:C.water, pointRadius:0, tension:.25, yAxisID:'y1', order:1},
   ]}, options:{maintainAspectRatio:false, scales:{x:{stacked:true, grid:{display:false}}, y:{stacked:true, ticks:{callback:v=>fmt.n(v,0)}}, y1:{position:'right', grid:{display:false}, ticks:{callback:v=>fmt.pct(v,1)}}}, plugins:{bands:{dates:df}, tooltip:{callbacks:{label:c=>c.dataset.yAxisID==='y1'?c.dataset.label+': '+fmt.pct(c.parsed.y,2):c.dataset.label+': '+fmt.n(c.parsed.y,2)+' STANDARD',
     afterBody:items=>{const i=items[0].dataIndex; return [`burned that day ${fmt.n(burnAll(Rf[i]),2)} · cumulative ${fmt.n(cumW[i],2)} STANDARD`];}}}}}});
@@ -535,7 +626,6 @@ renderLeaders();
 document.getElementById('lead_more').addEventListener('click',()=>{leadOpen=!leadOpen; renderLeaders();});
 
 // ---------- daily log, since launch ----------
-const resOf = (d)=>HIST[d]&&HIST[d].reserveUsd!=null?HIST[d].reserveUsd:null;
 const cols = [
   ['Date', r=>r.date, r=>r.date],
   ['Price', r=>r.price!=null?'$'+r.price.toFixed(4):'–', r=>r.price],
@@ -543,10 +633,11 @@ const cols = [
   ['Market cap (outstanding)', r=>fmt.usd(r.mcFloat), r=>r.mcFloat],
   ['Minted supply', r=>fmt.n(r.supply,2), r=>r.supply],
   ['Outstanding', r=>fmt.n(r.float,2), r=>r.float],
-  ['Fee income ($)', r=>fmt.usd(inc(r),1), r=>inc(r)],
+  ['Recurring revenue ($)', r=>fmt.usd(rec(r),1), r=>rec(r)],
+  ['Charter sales ($)', r=>fmt.usd(chs(r),1), r=>chs(r)],
   ['Routed (ETH)', r=>(r.routedEth||0).toFixed(1), r=>r.routedEth||0],
   ['Charters sold', r=>r.chartersSold?`${r.chartersSold} @ ${(r.charterEth/r.chartersSold).toFixed(2)}`:'–', r=>r.chartersSold||0],
-  ['Charter proceeds (ETH)', r=>(r.charterEth||0).toFixed(2), r=>r.charterEth||0],
+  ['Charter sales (ETH)', r=>(r.charterEth||0).toFixed(2), r=>r.charterEth||0],
   ['License close', r=>r.licClose?fmt.int(r.licClose):'–', r=>r.licClose||''],
   ['Licenses', r=>fmt.int(r.licCount||0), r=>r.licCount||0],
   ['Branches', r=>fmt.int(r.branches), r=>r.branches],
@@ -565,19 +656,22 @@ const cols = [
   ['Pool volume', r=>fmt.usd(r.spVol||0,1), r=>r.spVol||0],
   ['Served by reserve', r=>fmt.usd(r.spVolMine!=null?r.spVolMine:(r.spVol||0),1), r=>r.spVolMine!=null?r.spVolMine:(r.spVol||0)],
   ['Pool fee income', r=>fmt.usd(r.spFee||0,1), r=>r.spFee||0],
-  ['Reserve', r=>resOf(r.date)!=null?fmt.usd(resOf(r.date)):'–', r=>resOf(r.date)??''],
+  ['Reserve', r=>r.reserveUsd!=null?fmt.usd(r.reserveUsd):'–', r=>r.reserveUsd??''],
+  ['Price to backing', r=>pbOf(r)!=null?pbOf(r).toFixed(2)+'×':'–', r=>pbOf(r)??''],
+  ['Net market sales', r=>r.mktNet!=null?fmt.sgn(r.mktNet)+fmt.n(r.mktNet,1):'–', r=>r.mktNet??''],
+  ['Depth ±2%, bid', r=>r.bid2!=null?fmt.usd(r.bid2,1):'–', r=>r.bid2??''],
   ['Regime', r=>regime[r.date]===undefined?'–':regime[r.date]?'exp':'con', r=>regime[r.date]===undefined?'':regime[r.date]?'expansion':'contraction'],
 ];
 // supply / pool / outstanding table; the market column is the pool change plus the protocol's own purchases, so every row ties
-const fl = (r,i)=>{const p=i>0?Sh[i-1]:null; const mint=r.mint||0, dep=r.depositBurn||0, bb=(r.burnBuyback||0)+(r.burnOther||0), toInc=r.toIncentives||0;
-  const dP=p?r.pool-p.pool:null, prot=toInc+(r.burn_contraction||0);   // purchases out of the pool: POL into the Incentives Vault, contraction vault buybacks
-  return {p, dS:p?r.supply-p.supply:null, dP, dI:p?r.incentives-p.incentives:null, dF:p?r.float-p.float:null, mint, dep, bb, mkt:dP==null?null:dP+prot, prot};};
+const fl = (r,i)=>{const p=i>0?Sh[i-1]:null; const mint=(r.mint||0)+(r.genesisMint||0), dep=r.depositBurn||0, bb=(r.burn||0)-dep;
+  const dP=p?r.pool-p.pool:null, mkt=r.mktNet!=null?r.mktNet:null, prot=dP!=null&&mkt!=null?dP-mkt:null;   // protocol: buybacks, POL purchases, position fees collected
+  return {p, dS:p?r.supply-p.supply:null, dP, dI:p?r.incentives-p.incentives:null, dF:p?r.float-p.float:null, mint, dep, bb, mkt, prot};};
 const sc = (v,inv)=>v==null?'<td>–</td>':`<td class="${(inv?-v:v)>0?'pos':(inv?-v:v)<0?'neg':'mut'}">${Math.abs(v)<0.5?'0':fmt.sgn(v)+fmt.n(v,2)}</td>`;
 let floatOpen = false;
 function renderFloat(){
   const frows = Sh.map((r,i)=>({r, ...fl(r,i)})).reverse();
-  document.getElementById('t_float').innerHTML = '<tr><th>Date</th><th>Minted supply</th><th>Change</th><th>+ Withdrawals</th><th>− Deposits</th><th>− Burned</th><th>Protocol pool</th><th>Change</th><th>+ Market sales</th><th>− Buybacks</th><th>Incentives Vault, change</th><th>Outstanding</th><th>Change</th><th>%</th><th>Price</th></tr>' +
-    frows.map((x,i)=>`<tr class="${x.r.date===L.date?'today':''}${i>=10?' more':''}"><td>${x.r.date}</td><td>${fmt.n(x.r.supply,2)}</td>${sc(x.dS)}${sc(x.mint)}${sc(-x.dep)}${sc(-x.bb)}<td>${fmt.n(x.r.pool,2)}</td>${sc(x.dP,true)}${sc(x.mkt,true)}${sc(-x.prot,true)}${sc(x.dI,true)}<td>${fmt.n(x.r.float,2)}</td>${sc(x.dF)}<td class="${x.dF>0?'pos':x.dF<0?'neg':''}">${x.p?fmt.sgn(x.dF)+fmt.pct(x.dF/x.p.float,2):'–'}</td><td>${x.r.price!=null?'$'+x.r.price.toFixed(4):'–'}</td></tr>`).join('');
+  document.getElementById('t_float').innerHTML = '<tr><th>Date</th><th>Minted supply</th><th>Change</th><th>+ Withdrawals</th><th>− Deposits</th><th>− Burned</th><th>Protocol pool</th><th>Change</th><th>+ Market sales</th><th>− Protocol</th><th>Incentives Vault, change</th><th>Outstanding</th><th>Change</th><th>%</th><th>Price</th></tr>' +
+    frows.map((x,i)=>`<tr class="${x.r.date===L.date?'today':''}${i>=10?' more':''}"><td>${x.r.date}</td><td>${fmt.n(x.r.supply,2)}</td>${sc(x.dS)}${sc(x.mint)}${sc(-x.dep)}${sc(-x.bb)}<td>${fmt.n(x.r.pool,2)}</td>${sc(x.dP,true)}${sc(x.mkt,true)}${sc(x.prot,true)}${sc(x.dI,true)}<td>${fmt.n(x.r.float,2)}</td>${sc(x.dF)}<td class="${x.dF>0?'pos':x.dF<0?'neg':''}">${x.p?fmt.sgn(x.dF)+fmt.pct(x.dF/x.p.float,2):'–'}</td><td>${x.r.price!=null?'$'+x.r.price.toFixed(4):'–'}</td></tr>`).join('');
   document.getElementById('t_float').classList.toggle('open', floatOpen);
   document.getElementById('fmore').textContent = floatOpen ? 'View 10 days' : `View all ${frows.length} days`;
 }
@@ -615,7 +709,8 @@ const A = DATA.addrs || null, TIP = DATA.tip, TIPTS = DATA.tipTs || DATA.pulledA
 const clone = o=>JSON.parse(JSON.stringify(o));
 const BASE = {L:clone(L), row:clone(Sh[Sh.length-1]||{}), n:Sh.length, sn:S.length, ch:clone(CH), lp:clone(LP), ld:clone(LD)};
 const WN = A ? {[A.zero]:'zero', [A.poolManager]:'pool', [A.contractionVault]:'contraction', [A.polBuyback]:'polBuyback', [A.incentivesVault]:'incentives',
-  [A.sbills]:'sbills', [A.centralBank]:'bank', [A.teamWallet]:'team', [A.reserveSafe]:'safe', [A.polManager]:'polManager'} : {};
+  [A.sbills]:'sbills', [A.centralBank]:'bank', [A.teamWallet]:'team', [A.reserveSafe]:'safe', [A.polManager]:'polManager', [A.feeSplitter]:'feeSplitter', [A.taxHook]:'taxHook', [A.expansionVault]:'expansion'} : {};
+const MARKET = new Set(['team','other']);   // pool counterparties that are not protocol contracts
 const pad = a=>'0x'+a.slice(2).toLowerCase().padStart(64,'0');
 const big = x=>Number(BigInt(x))/1e18;
 function restore(){
@@ -628,8 +723,8 @@ async function rpc(calls){
   const r = await fetch(RPCU, {method:'POST', headers:{'content-type':'application/json'}, body:JSON.stringify(calls.map((c,i)=>({jsonrpc:'2.0', id:i, method:c[0], params:c[1]})))});
   const j = await r.json(), out = []; (Array.isArray(j)?j:[j]).forEach(x=>{out[x.id] = x.result;}); return out;
 }
-async function logsTo(B, q){   // eth_getLogs from the block after the compile to B, in 400k-block steps
-  const out = []; for (let lo=TIP+1; lo<=B; lo+=400000) { const [r] = await rpc([['eth_getLogs', [{...q, fromBlock:'0x'+lo.toString(16), toBlock:'0x'+Math.min(B, lo+399999).toString(16)}]]]); if (!Array.isArray(r)) throw new Error('logs'); out.push(...r); } return out;
+async function logsTo(B, q){   // eth_getLogs from the block after the compile to B, in 100k-block steps (the RPC's limit for OR-lists in a topic)
+  const out = []; for (let lo=TIP+1; lo<=B; lo+=100000) { const [r] = await rpc([['eth_getLogs', [{...q, fromBlock:'0x'+lo.toString(16), toBlock:'0x'+Math.min(B, lo+99999).toString(16)}]]]); if (!Array.isArray(r)) throw new Error('logs'); out.push(...r); } return out;
 }
 async function events(kind, B){
   const out = []; let cur = null;
@@ -655,7 +750,9 @@ async function replay(s, B){
     if (fr==='zero') add(d, a>=5e7?'genesisMint':'mint', a);
     if (to==='zero') { add(d,'burn',a); add(d,'burn_'+fr,a); }
     if (to==='pool') add(d, (fr==='zero'||fr==='polManager')?'genesisPool':'poolIn', a);
-    if (fr==='pool' && to!=='polManager') add(d,'poolOut',a);
+    if (fr==='pool') add(d,'poolOut',a);
+    if (fr==='pool' && to==='polManager') add(d,'feesToTeam',a);
+    if (to==='pool' || fr==='pool') { const cp = to==='pool'?fr:to, sg = to==='pool'?1:-1; add(d, MARKET.has(cp)?'mktNet':'protNet', sg*a); }
     if (to==='incentives') add(d,'toIncentives',a); if (fr==='incentives') add(d,'fromIncentives',a);
     if (to==='sbills') add(d,'sbillIn',a); if (fr==='sbills') add(d,'sbillOut',a);
     if (to==='team') add(d,'teamIn',a); if (fr==='team') add(d,'teamOut',a); });
@@ -686,6 +783,7 @@ async function replay(s, B){
     lv = {supply:lv.supply-((x.mint||0)+(x.genesisMint||0)-(x.burn||0)), pool:lv.pool-((x.poolIn||0)+(x.genesisPool||0)-(x.poolOut||0)),
           incentives:lv.incentives-((x.toIncentives||0)-(x.fromIncentives||0)), sbills:lv.sbills-((x.sbillIn||0)-(x.sbillOut||0)), teamStd:lv.teamStd-((x.teamIn||0)-(x.teamOut||0))}; }
   const RL = rows[rows.length-1];
+  if (RL.reserveUsd==null) { RL.reserveUsd = L.reserve.totalUsd; RL.reserveParts = BASE.row.reserveParts; }   // a new day carries the reserve read at the compile block
   Object.assign(RL, {price:L.price, mcTotal:L.price*RL.supply, mcFloat:L.price*RL.float, pending:L.pending, exitFee:L.exitFeeNow, sbRate:L.sbills.rate, sbLocked:L.sbills.locked,
     multiplier:L.multiplier, branches:L.branches, activeCharters:L.activeCharters, burnedCharters:L.burnedCharters});
   Object.assign(L, {date:RL.date, totalSupply:RL.supply, poolStd:RL.pool, incentivesStd:RL.incentives, sbillsStd:RL.sbills, teamStd:RL.teamStd, float:RL.float,

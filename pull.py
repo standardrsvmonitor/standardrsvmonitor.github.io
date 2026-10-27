@@ -4,6 +4,7 @@ Run daily. First run backfills from genesis (several minutes); later runs are in
 import json, urllib.request, time, datetime as dt, os, sys, math, bisect, collections
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from k import keccak
+import extra
 
 D = os.path.join(os.path.dirname(os.path.abspath(__file__)), "data")
 C = os.path.join(D, "cache"); os.makedirs(C, exist_ok=True)
@@ -25,6 +26,7 @@ H = {"reserveSafe": "0x9a6F75AE9E8bdB68e1d12a9AdcCd0bB2958E3C22", "expansionVaul
 ZERO = "0x0000000000000000000000000000000000000000"
 TR = "0x" + keccak(b"Transfer(address,address,uint256)").hex()
 SW = "0x" + keccak(b"Swap(bytes32,address,int128,int128,uint160,uint128,int24,uint24)").hex()
+ML = "0x" + keccak(b"ModifyLiquidity(bytes32,address,int24,int24,int256,bytes32)").hex()
 SEED_BLOCK = 88451986   # first stock-pool seeding block (Oct 14 2026)
 
 def sel(sig): return "0x" + keccak(sig.encode()).hex()[:8]
@@ -46,6 +48,15 @@ def rpc(m, p, tries=6):
         except Exception as e:
             err = e; time.sleep(2 + 2 * i)
     return {"error": {"message": str(err)}}
+def rpcb(calls, tries=6):   # batched JSON-RPC, results in call order
+    for i in range(tries):
+        try:
+            r = urllib.request.Request(RPC, json.dumps([{"jsonrpc": "2.0", "id": k, "method": m, "params": p} for k, (m, p) in enumerate(calls)]).encode(),
+                                       {"Content-Type": "application/json", "User-Agent": "Mozilla/5.0"})
+            res = json.load(urllib.request.urlopen(r, timeout=120)); return [x.get("result") for x in sorted(res, key=lambda x: x["id"])]
+        except Exception as e:
+            err = e; time.sleep(2 + 2 * i)
+    raise RuntimeError(f"rpc batch failed: {err}")
 def ecall(to, data, block="latest"):
     r = rpc("eth_call", [{"to": to, "data": data}, block]); return r.get("result")
 def get(url, tries=4, backoff=3):
@@ -55,16 +66,16 @@ def get(url, tries=4, backoff=3):
             err = e; time.sleep(backoff * (i + 1))
     return {"_error": str(err)}
 
-def getlogs(q, lo, hi, step=400000):
-    out = []; b = lo
+def getlogs(q, lo, hi, step=400000):   # step halves when a range returns too many logs and grows back to the starting step
+    out = []; b = lo; cap = step
     while b <= hi:
         e = min(b + step - 1, hi); qq = dict(q, fromBlock=hex(b), toBlock=hex(e))
-        r = rpc("eth_getLogs", [qq])
+        r = rpc("eth_getLogs", [qq], tries=3)
         if "error" in r:
             if step <= 2000: raise RuntimeError(r["error"])
             step //= 2; continue
         out += r["result"]; b = e + 1
-        if step < 400000: step = min(400000, step * 2)
+        if step < cap: step = min(cap, step * 2)
     return out
 
 # ---------- block timestamps (anchor cache, interpolation) ----------
@@ -124,7 +135,13 @@ def main():
         bal[n] = row
     bal["poolManager"] = {"STANDARD": int(ecall(STD, "0x70a08231" + pad(PM)[2:], BT), 16) / 1e18}
     total_supply = int(ecall(STD, "0x18160ddd", BT), 16) / 1e18
-    sb = get(IX + f"sbills/history?chainId={CHAIN}")
+    # S-Bill history: the full endpoint now stalls for minutes, so fetch the last seven days and merge into the cached points
+    sb_old = jload(os.path.join(C, "sbills.json"), {})
+    sb = get(IX + f"sbills/history?chainId={CHAIN}&range={'7d' if sb_old.get('points') else '30d'}", tries=2)
+    if "current" not in sb: sb = dict(sb_old)
+    key = lambda q: (q.get("t"), q.get("txHash"), q.get("kind"), q.get("amount"))
+    pts = {key(q): q for q in (sb_old.get("points") or [])}; pts.update({key(q): q for q in (sb.get("points") or [])})
+    sb["points"] = sorted(pts.values(), key=lambda q: (q.get("t") or 0)); sb.setdefault("deploymentBlock", sb_old.get("deploymentBlock"))
     lic = get(IX + f"auctions/license/periods?chainId={CHAIN}")
     act = {}
     for k in ["epoch-settled", "epoch-routed", "licenses-purchased", "withdrawn", "deposited", "charter-created", "revoked", "branches-opened", "checked-in"]:
@@ -134,7 +151,7 @@ def main():
             if "events" not in d: log("activity ERR", k, d); break
             ev += d["events"]; cur = d["page"].get("nextCursor")
             if not cur or not d["events"]: break
-        act[k] = [e for e in ev if int(e.get("blockNumber") or 0) <= tip]
+        act[k] = [e for e in ev if int(e.get("blockNumber") or 0) <= tip]; log("indexer activity", k, len(ev))
     jsave(os.path.join(C, "activity.json"), act); jsave(os.path.join(C, "home.json"), home)
     jsave(os.path.join(C, "sbills.json"), sb); jsave(os.path.join(C, "license_periods.json"), lic)
     genesis_ts = int(snap["bank"]["genesisTime"])
@@ -214,7 +231,7 @@ def main():
     for n, a in H.items():
         for t, (ta, dec) in toks.items():
             if t in ("STANDARD", "USDG"): continue
-            r = ecall(ta, "0x70a08231" + pad(a)[2:]); v = int(r, 16) / 10 ** dec if r and r != "0x" else 0
+            r = ecall(ta, "0x70a08231" + pad(a)[2:], BT); v = int(r, 16) / 10 ** dec if r and r != "0x" else 0
             if v > 1e-6: bal[n][t] = v
     log("pools", {k: round(v["valueUSD"]) for k, v in lp.items()})
 
@@ -225,7 +242,7 @@ def main():
     pids = list(pools.keys())
     if pids and sw["last"] < tip:
         byid = {p["id"]: p for p in pools.values()}
-        for l in getlogs({"address": PM, "topics": [SW, pids]}, sw["last"] + 1, tip):
+        for l in getlogs({"address": PM, "topics": [SW, pids]}, sw["last"] + 1, tip, 100000):   # OR-list in a topic: 100k-block ranges
             p = byid[l["topics"][1]]; idx = 0 if p["usdg0"] else 1
             usdg = abs(s128(l["data"][2 + 64 * idx:2 + 64 * (idx + 1)])) / 1e6
             fee = int(l["data"][2 + 64 * 5:2 + 64 * 6], 16); snd = "0x" + l["topics"][2][-40:]
@@ -345,7 +362,8 @@ def main():
         if t == "pool":
             if f in ("zero", "polManager"): days[d]["genesisPool"] += a
             else: days[d]["poolIn"] += a
-        if f == "pool" and t != "polManager": days[d]["poolOut"] += a
+        if f == "pool": days[d]["poolOut"] += a
+        if f == "pool" and t == "polManager": days[d]["feesToTeam"] += a   # the protocol position's STANDARD fees, forwarded by the POL manager to the team wallet
         if t == "incentives": days[d]["toIncentives"] += a
         if f == "incentives": days[d]["fromIncentives"] += a
         if t == "sbills": days[d]["sbillIn"] += a
@@ -430,7 +448,7 @@ def main():
         row.update({k: round(v, 6) for k, v in x.items()})
         row["burnBuyback"] = round(x["burn_contraction"] + x["burn_polManager"] + x["burn_sbills"], 6)   # tokens bought back and burned
         row["depositBurn"] = round(x["deposits"], 6)                                                     # deposits converted to ledger (burned), from deposited events
-        row["burnOther"] = round(max(0.0, x["burn_other"] + x["burn_bank"] - x["deposits"]), 6)          # wallet burns that are not deposits (counted in the token's burnedForever)
+        row["burnOther"] = round(max(0.0, x["burn_other"] + x["burn_bank"] - x["deposits"]), 6)          # burns that are not deposits: the tax hook burning STANDARD it takes from the pool (26,801.5 lifetime to 27 Oct 2026)
         row.update({"pending": pend_hist[d], "exitFee": fee_hist[d], "sbRate": rate_hist[d], "sbLocked": sbl_hist[d], "teamStd": tm_hist[d],
                     "activeCharters": cen_hist[d][0], "burnedCharters": cen_hist[d][1], "branches": cen_hist[d][2]})
         if prev and p and prev.get("price"):
@@ -532,6 +550,35 @@ def main():
     jsave(os.path.join(C, "ens.json"), ensc)
     out["leaders"] = {"rows": leaders, "bankers": len(bankers), "banks": sum(int(r.get("banks", 0)) for r in bankers), "branches": tot_br}
     log("leaderboard", len(bankers), "bankers; ENS names in top 25:", sum(1 for l in leaders if l["ens"]))
+    # ---------- reserve history, pool flows by holder group, STANDARD/ETH depth (extra.py) ----------
+    x = extra.Ctx(cache=C, H={k: v for k, v in H.items()}, G=G, tip=tip, tip_ts=block_ts(tip), genesis_ts=genesis_ts, getlogs=getlogs, rpcb=rpcb, T=T,
+                  PM=PM, SW=SW, ML=ML, TR=TR, pad=pad, STD=STD, USDG=USDG, POSM=POSM, SEED_BLOCK=SEED_BLOCK, bal=bal,
+                  pos_ids=[q["id"] for q in pos], lp_liq_now=sum(q["liq"] for q in pos), log=log, rpc=rpc)
+    lp_pools = {p_["stock"]: {"pool": pid_, "isEth": p_["stockAddr"].lower() == ZERO, "stockAddr": p_["stockAddr"], "usdg0": p_["usdg0"]} for pid_, p_ in pools.items()}
+    closes = extra.pool_closes(x, {**{pid_: SEED_BLOCK for pid_ in pools}, STD_POOL: G})
+    today_parts = {"total": reserve["totalUsd"], "eth": (reserve["safeEth"] + reserve["contractionEth"] + reserve["expansionEth"]) * ethusd, "usdg": reserve["safeUsdg"],
+                   "stocks": reserve["safeStockUsd"], "lp": {s_: v_["valueUSD"] for s_, v_ in lp.items()}}
+    res_hist, res_chk = extra.reserve_history(x, lp_pools, closes, eth_day, epochs, dl, today_parts)
+    log("reserve history", len(res_hist), "days; forward-from-zero checks (0 = ties):", res_chk)
+    for k_ in sorted(hist_prev := jload(os.path.join(D, "history.json"), {})):
+        if hist_prev[k_].get("reserveUsd") and k_ in res_hist: log("  reserve", k_, "snapshot", round(hist_prev[k_]["reserveUsd"]), "rebuilt close", round(res_hist[k_]["total"]))
+    pf = extra.pool_flows(x)
+    bankers = {(e.get("actor") or "").lower() for k_ in ("charter-created", "deposited", "withdrawn", "licenses-purchased", "branches-opened", "checked-in") for e in act[k_]}
+    bankers |= {r_["owner"].lower() for r_ in lbd.get("bankers", [])}; bankers.discard("")
+    sbh = {"0x" + l_["topics"][1][-40:] for l_ in getlogs({"address": STD, "topics": [TR, None, pad(H["sbills"])]}, int(sb.get("deploymentBlock") or G), tip, 4_000_000)}
+    names = dict(wl); names[PM.lower()] = "pool"; names.update({H["feeSplitter"].lower(): "feeSplitter", H["taxHook"].lower(): "taxHook", H["expansionVault"].lower(): "expansion"})
+    grp, sellers, grp_stats = extra.flows_by_group(x, pf, names, bankers, sbh, H["teamWallet"].lower(), genesis_ts, dl)
+    log("pool flows", len(pf["rows"]), "rows;", grp_stats, "| bankers", len(bankers), "S-Bill holders", len(sbh))
+    fee_lp = 0.01; s0 = ecall(SV, sel("getSlot0(bytes32)") + STD_POOL[2:], BT); sp_now = int(s0[2:66], 16) / 2 ** 96
+    depth = extra.std_depth(x, STD_POOL, sp_now, ethusd, closes, eth_day, dl, fee_lp, int(snap["tax"]["buyTaxNowBps"]) / 1e4, int(snap["tax"]["sellTaxNowBps"]) / 1e4, H["polManager"].lower())
+    log("depth", {k_: (round(v_) if isinstance(v_, float) else v_) for k_, v_ in depth.items() if k_ in ("bid2", "ask2", "bid5", "ask5", "protocolShare", "positions")})
+    for row in series:
+        d_ = row["date"]; g_ = grp.get(d_, {})
+        rp_ = res_hist.get(d_); row["reserveUsd"] = rp_["total"] if rp_ else None; row["reserveParts"] = rp_
+        row["mktNet"] = round(g_.get("mktNet", 0.0), 6); row["protNet"] = round(g_.get("protNet", 0.0), 6)
+        for k_ in ("team", "bankers", "sbills", "active", "launch", "other"): row["sell_" + k_] = round(g_.get("sell_" + k_, 0.0), 6)
+        if d_ in depth["hist"]: row.update(depth["hist"][d_])
+    out["sellers"] = sellers; out["depth"] = {k_: v_ for k_, v_ in depth.items() if k_ != "hist"}; out["checks"] = res_chk
     hist = jload(os.path.join(D, "history.json"), {})
     hist[today] = {k: v for k, v in live.items() if k not in ("poolCtx", "balances", "lp", "sbills", "reserve")}
     hist[today]["lp"] = {s: {"stock": v["stock"], "usdg": v["usdg"], "valueUSD": v["valueUSD"], "price": v["price"]} for s, v in lp.items()}

@@ -335,3 +335,289 @@ def std_depth(x, pid, sp_now, ethusd, closes, eth_day, dates, fee, tax_buy, tax_
         hist[d] = {"bid2": bd, "ask2": ak, "bid5": b5_, "ask5": a5_}
     return {"bid2": b2, "ask2": a2, "bid5": b5, "ask5": a5, "slip": slip, "fee": fee, "taxBuy": tax_buy, "taxSell": tax_sell,
             "protocolShare": prot_in / in_range if in_range else None, "positions": sum(1 for _ in rng), "hist": hist}
+
+
+# ---------- every venue for each reserve asset: daily volume and liquidity, from the chain ----------
+def _bytes25(pid): return pid[2:52] + "00" * 7
+
+
+def v4_keys(x, ids):
+    """Pool keys for Uniswap v4 pool ids, via PositionManager.poolKeys(bytes25); cached."""
+    import time
+    c = x.jl("v4_keys.json", {})
+    need = [i for i in ids if i not in c]
+    for k in range(0, len(need), 10):
+        part = need[k:k + 10]
+        for t in range(6):
+            try: res = x.rpcb([("eth_call", [{"to": x.POSM, "data": x.sel("poolKeys(bytes25)") + _bytes25(i)}, "latest"]) for i in part]); break
+            except Exception: time.sleep(5 * (t + 1))
+        else: continue
+        for i, r in zip(part, res):
+            if r and len(r) >= 2 + 64 * 5:
+                w = words(r); c[i] = ["0x" + w[0][-40:], "0x" + w[1][-40:], int(w[2], 16), s256(w[3]), "0x" + w[4][-40:]]
+        time.sleep(0.3)
+    x.js("v4_keys.json", c)
+    return c
+
+
+def decimals(x, toks):
+    import time
+    c = x.jl("decimals.json", {"0x" + "0" * 40: 18})
+    need = [t for t in toks if t not in c]
+    for k in range(0, len(need), 10):
+        part = need[k:k + 10]
+        try: res = x.rpcb([("eth_call", [{"to": t, "data": "0x313ce567"}, "latest"]) for t in part])
+        except Exception: time.sleep(5); continue
+        for t, r in zip(part, res): c[t] = int(r, 16) if r and r != "0x" else 18
+        time.sleep(0.3)
+    x.js("decimals.json", c)
+    return c
+
+
+def venue_scan(x, pairs, reserve_pids):
+    """Incremental per-venue daily aggregates. v4 pools: swap amounts and last sqrtPrice by day, net liquidity by range by day; for the
+    reserve's own pools also the swap callers with sample transactions. Custodial pools (v2, v3, Solidly-type, Metric and others): the
+    asset's and quote token's flows in and out of the pool contract, split into swaps (opposite directions in one transaction) and
+    liquidity changes (same direction)."""
+    reg = []
+    for sym, plist in pairs.items():
+        if not isinstance(plist, list): continue
+        for p in plist:
+            a = (p.get("pairAddress") or "").lower()
+            if not a: continue
+            cts = (p.get("pairCreatedAt") or 0) / 1000
+            cb = x.B(cts - 86400) if cts - 86400 >= x.genesis_ts else 0          # anchors begin at genesis; older pools' liquidity is scanned from block 0
+            reg.append({"sym": sym, "id": a, "v4": len(a) == 66, "liqStart": max(0, cb), "start": max(cb, x.SEED_BLOCK - 3_000_000), "dex": p.get("dexId"), "label": ((p.get("labels") or [""]) or [""])[0],
+                        "base": (p.get("baseToken") or {}).get("address", "").lower(), "quote": (p.get("quoteToken") or {}).get("address", "").lower(),
+                        "bsym": (p.get("baseToken") or {}).get("symbol"), "qsym": (p.get("quoteToken") or {}).get("symbol")})
+    keys = v4_keys(x, [r["id"] for r in reg if r["v4"]])
+    sw = x.jl("venue_v4.json", {}); lq = x.jl("venue_v4liq.json", {}); cu = x.jl("venue_cust.json", {})
+    for r in reg:
+        if not r["v4"] or r["id"] not in keys: continue
+        e = sw.setdefault(r["id"], {"last": r["start"] - 1, "d": {}, "snd": {}})
+        if e["last"] < r["start"]: x.log("venue v4 backfill", r["sym"], r["id"][:10], "from", r["start"])
+        if e["last"] < x.tip:
+            mine = r["id"] in reserve_pids
+            for l in x.getlogs({"address": x.PM, "topics": [x.SW, r["id"]]}, e["last"] + 1, x.tip, 4000000):
+                w = words(l["data"]); d = day(x.T(int(l["blockNumber"], 16)))
+                v = e["d"].setdefault(d, [0.0, 0.0, None]); v[0] += abs(s256(w[0])); v[1] += abs(s256(w[1])); v[2] = str(int(w[2], 16))
+                if mine:
+                    s = "0x" + l["topics"][2][-40:]; q = e["snd"].setdefault(s, [0, []]); q[0] += 1
+                    if len(q[1]) < 12 and (not q[1] or q[0] % max(1, q[0] // 12 + 1) == 0): q[1].append(l["transactionHash"])
+            e["last"] = x.tip
+        f = lq.setdefault(r["id"], {"last": r["liqStart"] - 1, "d": {}})
+        if f["last"] < x.tip:
+            for l in x.getlogs({"address": x.PM, "topics": [x.ML, r["id"]]}, f["last"] + 1, x.tip, 4000000):
+                w = words(l["data"]); d = day(x.T(int(l["blockNumber"], 16))); k = f"{s256(w[0])},{s256(w[1])}"
+                dd = f["d"].setdefault(d, {}); dd[k] = str(int(dd.get(k, "0")) + s256(w[2]))
+                if dd[k] == "0": dd.pop(k)
+            f["last"] = x.tip
+    import time
+    quiet = [r["id"] for r in reg if r["v4"] and r["id"] in sw and not sw[r["id"]]["d"]]   # no swaps since the reserve's launch: price from slot0 now
+    for k in range(0, len(quiet), 10):
+        try: res = x.rpcb([("eth_call", [{"to": x.SV, "data": x.sel("getSlot0(bytes32)") + i[2:]}, "latest"]) for i in quiet[k:k + 10]])
+        except Exception: time.sleep(5); continue
+        for i, v in zip(quiet[k:k + 10], res):
+            if v and len(v) >= 66: sw[i]["spNow"] = str(int(v[2:66], 16))
+        time.sleep(0.3)
+    x.js("venue_v4.json", sw); x.js("venue_v4liq.json", lq)
+    cust = [r for r in reg if not r["v4"]]; calls = [(r["id"], t) for r in cust for t in {r["base"], r["quote"]}]
+    for k in range(0, len(calls), 10):
+        part = calls[k:k + 10]
+        for t_ in range(6):
+            try: res = x.rpcb([("eth_call", [{"to": t, "data": "0x70a08231" + x.pad(pid)[2:]}, hex(x.tip)]) for pid, t in part]); break
+            except Exception: time.sleep(5 * (t_ + 1))
+        else: res = [None] * len(part)
+        for (pid, t), v in zip(part, res): cu.setdefault(pid, {"last": None, "d": {}}).setdefault("now", {})[t] = str(int(v, 16)) if v and v != "0x" else "0"
+        time.sleep(0.3)
+    for r in reg:
+        if r["v4"]: continue
+        e = cu.setdefault(r["id"], {"last": r["start"] - 1, "d": {}})
+        if e.get("last") is None: e["last"] = r["start"] - 1
+        if e["last"] < r["start"]: x.log("venue pool backfill", r["sym"], r["dex"], r["id"][:10], "from", r["start"])
+        if e["last"] < x.tip:
+            logs = []
+            for tok in {r["base"], r["quote"]}:
+                for topics in ([x.TR, x.pad(r["id"])], [x.TR, None, x.pad(r["id"])]):
+                    logs += [(l, tok) for l in x.getlogs({"address": tok, "topics": topics}, e["last"] + 1, x.tip, 4000000)]
+            bytx = collections.defaultdict(lambda: collections.defaultdict(float)); txd = {}
+            for l, tok in logs:
+                a = int(l["data"], 16); f_ = "0x" + l["topics"][1][-40:]; t_ = "0x" + l["topics"][2][-40:]
+                sgn = 1 if t_ == r["id"] else -1 if f_ == r["id"] else 0
+                if not sgn or f_ == t_: continue
+                bytx[l["transactionHash"]][tok] += sgn * a; txd[l["transactionHash"]] = int(l["blockNumber"], 16)
+            for h, fl in bytx.items():
+                d = day(x.T(txd[h])); v = e["d"].setdefault(d, {})
+                for tok, a in fl.items(): v["net_" + tok] = str(int(v.get("net_" + tok, "0")) + int(a))
+                vals = list(fl.values())
+                if len(vals) == 2 and vals[0] * vals[1] < 0:      # one token in, the other out: a swap through this pool
+                    for tok, a in fl.items(): v["sw_" + tok] = str(int(v.get("sw_" + tok, "0")) + abs(int(a)))
+            e["last"] = x.tip
+    x.js("venue_v4.json", sw); x.js("venue_v4liq.json", lq); x.js("venue_cust.json", cu)
+    return reg, keys, sw, lq, cu
+
+
+def chain_shares(x, reg, keys, sw, lq, cu, lp_pools, closes, eth_day, dates, res_hist):
+    """Per reserve asset and day: every listed venue's volume and liquidity in USD, the reserve pool's share of chain volume and the
+    reserve position's share of chain liquidity, the reserve pool's rank by liquidity and the largest other venue."""
+    zero = "0x" + "0" * 40; usdg = x.USDG.lower()
+    sym_of = {}
+    for r in reg: sym_of[r["base"]] = r["bsym"]; sym_of[r["quote"]] = r["qsym"]
+    eth_like = {zero} | {a for a, s in sym_of.items() if s in ("WETH", "ETH")}
+    dec = decimals(x, sorted({t for k in keys.values() for t in k[:2]} | {r["base"] for r in reg} | {r["quote"] for r in reg}))
+    def asset_px(sym, d):
+        if sym == "ETH": return eth_day.get(d)
+        p = lp_pools.get(sym); c = close_on(closes.get(p["pool"], {}), d, first=True) if p else None
+        if c is None: return None
+        sp = c / 2 ** 96; P = sp * sp
+        return (1e12 / P if P else None) if p["usdg0"] else P * 1e18 / 1e6
+    def is_asset(tok, sym): return tok in eth_like if sym == "ETH" else tok == (lp_pools.get(sym) or {}).get("stockAddr", "").lower()
+    def usd_of(tok, sym, d):
+        if tok == usdg: return 1.0
+        if tok in eth_like: return eth_day.get(d)
+        if is_asset(tok, sym): return asset_px(sym, d)
+        return None
+    def priced(t, sym): return t == usdg or t in eth_like or is_asset(t, sym)
+    def is_venue(r):   # a pool pairing the asset with USDG or ETH; memecoins quoted in an equity and exotic quotes are not venues for the asset
+        if r["v4"]:
+            k = keys.get(r["id"])
+            if not k or k[0].lower() == k[1].lower(): return False
+            toks = [k[0].lower(), k[1].lower()]
+        else: toks = [r["base"], r["quote"]]
+        return all(priced(t, r["sym"]) for t in toks) and any(is_asset(t, r["sym"]) for t in toks)
+    out = collections.defaultdict(dict)
+    for sym in sorted({r["sym"] for r in reg}):
+        venues = [r for r in reg if r["sym"] == sym and is_venue(r)]; mine = (lp_pools.get(sym) or {}).get("pool", "").lower()
+        cum_rng = {r["id"]: collections.defaultdict(int) for r in venues if r["v4"]}
+        after = {}                                     # custodial: balance at a day's close = balance now less every net flow after that day
+        for r in venues:
+            if r["v4"]: continue
+            e = cu.get(r["id"], {}); tot = collections.defaultdict(int)
+            for dd in sorted(e.get("d", {}), reverse=True):
+                after[(r["id"], dd)] = dict(tot)
+                for kk, v in e["d"][dd].items():
+                    if kk.startswith("net_"): tot[kk[4:]] += int(v)
+            after[(r["id"], "_all")] = dict(tot)
+        last_sp = {}
+        for d in dates:
+            if d < "2026-10-14": continue                 # the reserve's pools opened on 14 October
+            ap = asset_px(sym, d)
+            if ap is None: continue
+            vol = {}; tvl = {}
+            for r in venues:
+                vid = r["id"]
+                if r["v4"]:
+                    k = keys.get(vid)
+                    if not k: continue
+                    c0, c1 = k[0].lower(), k[1].lower(); d0, d1 = dec.get(c0, 18), dec.get(c1, 18)
+                    for rk, L in (lq.get(vid, {}).get("d", {}).get(d) or {}).items(): cum_rng[vid][rk] += int(L)
+                    dv = sw.get(vid, {}).get("d", {}).get(d)
+                    if dv and dv[2]: last_sp[vid] = int(dv[2]) / 2 ** 96
+                    elif vid not in last_sp and sw.get(vid, {}).get("spNow"): last_sp[vid] = int(sw[vid]["spNow"]) / 2 ** 96
+                    sp = last_sp.get(vid)
+                    if sp is None: continue
+                    p10 = sp * sp * 10 ** (d0 - d1)                    # token1 per token0
+                    u0, u1 = usd_of(c0, sym, d), usd_of(c1, sym, d)
+                    if u0 is None and u1 is not None: u0 = u1 * p10
+                    if u1 is None and u0 is not None and p10: u1 = u0 / p10
+                    if u0 is None or u1 is None: continue
+                    a0 = a1 = 0.0
+                    for rk, L in cum_rng[vid].items():
+                        if L > 0:
+                            tl, tu = map(int, rk.split(",")); q0, q1 = lp_amounts(L, tl, tu, sp); a0 += q0; a1 += q1
+                    tvl[vid] = a0 / 10 ** d0 * u0 + a1 / 10 ** d1 * u1
+                    vol[vid] = (dv[0] / 10 ** d0 * u0 if c0 == usdg or (c1 != usdg and is_asset(c0, sym)) else dv[1] / 10 ** d1 * u1) if dv else 0.0
+                else:
+                    cv = cu.get(vid, {}); e = (cv.get("d", {}).get(d)) or {}; now_ = cv.get("now", {})
+                    aft = after.get((vid, d))
+                    if aft is None:                            # no flow that day: everything after the last flow day on or before it
+                        later = [dd for dd in cv.get("d", {}) if dd > d]; aft = after.get((vid, min(later)), {}) if later else {}
+                        if later: aft = {t_: aft.get(t_, 0) + sum(int(v) for kk, v in cv["d"][min(later)].items() if kk == "net_" + t_) for t_ in set(aft) | {k_[4:] for k_ in cv["d"][min(later)] if k_.startswith("net_")}}
+                    b, q = r["base"], r["quote"]; ub, uq = usd_of(b, sym, d), usd_of(q, sym, d)
+                    bb, qb = (int(now_.get(b, 0)) - aft.get(b, 0)) / 10 ** dec.get(b, 18), (int(now_.get(q, 0)) - aft.get(q, 0)) / 10 ** dec.get(q, 18)
+                    if ub is None and uq is None: continue
+                    tvl[vid] = (bb * ub if ub is not None else qb * uq) + (qb * uq if uq is not None else bb * ub)   # an unpriced side is valued like the priced one
+                    stok = q if q == usdg else (b if ub is not None else q)
+                    vol[vid] = int(e.get("sw_" + stok, "0")) / 10 ** dec.get(stok, 18) * (usd_of(stok, sym, d) or 0)
+            tv, vv = sum(tvl.values()), sum(vol.values())
+            pos = ((res_hist.get(d) or {}).get("lp") or {}).get(sym)
+            ranked = sorted(tvl.items(), key=lambda kv: -kv[1])
+            rk = next((i + 1 for i, (vid, _) in enumerate(ranked) if vid == mine), None)
+            other = next(((vid, v) for vid, v in ranked if vid != mine), (None, 0))
+            out[d].update({f"chainTvl_{sym}": tv, f"chainVol_{sym}": vv, f"poolTvl_{sym}": tvl.get(mine), f"poolVolChain_{sym}": vol.get(mine),
+                           f"liqShare_{sym}": (pos / tv if pos is not None and tv else None), f"volShare_{sym}": (vol.get(mine, 0) / vv if vv else None),
+                           f"rank_{sym}": rk, f"venues_{sym}": sum(1 for v in tvl.values() if v >= 100)})
+            ov = next((r for r in venues if r["id"] == other[0]), None)
+            out[d][f"otherTvl_{sym}"] = other[1]; out[d][f"otherDex_{sym}"] = (ov["dex"] + (" " + ov["label"] if ov["label"] else "")) if ov else ""
+    return out
+
+
+def lp_pnl(x, lp_pools, closes, dates, res_hist, fees_by_day):
+    """The reserve's positions against holding what was deposited. Deposits and withdrawals are each liquidity change of the Safe's
+    positions valued at the pool price just before it; holding value marks those token amounts at each day's close. Returns per pool and
+    day: position value, holding value, cost in USD, cumulative fees earned."""
+    import time
+    lm = x.jl("lp_mods.json", {"rows": []}); cache = x.jl("lp_cost.json", {})
+    ids = {"0x" + format(i, "064x") for i in x.pos_ids}
+    INIT = x.INIT
+    def price_before(pid, b):
+        for span in (20000, 200000, 2000000):
+            lg = x.getlogs({"address": x.PM, "topics": [x.SW, pid]}, max(x.G, b - span), b - 1, 4000000)
+            if lg: return int(words(lg[-1]["data"])[2], 16)
+        lg = x.getlogs({"address": x.PM, "topics": [INIT, pid]}, max(x.G, b - 2000000), b, 4000000)
+        return int(words(lg[-1]["data"])[3], 16) if lg else None
+    pid_sym = {p["pool"]: s for s, p in lp_pools.items()}
+    ev = []
+    for b, pid, tl, tu, dl, salt in lm["rows"]:
+        if salt not in ids or pid not in pid_sym: continue
+        k = f"{b}:{pid}:{tl}:{tu}:{dl}"
+        if k not in cache:
+            sp = price_before(pid, b); cache[k] = str(sp) if sp else None; time.sleep(0.2)
+        if not cache[k]: continue
+        sp = int(cache[k]) / 2 ** 96; a0, a1 = lp_amounts(abs(int(dl)), tl, tu, sp); sg = 1 if int(dl) > 0 else -1
+        ev.append((day(x.T(b)), pid_sym[pid], sg * a0, sg * a1, sp))
+    x.js("lp_cost.json", cache)
+    out = collections.defaultdict(dict)
+    for s, p in lp_pools.items():
+        d0, d1 = (6, 18) if p["usdg0"] else (18, 6)
+        def usd(a0, a1, sp):
+            P = sp * sp
+            if p["usdg0"]: return a0 / 1e6 + a1 / 1e18 * (1e12 / P if P else 0)
+            return a0 / 1e18 * (P * 1e18 / 1e6) + a1 / 1e6
+        h0 = h1 = cost = fees = 0.0
+        for d in dates:
+            for dd, s2, a0, a1, sp in ev:
+                if dd == d and s2 == s: h0 += a0; h1 += a1; cost += usd(a0, a1, sp)
+            fees += fees_by_day.get(d, {}).get(s, 0.0)
+            c = close_on(closes.get(p["pool"], {}), d, first=True)
+            pos = ((res_hist.get(d) or {}).get("lp") or {}).get(s)
+            if c is None or pos is None or (h0 == 0 and h1 == 0): continue
+            out[d][s] = {"lp": pos, "hold": usd(h0, h1, c / 2 ** 96), "cost": cost, "fees": fees}
+    return out
+
+
+def swap_callers(x, sw, reserve_pids):
+    """Classify the contracts that executed swaps in the reserve's pools. A contract with fewer than 20 swaps is occasional (a wallet's own
+    contract or a one-off route) and counts as organic. For the rest, six transactions are sampled: three or more distinct sending wallets
+    make it a router or aggregator (organic); one or two make it a single-operator bot (arbitrage, market-making, other automation)."""
+    import time
+    c = x.jl("swap_callers.json", {})
+    todo = []
+    for pid in reserve_pids:
+        for s, (n, txs) in (sw.get(pid, {}).get("snd") or {}).items():
+            if s in c: continue
+            if n < 20: c[s] = {"wallets": None, "kind": "router", "swaps": n}; continue
+            if txs: todo.append((s, txs[:6]))
+    for s, txs in todo:
+        frm = set()
+        for k in range(0, len(txs), 5):
+            for t in range(6):
+                try: res = x.rpcb([("eth_getTransactionByHash", [h]) for h in txs[k:k + 5]]); break
+                except Exception: time.sleep(5 * (t + 1))
+            else: res = []
+            frm |= {(r or {}).get("from", "").lower() for r in res if r}
+            time.sleep(0.3)
+        c[s] = {"wallets": len(frm), "kind": "router" if len(frm) >= 3 else "bot"}
+        if len(c) % 20 == 0: x.js("swap_callers.json", c)
+    x.js("swap_callers.json", c)
+    return c

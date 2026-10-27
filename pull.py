@@ -84,6 +84,13 @@ def block_ts(b):
     k = str(b)
     if k in ANCH: return ANCH[k]
     r = rpc("eth_getBlockByNumber", [hex(b), False]); t = int(r["result"]["timestamp"], 16); ANCH[k] = t; return t
+def ts_block(ts):   # block at a timestamp, interpolated from the anchors (approximate; callers leave a margin)
+    ks = sorted(int(k) for k in ANCH); ts_ = [ANCH[str(k)] for k in ks]
+    i = bisect.bisect_left(ts_, ts)
+    if i <= 0: return ks[0]
+    if i >= len(ks): return ks[-1]
+    b0, b1, t0, t1 = ks[i - 1], ks[i], ts_[i - 1], ts_[i]
+    return int(b0 + (b1 - b0) * (ts - t0) / max(1, t1 - t0))
 def ensure_anchors(lo, hi, every=100000):
     b = lo - lo % every
     while b <= hi + every:
@@ -553,7 +560,8 @@ def main():
     # ---------- reserve history, pool flows by holder group, STANDARD/ETH depth (extra.py) ----------
     x = extra.Ctx(cache=C, H={k: v for k, v in H.items()}, G=G, tip=tip, tip_ts=block_ts(tip), genesis_ts=genesis_ts, getlogs=getlogs, rpcb=rpcb, T=T,
                   PM=PM, SW=SW, ML=ML, TR=TR, pad=pad, STD=STD, USDG=USDG, POSM=POSM, SEED_BLOCK=SEED_BLOCK, bal=bal,
-                  pos_ids=[q["id"] for q in pos], lp_liq_now=sum(q["liq"] for q in pos), log=log, rpc=rpc)
+                  pos_ids=[q["id"] for q in pos], lp_liq_now=sum(q["liq"] for q in pos), log=log, rpc=rpc, sel=sel, B=ts_block, SV=SV,
+                  INIT="0x" + keccak(b"Initialize(bytes32,address,address,uint24,int24,address,uint160,int24)").hex())
     lp_pools = {p_["stock"]: {"pool": pid_, "isEth": p_["stockAddr"].lower() == ZERO, "stockAddr": p_["stockAddr"], "usdg0": p_["usdg0"]} for pid_, p_ in pools.items()}
     closes = extra.pool_closes(x, {**{pid_: SEED_BLOCK for pid_ in pools}, STD_POOL: G})
     today_parts = {"total": reserve["totalUsd"], "eth": (reserve["safeEth"] + reserve["contractionEth"] + reserve["expansionEth"]) * ethusd, "usdg": reserve["safeUsdg"],
@@ -579,6 +587,25 @@ def main():
         for k_ in ("team", "bankers", "sbills", "active", "launch", "other"): row["sell_" + k_] = round(g_.get("sell_" + k_, 0.0), 6)
         if d_ in depth["hist"]: row.update(depth["hist"][d_])
     out["sellers"] = sellers; out["depth"] = {k_: v_ for k_, v_ in depth.items() if k_ != "hist"}; out["checks"] = res_chk
+    # every venue for each reserve asset; the reserve's position against holding; who executes swaps in the reserve's pools
+    reg, keys, vsw, vlq, vcu = extra.venue_scan(x, stock_ds, {p_["pool"] for p_ in lp_pools.values()})
+    shares = extra.chain_shares(x, reg, keys, vsw, vlq, vcu, lp_pools, closes, eth_day, dl, res_hist)
+    fees_day = collections.defaultdict(dict)
+    for row in series:
+        for s_ in lp_pools: fees_day[row["date"]][s_] = row.get("spFee_" + s_, 0.0)
+    pnl = extra.lp_pnl(x, lp_pools, closes, dl, res_hist, fees_day)
+    callers = extra.swap_callers(x, vsw, [p_["pool"] for p_ in lp_pools.values()])
+    kind = {s_[:10]: v_["kind"] for s_, v_ in callers.items()}
+    cls = collections.defaultdict(lambda: collections.defaultdict(float))
+    for r_ in sw["rows"]:
+        b_, s_, usdg_, fee_, snd_ = r_[:5]; share_ = r_[5] if len(r_) > 5 else 1.0; d_ = day(T(b_))
+        k_ = "Fx" if fee_ == 0 else ("Org" if kind.get(snd_) == "router" else "Bot")
+        cls[d_][f"vol{k_}_{s_}"] += usdg_; cls[d_][f"fee{k_}_{s_}"] += usdg_ * fee_ / 1e6 * share_
+    for row in series:
+        d_ = row["date"]; row.update({k_: v_ for k_, v_ in (shares.get(d_) or {}).items()}); row.update({k_: round(v_, 2) for k_, v_ in cls.get(d_, {}).items()})
+        for s_, v_ in (pnl.get(d_) or {}).items(): row.update({f"lpVal_{s_}": v_["lp"], f"holdVal_{s_}": v_["hold"], f"lpCost_{s_}": v_["cost"], f"lpFees_{s_}": v_["fees"]})
+    chk_ = [(row["date"], s_, round(row.get("poolVolChain_" + s_) or 0), round(row.get("spVol_" + s_) or 0)) for row in series[-3:-1] for s_ in lp_pools]
+    log("venues", len(reg), "| reserve pool volume, chain scan vs swap cache:", chk_, "| callers", collections.Counter(v_["kind"] for v_ in callers.values()))
     hist = jload(os.path.join(D, "history.json"), {})
     hist[today] = {k: v for k, v in live.items() if k not in ("poolCtx", "balances", "lp", "sbills", "reserve")}
     hist[today]["lp"] = {s: {"stock": v["stock"], "usdg": v["usdg"], "valueUSD": v["valueUSD"], "price": v["price"]} for s, v in lp.items()}

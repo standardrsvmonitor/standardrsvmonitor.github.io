@@ -841,8 +841,10 @@ async function replay(s, B){
   // flows by UTC date, with the compiler's rules
   const F = {}, f = (d)=>F[d] || (F[d] = {}), add = (d,k,v)=>{const o=f(d); o[k]=(o[k]||0)+v;};
   const seen = new Set();
+  // the RPC often returns blockTimestamp 0x0; then interpolate between the compile block and the snapshot block
+  const lts = l=>{const t=parseInt(l.blockTimestamp||'0x0',16); if(t) return t; const b=parseInt(l.blockNumber,16); return Math.round(TIPTS + (b-DATA.tip)*(+s.blockTimestamp-TIPTS)/Math.max(1,B-DATA.tip));};
   [...la, ...lb].forEach(l=>{const key=l.transactionHash+':'+l.logIndex; if(seen.has(key)) return; seen.add(key);
-    const d = fmt.dt(parseInt(l.blockTimestamp,16)), fr = WN['0x'+l.topics[1].slice(-40)]||'other', to = WN['0x'+l.topics[2].slice(-40)]||'other', a = big(l.data);
+    const d = fmt.dt(lts(l)), fr = WN['0x'+l.topics[1].slice(-40)]||'other', to = WN['0x'+l.topics[2].slice(-40)]||'other', a = big(l.data);
     if (fr==='zero') add(d, a>=5e7?'genesisMint':'mint', a);
     if (to==='zero') { add(d,'burn',a); add(d,'burn_'+fr,a); }
     if (to==='pool') add(d, (fr==='zero'||fr==='polManager')?'genesisPool':'poolIn', a);
@@ -859,7 +861,7 @@ async function replay(s, B){
   lic.sort((a,b)=>a.timestamp-b.timestamp).forEach(e=>{const v=V(e), c=+v.count, px=big(v.unitPrice), d=tsd(e); add(d,'licBurn',c*px); add(d,'licCount',c); f(d).licClose = px;
     let q = LP.find(p=>p.day===+v.day); if(!q){ q={day:+v.day, start:+e.timestamp, sold:0, burned:0, close:0, sales:0}; LP.push(q);} q.sold+=c; q.burned+=c*px; q.close=px; q.sales+=1;});
   cc.forEach(e=>{ if (+e.charterId > (DATA.foundingCharters||1000)) add(tsd(e),'chartersSold',1); });
-  lc.forEach(l=>{const ts=parseInt(l.blockTimestamp,16), px=Number(BigInt(l.data.slice(0,66)))/1e18; add(fmt.dt(ts),'charterEth',px);
+  lc.forEach(l=>{const ts=lts(l), px=Number(BigInt(l.data.slice(0,66)))/1e18; add(fmt.dt(ts),'charterEth',px);
     CH.push({id:parseInt(l.topics[1]||'0x0',16), ts, eth:px, buyer:l.topics[2]?'0x'+l.topics[2].slice(-40):'', viaContract:false});});
   // rows: the compiled last day takes the flows dated to it; any later UTC day gets a new row
   const R0 = Sh[Sh.length-1], dLive = fmt.dt(+s.blockTimestamp), rows = [R0];

@@ -1,7 +1,9 @@
 #!/usr/bin/env python3
 """Render data/dash.json into index.html: a single-file, tabbed protocol monitor (Chart.js from jsDelivr, fonts from Google Fonts)."""
-import json, os, datetime as dt
+import json, os, base64, datetime as dt
 D = os.path.join(os.path.dirname(os.path.abspath(__file__)), "data")
+hero_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "assets", "reserve-dam.webp")
+HERO_IMG = "data:image/webp;base64," + base64.b64encode(open(hero_path, "rb").read()).decode()
 data = json.load(open(os.path.join(D, "dash.json")))
 built = dt.datetime.fromtimestamp(data["pulledAt"], dt.timezone.utc)
 
@@ -36,15 +38,15 @@ SECTIONS = {
           chart("c_brco"), "h_brco") + '</div>',
 
 "revenue": kpis("revenue") + '<div class="grid">' +
-    panel(8, "Revenue by stream, daily", "Token trading fees are known per three-day epoch and spread evenly over its days; the live epoch is estimated from ETH held in the tax hook "
+    panel(7, "Revenue by stream, daily", "Token trading fees are known per three-day epoch and spread evenly over its days; the live epoch is estimated from ETH held in the tax hook "
           "and fee splitter. Pool fee income is each swap’s fee weighted by the reserve’s share of in-range liquidity. The launchpad line is the protocol’s 50% of the 1% base fee, "
           "held in the launchpad fee Safe. Charter sales are recorded on the sale date.", chart("c_rev", "l"), "h_rev") +
-    panel(4, "Income allocation, trailing seven days", "Where the last seven complete days of income went. Token trading fees and charter sales are routed at settlement: 70% to the "
+    panel(5, "Income allocation, trailing seven days", "Where the last seven complete days of income went. Token trading fees and charter sales are routed at settlement: 70% to the "
           "reserve in expansion or to buybacks in contraction, 15% to POL buybacks and 15% to the team. Pool fees accrue inside the reserve’s positions. The launchpad’s "
           "protocol share sits in the fee Safe and has not been routed.", '<div class="alloc" id="alloc"></div>', "h_alloc") +
-    panel(8, "Income routing by epoch", "Trading fees and charter proceeds routed by the fee engine at each settlement, in ETH. Green bars are expansion epochs, red contraction.",
+    panel(7, "Income routing by epoch", "Trading fees and charter proceeds routed by the fee engine at each settlement, in ETH. Green bars are expansion epochs, red contraction.",
           chart("c_epochs"), "h_epochs") +
-    panel(4, "Price to recurring revenue, daily", "Market capitalization on outstanding supply over trailing seven-day recurring revenue, annualized. Windows that include the "
+    panel(5, "Price to recurring revenue, daily", "Market capitalization on outstanding supply over trailing seven-day recurring revenue, annualized. Windows that include the "
           "launch epoch are omitted.", chart("c_prr"), "h_prr") + '</div>',
 
 "liquidity": kpis("liquidity") + '<div class="grid">' +
@@ -59,49 +61,49 @@ SECTIONS = {
           "lists against USDG or ETH.", chart("c_vshare"), "h_vshare", "p_vshare") +
     panel(6, "Share of chain liquidity by pool, daily", "The reserve’s position value as a share of all on-chain liquidity in pools pairing the same asset with USDG or ETH.",
           chart("c_lshare"), "h_lshare", "p_lshare") +
-    panel(8, "Pool volume by counterparty, daily", "Fee-exempt swaps are summed exactly. The rest is estimated from 150 size-weighted trades per pool and day, read from receipts. "
+    panel(7, "Pool volume by counterparty, daily", "Fee-exempt swaps are summed exactly. The rest is estimated from 150 size-weighted trades per pool and day, read from receipts. "
           "Arbitrage trades the asset the other way on another pool in the same transaction. Organic users are wallets with fewer than 1,000 transactions trading through a "
           "public router. Other bots are everything else. Daily shares carry up to eight points of sampling error, seven-day shares about three.", chart("c_cpty"), "h_cpty") +
-    panel(4, "Counterparty mix, trailing seven days", "Share of the volume the reserve’s liquidity served in each pool over the last seven complete days. Rows sum to 100%.",
+    panel(5, "Counterparty mix, trailing seven days", "Share of the volume the reserve’s liquidity served in each pool over the last seven complete days. Rows sum to 100%.",
           table("t_cpty")) +
-    panel(8, "Pool profit and loss against holding, cumulative", "Fees earned plus divergence, the position’s value less the value of holding the deposited tokens, since "
+    panel(7, "Pool profit and loss against holding, cumulative", "Fees earned plus divergence, the position’s value less the value of holding the deposited tokens, since "
           "each pool was seeded.", chart("c_pnl"), "h_pnl") +
-    panel(4, "Pool profit and loss since seeding", "Net against holding is fees plus divergence. Net in USD compares value plus fees with the USD cost of the deposits, so it also "
+    panel(5, "Pool profit and loss since seeding", "Net against holding is fees plus divergence. Net in USD compares value plus fees with the USD cost of the deposits, so it also "
           "carries the move in the assets’ prices. Hover a row for cost, value and holding.", table("t_pnl")) + '</div>',
 
 "launchpad": kpis("launchpad") + '<div class="grid">' +
-    panel(8, "Launchpad fees by recipient, daily", "Every launchpad-token trade, on the bonding curve or in the graduated pool, pays a 1% base fee on its stock or WETH side: "
+    panel(7, "Launchpad fees by recipient, daily", "Every launchpad-token trade, on the bonding curve or in the graduated pool, pays a 1% base fee on its stock or WETH side: "
           "30% to the token’s creator, 20% to the King of the Markets reward pool and 50% to the protocol. The reward pool and protocol shares arrive together in one 2-of-4 "
           "Safe signed by the reserve’s signers and are split here 2:5. Creator receipts include optional hook-module fees. Valued at each day’s closing prices.",
           chart("c_lfee", "l"), "h_lfee") +
-    panel(4, "King of the Markets standings", "Season 1 points by team from the launchpad’s markets API. Launchpad-token trades score five points a dollar; stock trades through "
+    panel(5, "King of the Markets standings", "Season 1 points by team from the launchpad’s markets API. Launchpad-token trades score five points a dollar; stock trades through "
           "reserve markets scored one point a dollar until 21 Oct 13:55 UTC. The reward pool opens with $1.1M from the Standard Reserve, as the protocol’s site states; "
           "the fee Safe holds none of it. 65% is shared by points and 35% goes to the leading team.", table("t_kotm") + '<div class="kv2" id="kotm_pool"></div>', "h_kotm") +
-    panel(8, "Reserve pool fees from launchpad trades, daily", "Launchpad trades paid in USDG or ETH cross the reserve’s stock pools on the way in and out. Estimated from the "
+    panel(7, "Reserve pool fees from launchpad trades, daily", "Launchpad trades paid in USDG or ETH cross the reserve’s stock pools on the way in and out. Estimated from the "
           "sampled trades whose swap was executed by a launchpad router; the rest is all other trading.", chart("c_lroute"), "h_lroute") +
-    panel(4, "Launchpad fee Safe holdings", "Balances received by the fee Safe from launchpad trades, valued at current prices. Nothing has left the Safe since the launchpad opened.",
+    panel(5, "Launchpad fee Safe holdings", "Balances received by the fee Safe from launchpad trades, valued at current prices. Nothing has left the Safe since the launchpad opened.",
           table("t_fsafe"), "h_fsafe") + '</div>',
 
 "reserve": kpis("reserve") + '<div class="grid">' +
-    panel(8, "Reserve assets by component, daily", "ETH and USDG in the reserve Safe, ETH in the policy vaults, tokenized equities held outside pools and the Safe’s Uniswap v4 "
+    panel(7, "Reserve assets by component, daily", "ETH and USDG in the reserve Safe, ETH in the policy vaults, tokenized equities held outside pools and the Safe’s Uniswap v4 "
           "positions, at each day’s close. Excludes ETH held by the POL buyback contract and the team wallet, and uncollected position fees.", chart("c_res", "l"), "h_res") +
-    panel(4, "Price to backing, daily", "Market capitalization on outstanding supply divided by reserve assets.", chart("c_pb", "l"), "h_pb") +
+    panel(5, "Price to backing, daily", "Market capitalization on outstanding supply divided by reserve assets.", chart("c_pb", "l"), "h_pb") +
     panel(12, "Reserve composition, daily change", "Each component today, read at the compile block, against the close one and seven days earlier.", table("t_resd")) + '</div>',
 
 "token": kpis("token") + '<div class="grid">' +
-    panel(8, "Price and market capitalization, daily", "GeckoTerminal daily close for the STANDARD/ETH pool. Minted supply is the ERC-20 total, the basis DexScreener quotes. "
+    panel(7, "Price and market capitalization, daily", "GeckoTerminal daily close for the STANDARD/ETH pool. Minted supply is the ERC-20 total, the basis DexScreener quotes. "
           "Outstanding supply excludes STANDARD in the protocol’s own pool and the Incentives Vault. Shaded days are contraction epochs.", chart("c_price", "l"), "h_price") +
-    panel(4, "Supply reconciliation", "From the genesis mint to minted supply, outstanding supply and free float, at one block.", '<div class="bridge" id="bridge"></div>') +
-    panel(8, "Net sales into the pool by holder group, daily", "STANDARD sold into the protocol’s STANDARD/ETH pool less STANDARD bought from it. Groups apply in order: team "
+    panel(5, "Supply reconciliation", "From the genesis mint to minted supply, outstanding supply and free float, at one block.", '<div class="bridge" id="bridge"></div>') +
+    panel(7, "Net sales into the pool by holder group, daily", "STANDARD sold into the protocol’s STANDARD/ETH pool less STANDARD bought from it. Groups apply in order: team "
           "wallet, bankers, S-Bill holders, wallets with 300 or more pool trades, launch-week buyers, others.", chart("c_sell"), "h_sell") +
-    panel(4, "Largest net sellers, trailing seven days", "Net STANDARD sold into the pool by wallet over the last seven complete days; trades through routers are assigned to the "
+    panel(5, "Largest net sellers, trailing seven days", "Net STANDARD sold into the pool by wallet over the last seven complete days; trades through routers are assigned to the "
           "wallet behind the router.", table("t_sellers")) +
     panel(6, "STANDARD supply composition, daily", "Outstanding supply, protocol holdings in the pool and Incentives Vault, and the ledger balance owed to bankers but not yet "
           "minted. The full height is every STANDARD that exists or is owed.", chart("c_mc"), "h_mc") +
     panel(6, "Outstanding supply flows by source, daily", "Daily movements into and out of outstanding supply; the bars sum to the line.", chart("c_flows")) +
-    panel(8, "STANDARD/ETH market depth, daily", "ETH, in USD, that sellers receive taking STANDARD’s price down two and five percent, from every open liquidity range at the "
+    panel(7, "STANDARD/ETH market depth, daily", "ETH, in USD, that sellers receive taking STANDARD’s price down two and five percent, from every open liquidity range at the "
           "day’s closing price. Ask depth is in the tooltip.", chart("c_depth"), "h_depth") +
-    panel(4, "STANDARD/ETH execution cost by size", "Each order simulated against the pool’s liquidity at the compile block. Cost adds the 1% pool fee and the hook’s tax.",
+    panel(5, "STANDARD/ETH execution cost by size", "Each order simulated against the pool’s liquidity at the compile block. Cost adds the 1% pool fee and the hook’s tax.",
           table("t_slip") + '<div class="kv2" id="slip_s"></div>') +
     panel(12, "STANDARD burned by source, daily", "Expansion licenses paid from ledger balances, the burned half of resolution and revocation fees, and buybacks and other token "
           "burns. The line is the cumulative total as a share of the 1 billion hard cap.", chart("c_burn"), "h_burn") + '</div>',
@@ -130,151 +132,231 @@ SECTIONS = {
           table("t_float") + '<div class="btns"><button class="btn" id="fmore"></button></div>') + '</div>',
 }
 
-BODY = "".join(f'<section class="tab" id="t-{k}">{SECTIONS[k]}</section>' for k, _ in TABS)
-NAV = "".join(f'<button data-t="{k}">{n}</button>' for k, n in TABS)
+SUB = {"revenue": "Income from the token economy, the reserve’s pools and the launchpad.", "liquidity": "The reserve as market maker for stock tokens and ETH.",
+       "launchpad": "Fees from tokens launched against reserve markets, and King of the Markets.", "reserve": "The assets behind STANDARD, rebuilt daily from on-chain events.",
+       "token": "Price, supply, burns and who is selling.", "banking": "Branches, charters, auctions, issuance and S-Bills.", "data": "Every daily observation since genesis."}
+def hero(k, n):
+    if k == "overview": return '<div class="hero big"><div class="hero-in" id="ov_hero"></div></div>'
+    return f'<div class="hero mini"><div class="hero-in"><h1>{n}</h1><p>{SUB[k]}</p></div></div>'
+BODY = "".join(f'<section class="tab" id="t-{k}">{hero(k, n)}{SECTIONS[k]}</section>' for k, n in TABS)
+NAV = "".join(f'<button data-t="{k}"><i></i>{n}</button>' for k, n in TABS)
 
 TEMPLATE = r"""<!doctype html>
 <html lang="en"><head>
 <meta charset="utf-8">
 <title>Standard Reserve Monitor</title>
+<meta name="description" content="Independent on-chain monitor of the Standard Reserve protocol on Robinhood Chain.">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Figtree:wght@400;450;500;600&display=swap">
 <style>
+/* The Standard Reserve app's dark design system (standardreserve.xyz/liquidity): warm charcoal surfaces, off-white text, glass panels with
+   15% white borders, uppercase badges with wide tracking, medal accents (silver US, gold CN, celadon KR, sapphire ETH). Their typeface, KH Teka,
+   is licensed to their domain; Figtree is the closest open match. Numbers use tabular figures; addresses use the system mono stack. */
 :root{
-  --bg:#08090b; --panel:#0e1013; --panel2:#13161a; --hover:#171a1f; --line:#1b1f25; --line2:#272c34;
-  --fg:#e7e9ec; --fg2:#bfc5cd; --muted:#868d97; --dim:#565d67;
-  --gold:#e8b84a; --up:#34c88a; --dn:#ff5f5a;
-  --sans:"Inter",ui-sans-serif,system-ui,-apple-system,"Helvetica Neue",Arial,sans-serif;
-  --mono:"JetBrains Mono",ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+  --ink:#0d0e0e; --page:#121211; --app:#22221f; --card:#282824; --overlay:#292925; --side:#1b1b19; --sel:#34332c; --hov:#2a2a25;
+  --fg:#e8e3d9; --white:#fff; --sec:#aaa79c; --dis:#77776c; --dim:rgb(255 255 255 / 45%);
+  --line:rgb(255 255 255 / 10%); --line2:rgb(255 255 255 / 15%); --dash:rgb(255 255 255 / 18%); --bsub:#34342d;
+  --gold:#deb553; --gold2:#ffdd8a; --silver:#c9cacd; --celadon:#a8c79a; --sapphire:#8fa2f0; --red:#e5484d; --rose:#e7a3aa; --bronze:#d5c4a5; --violet:#d7cce3;
+  --up:#b5c69b; --dn:#e7a3aa;
+  --medal-gold:linear-gradient(90deg,#deb553 0%,#ffdd8a 37%,#bc973e 67%,#ab8834 100%);
+  --sans:"Figtree",ui-sans-serif,system-ui,-apple-system,"Helvetica Neue",Arial,sans-serif;
+  --mono:ui-monospace,"SF Mono",Menlo,Consolas,monospace;
+  --ease:cubic-bezier(.4,0,.2,1);
   color-scheme:dark;
 }
 *{box-sizing:border-box}
-html,body{margin:0;background:var(--bg);color:var(--fg)}
-body{font-family:var(--sans);font-size:13px;line-height:1.45;-webkit-font-smoothing:antialiased;font-feature-settings:"tnum" 1}
+html,body{margin:0;background:var(--ink);color:var(--fg)}
+body{font-family:var(--sans);font-size:14px;line-height:1.43;font-weight:400;-webkit-font-smoothing:antialiased;-moz-osx-font-smoothing:grayscale;text-rendering:optimizeLegibility;font-variant-numeric:tabular-nums}
 a{color:inherit}
-/* top bar and tabs */
-.top{position:sticky;top:0;z-index:40;background:rgba(8,9,11,.92);backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);border-bottom:1px solid var(--line)}
-.bar{display:flex;align-items:center;gap:18px;padding:12px clamp(16px,3vw,32px) 8px;max-width:1520px;margin:0 auto}
-.brand{display:flex;align-items:baseline;gap:10px;white-space:nowrap}
-.brand .mk{width:10px;height:10px;background:var(--gold);border-radius:2px;display:inline-block;transform:translateY(0)}
-.brand b{font-weight:700;letter-spacing:.16em;font-size:12.5px}
-.brand span{color:var(--muted);font-size:12px}
-.status{margin-left:auto;display:flex;align-items:center;gap:14px;font-family:var(--mono);font-size:11.5px;color:var(--muted);white-space:nowrap;overflow:hidden}
-.status b{color:var(--fg);font-weight:500}
-.dot{width:7px;height:7px;border-radius:50%;background:var(--dim);display:inline-block;margin-right:6px;vertical-align:1px}
-.dot.on{background:var(--up);box-shadow:0 0 0 0 rgba(52,200,138,.6);animation:pulse 2.4s infinite}
-@keyframes pulse{0%{box-shadow:0 0 0 0 rgba(52,200,138,.5)}70%{box-shadow:0 0 0 7px rgba(52,200,138,0)}100%{box-shadow:0 0 0 0 rgba(52,200,138,0)}}
-.chip{display:inline-block;padding:2px 8px;border-radius:4px;border:1px solid var(--line2);font-family:var(--mono);font-size:11px;color:var(--fg2)}
-.chip.exp{color:var(--up);border-color:rgba(52,200,138,.35)} .chip.con{color:var(--dn);border-color:rgba(255,95,90,.35)}
-.tabs{display:flex;align-items:center;gap:2px;padding:0 clamp(16px,3vw,32px);max-width:1520px;margin:0 auto}
-.tabs button{background:none;border:0;border-bottom:2px solid transparent;color:var(--muted);font:500 12.5px var(--sans);padding:9px 12px 10px;cursor:pointer;white-space:nowrap}
-.tabs button:hover{color:var(--fg)}
-.tabs button.on{color:var(--fg);border-bottom-color:var(--gold)}
-.tabs .sp{flex:1}
-.seg{display:inline-flex;border:1px solid var(--line2);border-radius:5px;overflow:hidden;font-family:var(--mono);font-size:11px;margin-bottom:4px}
-.seg button{border:0;background:none;color:var(--muted);padding:4px 10px;cursor:pointer;font:inherit}
-.seg button.on{background:var(--panel2);color:var(--fg)}
-/* layout */
-.wrap{max-width:1520px;margin:0 auto;padding:18px clamp(16px,3vw,32px) 56px}
-.tab{display:none} .tab.on{display:block}
-.grid{display:grid;grid-template-columns:repeat(12,minmax(0,1fr));gap:12px}
-.col{display:flex;flex-direction:column;gap:12px;min-width:0}
+/* shell */
+.shell{display:flex;min-height:100vh}
+.side{position:sticky;top:0;height:100vh;width:15.25rem;flex:0 0 15.25rem;display:flex;flex-direction:column;background:var(--side);border-right:1px solid var(--bsub);z-index:30}
+.brand{display:flex;align-items:center;gap:.75rem;height:4.25rem;padding:0 1.25rem;border-bottom:1px solid var(--bsub)}
+.brand i{width:5px;height:20px;border-radius:1px;background:var(--medal-gold);display:block}
+.brand b{font-weight:500;font-size:.8125rem;letter-spacing:.16em;color:var(--white)}
+.brand span{display:block;font-size:.6875rem;letter-spacing:.12em;color:var(--dim);margin-top:2px}
+.nav{padding:1.25rem .75rem;display:flex;flex-direction:column;gap:.1875rem;flex:1}
+.nlabel{margin:.25rem 0 .5rem;padding:0 .625rem;color:var(--sec);font-size:.6875rem;font-weight:500;letter-spacing:.08em;text-transform:uppercase}
+.nlabel.gap{margin-top:1.5rem}
+.nav button,.nav a{display:flex;align-items:center;gap:.6875rem;min-height:2.5rem;padding:.5rem .875rem;border:0;border-radius:.25rem;background:transparent;color:var(--sec);font:inherit;font-size:.875rem;text-align:left;cursor:pointer;text-decoration:none;transition:background var(--ease) .15s,color var(--ease) .15s}
+.nav button:hover,.nav a:hover{background:rgb(232 227 217 / 5%);color:var(--fg)}
+.nav button.on{background:var(--sel);color:var(--fg)}
+.nav button i{width:6px;height:6px;border-radius:50%;background:currentColor;opacity:.35;flex:none}
+.nav button.on i{opacity:1;background:var(--white)}
+.nav a::after{content:"↗";margin-left:auto;font-size:.75rem;color:var(--dis)}
+.side-foot{padding:1rem 1.25rem 1.25rem;border-top:1px solid var(--bsub);color:var(--dis);font-size:.75rem;line-height:1.5}
+.main{flex:1;min-width:0;display:flex;flex-direction:column;position:relative}
+.top{position:sticky;top:0;z-index:20;display:flex;align-items:center;gap:.75rem;height:4.25rem;padding:0 1.5rem;border-bottom:1px solid var(--bsub);background:rgb(18 18 17 / 92%);backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px)}
+.crumb{color:var(--sec);font-size:.8125rem;white-space:nowrap}
+.crumb strong{color:var(--fg);font-weight:500}
+.status{margin-left:auto;display:flex;align-items:center;gap:.5rem;min-width:0;overflow:hidden}
+.badge{display:inline-flex;align-items:center;gap:.5rem;padding:.5rem .75rem;border:1px solid var(--line);border-radius:.5rem;color:var(--white);font-size:.75rem;line-height:1;text-transform:uppercase;white-space:nowrap;letter-spacing:.02em}
+.badge span{color:var(--dim)}
+.badge i{width:6px;height:6px;border-radius:50%;background:var(--dim);flex:none}
+.badge i.live{background:var(--celadon);box-shadow:0 0 0 0 rgb(168 199 154 / 50%);animation:pulse 2.4s infinite}
+.badge.exp i{background:var(--celadon)} .badge.con i{background:var(--red)}
+@keyframes pulse{0%{box-shadow:0 0 0 0 rgb(168 199 154 / 45%)}70%{box-shadow:0 0 0 7px rgb(168 199 154 / 0%)}100%{box-shadow:0 0 0 0 rgb(168 199 154 / 0%)}}
+.seg{display:flex;gap:.375rem;flex:none}
+@media (max-width:1300px){.status .hide{display:none}}
+.seg button{display:inline-flex;align-items:center;gap:.5rem;padding:.5rem .75rem;border:1px solid var(--line);border-radius:.5rem;background:rgb(255 255 255 / 1%);color:rgb(255 255 255 / 40%);font:inherit;font-size:.75rem;line-height:1;text-transform:uppercase;cursor:pointer;transition:all .22s var(--ease)}
+.seg button:hover{color:var(--white)}
+.seg button.on{border-color:var(--white);background:rgb(255 255 255 / 8%);box-shadow:inset 0 0 12px rgb(255 255 255 / 10%);color:var(--white)}
+/* page */
+.page{position:relative;isolation:isolate;width:min(100%,82rem);margin:0 auto;padding:1.25rem clamp(1rem,3vw,2.5rem) 4rem}
+.page::before{content:"";position:absolute;z-index:-1;inset:0 -50vw auto;height:46rem;pointer-events:none;opacity:.3;
+  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='4' height='4'%3E%3Crect width='1' height='1' fill='white'/%3E%3C/svg%3E");
+  -webkit-mask-image:linear-gradient(180deg,transparent,#000 6rem,#000 22rem,transparent);mask-image:linear-gradient(180deg,transparent,#000 6rem,#000 22rem,transparent)}
+.tab{display:none} .tab.on{display:block;animation:pin .26s cubic-bezier(.25,1,.5,1) both}
+@keyframes pin{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:none}}
+/* heroes: the reserve dam */
+.hero{position:relative;overflow:hidden;border:1px solid var(--line2);border-radius:.75rem;margin-bottom:1rem;background:#1d1b26 url(__HERO__) center 42%/cover no-repeat}
+.hero::before{content:"";position:absolute;inset:0;pointer-events:none}
+.hero.big::before{background:linear-gradient(180deg,rgb(13 14 14 / 10%) 0%,rgb(13 14 14 / 30%) 32%,rgb(13 14 14 / 72%) 58%,rgb(13 14 14 / 94%) 82%,#0d0e0e 100%)}
+.hero.mini{background-position:center 58%}
+.hero.mini::before{background:linear-gradient(90deg,rgb(13 14 14 / 92%) 0%,rgb(13 14 14 / 70%) 45%,rgb(13 14 14 / 25%) 100%)}
+.hero-in{position:relative;z-index:1}
+.hero.mini .hero-in{padding:2.25rem 2rem 2rem}
+.hero.mini h1{margin:0;font-size:1.75rem;font-weight:500;letter-spacing:-.035em;color:var(--white);line-height:1.15}
+.hero.mini p{margin:.4rem 0 0;color:rgb(255 255 255 / 70%);font-size:.875rem}
+.hero.big .hero-in{padding:1.5rem 2rem 1.75rem;color:var(--white)}
+.h-top{display:grid;grid-template-columns:1fr auto 1fr;gap:1rem;align-items:center}
+.h-top>div:last-child{justify-self:end}
+.h-top .badge{background:rgb(13 14 14 / 50%);backdrop-filter:blur(3px)}
+.mark{display:flex;gap:.6rem;align-items:center;font-size:.8rem;letter-spacing:.22em;text-transform:uppercase;white-space:nowrap;color:var(--white)}
+.mark i{width:1px;height:1.3rem;background:var(--white)}
+.h-num{text-align:center;margin-top:9rem}
+.h-num strong{display:block;font-size:3.5rem;font-weight:400;line-height:1.2;letter-spacing:-.01em;text-shadow:0 0 4px #fff}
+.h-num p{margin:.6rem auto 0;max-width:40rem;color:rgb(255 255 255 / 82%);font-size:1.125rem;line-height:1.45}
+.h-num p b{color:var(--white);font-weight:500}
+.race{display:flex;gap:4px;margin-top:1.75rem}
+.race span{height:3px;min-width:3px;border-radius:2px}
+.totals{display:flex;flex-wrap:wrap;gap:.75rem 1rem;align-items:center;justify-content:space-between;margin-top:1rem;font-size:.75rem;text-transform:uppercase}
+.totals ol{display:flex;flex-wrap:wrap;gap:.5rem 1.125rem;margin:0;padding:0;list-style:none}
+.totals li{display:flex;gap:.375rem;align-items:center} .totals li i{width:6px;height:6px} .totals li span,.totals p span{color:var(--dim)}
+.totals p{display:flex;gap:1.25rem;margin:0}
+.how{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:1.5rem;margin:1.5rem 0 0;padding:1.25rem 0 0;border-top:1px dashed var(--dash);list-style:none}
+.how li{color:rgb(255 255 255 / 62%);font-size:.875rem;line-height:1.45}
+.how b{display:block;margin-bottom:.25rem;color:var(--fg);font-weight:500}
+.how span{white-space:nowrap}
+#t_pools th{white-space:normal;vertical-align:bottom;line-height:1.25;max-width:7rem}
+.how strong{display:block;font-size:1.5rem;font-weight:450;letter-spacing:-.02em;color:var(--white);margin:.15rem 0}
+/* grid and panels */
+.grid{display:grid;grid-template-columns:repeat(12,minmax(0,1fr));gap:1rem}
+.col{display:flex;flex-direction:column;gap:1rem;min-width:0}
 .w12{grid-column:span 12}.w8{grid-column:span 8}.w7{grid-column:span 7}.w6{grid-column:span 6}.w5{grid-column:span 5}.w4{grid-column:span 4}
 .col>.panel{flex:1;display:flex;flex-direction:column} .col>.panel .ch{flex:1;min-height:220px}
-.panel{position:relative;background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:14px 16px 12px;min-width:0}
-.ph{display:flex;align-items:center;gap:12px;min-height:20px;padding-right:22px}
-.pt{font-weight:600;font-size:13px;color:var(--fg);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.pn{margin-left:auto;font-family:var(--mono);font-size:11.5px;color:var(--fg2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0}
-.pn em{font-style:normal;color:var(--gold)}
-.ph>.i{position:absolute;top:15px;right:14px}
-.i{width:15px;height:15px;border-radius:50%;border:1px solid var(--line2);color:var(--dim);font:500 9.5px var(--mono);display:inline-flex;align-items:center;justify-content:center;cursor:help;position:relative;flex-shrink:0}
-.i:hover,.i:focus{color:var(--fg);border-color:var(--muted);outline:none}
-.i .tip{display:none;position:absolute;right:-6px;top:22px;z-index:50;width:320px;background:#15181d;border:1px solid var(--line2);border-radius:6px;padding:10px 12px;
-  font:400 12px/1.5 var(--sans);color:var(--fg2);box-shadow:0 12px 32px rgba(0,0,0,.55);text-align:left;white-space:normal;letter-spacing:0;text-transform:none}
+.panel{position:relative;min-width:0;padding:1.125rem 1.25rem 1rem;border:1px solid rgb(255 255 255 / 12%);border-radius:.5rem;background:linear-gradient(180deg,rgb(255 255 255 / 5%),rgb(255 255 255 / 1.6%)),#141413}
+.ph{display:flex;flex-wrap:wrap;align-items:baseline;gap:.25rem 1rem;padding-right:1.5rem;min-height:1.25rem}
+.pt{font-size:.9375rem;font-weight:500;letter-spacing:-.015em;color:var(--white);white-space:nowrap}
+.pn{margin-left:auto;color:var(--sec);font-size:.8125rem;white-space:nowrap}
+.pn em{font-style:normal;color:var(--white);font-weight:500}
+.ph>.i{position:absolute;top:1.15rem;right:1rem}
+.i{position:relative;display:inline-flex;align-items:center;justify-content:center;width:15px;height:15px;flex:none;border:1px solid rgb(255 255 255 / 20%);border-radius:50%;color:var(--dim);font:500 9px var(--sans);cursor:help}
+.i:hover,.i:focus{color:var(--white);border-color:rgb(255 255 255 / 50%);outline:none}
+.i .tip{display:none;position:absolute;top:22px;right:-8px;z-index:60;width:320px;padding:.75rem .875rem;border:1px solid var(--line2);border-radius:.5rem;background:var(--overlay);
+  box-shadow:0 8px 28px rgb(0 0 0 / 40%);color:var(--fg);font:400 .8125rem/1.5 var(--sans);text-align:left;text-transform:none;letter-spacing:0;white-space:normal}
 .i:hover .tip,.i:focus .tip{display:block}
-.ch{position:relative;height:260px;margin-top:10px}
-.ch.s{height:190px} .ch.l{height:300px}
-/* KPI tiles */
-.kpis{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:12px;margin-bottom:12px}
-.kpi{position:relative;background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:12px 14px 0;min-width:0;display:flex;flex-direction:column;overflow:visible}
-.kl{display:flex;align-items:center;gap:6px;font-size:10px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);white-space:nowrap;min-width:0}
-.kl span.t{overflow:hidden;text-overflow:ellipsis}
-.kl .i{margin-left:auto}
-.kv{font-family:var(--mono);font-size:22px;font-weight:500;letter-spacing:-.02em;margin-top:6px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.kd{font-family:var(--mono);font-size:11px;color:var(--muted);margin-top:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-height:16px}
-.kd .ks{color:var(--dim);margin-left:6px}
-.kpi svg{display:block;width:calc(100% + 28px);margin:8px -14px 0;height:30px}
-.up{color:var(--up)} .dn{color:var(--dn)} .nt{color:var(--fg2)} .mut{color:var(--muted)}
-/* tables */
-.tw{overflow-x:auto;margin-top:10px}
-table{width:100%;border-collapse:collapse;font-size:12px}
-th{font:500 10px var(--sans);letter-spacing:.08em;text-transform:uppercase;color:var(--muted);text-align:right;padding:7px 8px;border-bottom:1px solid var(--line2);white-space:nowrap}
-td{font-family:var(--mono);text-align:right;padding:6px 8px;border-bottom:1px solid var(--line);white-space:nowrap;color:var(--fg)}
+.ch{position:relative;height:270px;margin-top:.875rem}
+.ch.s{height:200px} .ch.l{height:310px}
+/* KPI cards, after the leader cards */
+.kpis{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:1rem;margin-bottom:1rem}
+@media (min-width:1640px){.kpis{grid-template-columns:repeat(6,minmax(0,1fr))}}
+.kpi{position:relative;display:flex;flex-direction:column;min-width:0;padding:.875rem 1rem 0;border:1px solid rgb(255 255 255 / 12%);border-radius:.5rem;background:linear-gradient(180deg,rgb(255 255 255 / 5%),rgb(255 255 255 / 1.6%)),#141413}
+.kl{display:flex;align-items:center;gap:.4rem;color:rgb(255 255 255 / 50%);font-size:.625rem;letter-spacing:.12em;text-transform:uppercase;white-space:nowrap;min-width:0}
+.kl span.t{overflow:hidden;text-overflow:ellipsis} .kl .i{margin-left:auto}
+.kv{margin-top:.5rem;color:var(--white);font-size:1.5rem;font-weight:450;letter-spacing:-.02em;line-height:1.15;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.kd{margin-top:.3rem;color:var(--sec);font-size:.75rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-height:1rem}
+.kd .ks{margin-left:.4rem;color:var(--dis)}
+.kpi svg{display:block;width:calc(100% + 2rem);height:28px;margin:.6rem -1rem 0}
+.up{color:var(--up)} .dn{color:var(--dn)} .nt{color:var(--sec)} .mut{color:var(--sec)}
+/* tables, after the board table */
+.tw{overflow-x:auto;margin-top:.75rem}
+table{width:100%;border-collapse:collapse;font-size:.8125rem}
+th{padding:.5rem .625rem;border-bottom:1px solid var(--line);color:var(--fg);font-weight:500;font-size:.75rem;text-align:right;white-space:nowrap}
+td{padding:.5rem .625rem;border-bottom:1px solid rgb(255 255 255 / 6%);color:var(--fg);text-align:right;white-space:nowrap}
 th:first-child,td:first-child{text-align:left}
-td:first-child{font-family:var(--sans);color:var(--fg2)}
-tbody tr:hover td,table tr:hover td{background:var(--hover)}
-tr.tot td{color:var(--fg);font-weight:600;border-top:1px solid var(--line2)}
+td:first-child{color:var(--sec)}
+tr{transition:background .15s} tbody tr:hover td,table tr:hover td{background:var(--hov)}
+tr.tot td{color:var(--white);font-weight:500;border-top:1px dashed var(--dash)}
 tr.more{display:none} table.open tr.more{display:table-row}
-tr.today td{color:var(--gold)}
+tr.today td{color:var(--white)}
 td.l,th.l{text-align:left}
 .pos{color:var(--up)} .neg{color:var(--dn)}
-table.gm td{padding:5px 8px}
-table.gm tr.grp td{font:600 10px var(--sans);letter-spacing:.1em;text-transform:uppercase;color:var(--gold);padding:12px 8px 5px;border-bottom:1px solid var(--line2);background:none}
-table.gm tr.grp:first-child td{padding-top:4px}
-table.gm td .u{color:var(--dim);font-family:var(--mono);font-size:10.5px;margin-left:6px}
-table.gm td svg{display:block;width:120px;height:20px;margin-left:auto}
-table.gm td.c{min-width:74px}
-.btn{background:none;border:1px solid var(--line2);color:var(--fg2);font:500 11px var(--mono);padding:5px 12px;border-radius:5px;cursor:pointer;margin-top:10px}
-.btn:hover{color:var(--fg);border-color:var(--muted)}
-.btns{display:flex;gap:8px}
-/* misc blocks */
-.bridge{display:grid;grid-template-columns:1fr auto;gap:5px 16px;font-family:var(--mono);font-size:12px;margin-top:12px}
-.bridge div:nth-child(odd){font-family:var(--sans);color:var(--muted)}
-.bridge .tot{color:var(--fg);font-weight:600;border-top:1px solid var(--line2);padding-top:6px}
-.kv2{display:grid;grid-template-columns:auto 1fr;gap:4px 14px;margin-top:12px;font-family:var(--mono);font-size:11.5px}
-.kv2 div:nth-child(odd){font-family:var(--sans);color:var(--muted)} .kv2 div:nth-child(even){text-align:right}
-.alloc .abar{display:flex;height:22px;border-radius:4px;overflow:hidden;margin-top:16px;background:var(--panel2)} .alloc .abar>div{height:100%}
-.alloc .lg{display:grid;grid-template-columns:auto 1fr auto auto;gap:8px 10px;margin-top:14px;font-size:12px;align-items:center}
-.alloc .lg i{width:9px;height:9px;border-radius:2px;display:inline-block}
-.alloc .lg .v{font-family:var(--mono);text-align:right} .alloc .lg .p{font-family:var(--mono);color:var(--muted);text-align:right;min-width:36px}
-.foot{max-width:1520px;margin:0 auto;padding:0 clamp(16px,3vw,32px) 40px;color:var(--dim);font:11px/1.7 var(--mono)}
-@media (max-width:1180px){.kpis{grid-template-columns:repeat(3,minmax(0,1fr))}.w8,.w7,.w5,.w4{grid-column:span 12}}
-@media (max-width:900px){.w6{grid-column:span 12}}
+.addr{font-family:var(--mono);font-size:.75rem}
+table.gm td{padding:.4375rem .625rem}
+table.gm td:first-child{color:var(--fg)}
+table.gm tr.grp td{padding:1rem .625rem .375rem;border-bottom:1px dashed var(--dash);background:none;color:rgb(255 255 255 / 50%);font-size:.625rem;letter-spacing:.12em;text-transform:uppercase}
+table.gm tr.grp:first-child td{padding-top:.25rem}
+table.gm td .u{margin-left:.4rem;color:var(--dis);font-size:.75rem}
+table.gm td svg{display:block;width:84px;height:20px;margin-left:auto}
+table.gm td.c{min-width:80px}
+.btn{display:inline-flex;align-items:center;height:2.125rem;margin-top:.875rem;padding:0 .8125rem;border:0;border-radius:.5rem;background:rgb(255 255 255 / 8%);box-shadow:inset 0 0 12px rgb(255 255 255 / 10%);color:var(--white);font:inherit;font-size:.75rem;cursor:pointer}
+.btn:hover{background:rgb(255 255 255 / 14%)}
+.btns{display:flex;gap:.5rem}
+.chip{display:inline-flex;align-items:center;gap:.4rem;padding:.25rem .5rem;border:1px solid var(--line);border-radius:.375rem;font-size:.6875rem;text-transform:uppercase;letter-spacing:.04em;color:var(--fg)}
+.chip::before{content:"";width:5px;height:5px;border-radius:50%;background:var(--dim)}
+.chip.exp::before{background:var(--celadon)} .chip.con::before{background:var(--red)}
+.bridge{display:grid;grid-template-columns:1fr auto;gap:.4rem 1rem;margin-top:.875rem;font-size:.8125rem}
+.bridge div:nth-child(odd){color:var(--sec)}
+.bridge .tot{color:var(--white);font-weight:500;border-top:1px dashed var(--dash);padding-top:.4rem}
+.kv2{display:grid;grid-template-columns:auto 1fr;gap:.35rem 1rem;margin-top:.875rem;font-size:.8125rem}
+.kv2 div:nth-child(odd){color:var(--sec)} .kv2 div:nth-child(even){text-align:right;color:var(--fg)}
+.alloc .abar{display:flex;gap:3px;height:6px;margin-top:1.25rem} .alloc .abar>div{height:100%;border-radius:2px}
+.alloc .lg{display:grid;grid-template-columns:auto 1fr auto auto;gap:.6rem .75rem;margin-top:1.25rem;font-size:.8125rem;align-items:center}
+.alloc .lg i{width:6px;height:6px;display:inline-block}
+.alloc .lg .v{text-align:right;color:var(--white)} .alloc .lg .p{text-align:right;color:var(--sec);min-width:2.5rem}
+.foot{margin-top:2.5rem;padding-top:1rem;border-top:1px dashed var(--dash);color:var(--dis);font-size:.75rem;line-height:1.6}
+@media (max-width:1200px){.w8,.w7,.w5,.w4{grid-column:span 12}}
+@media (max-width:980px){
+  .shell{flex-direction:column} .side{position:sticky;top:0;height:auto;width:100%;flex:none;border-right:0;border-bottom:1px solid var(--bsub)}
+  .brand{height:3.25rem;border-bottom:0} .nlabel,.side-foot,.nav a{display:none}
+  .nav{flex-direction:row;overflow-x:auto;padding:0 .75rem .625rem;scrollbar-width:none;gap:.25rem} .nav::-webkit-scrollbar{display:none}
+  .nav button{min-height:2.125rem;padding:.375rem .75rem;white-space:nowrap} .nav button i{display:none}
+  .top{position:static;height:auto;padding:.75rem 1rem;flex-wrap:wrap} .crumb{display:none} .status{margin-left:0;flex-wrap:wrap} .w6{grid-column:span 12}
+}
 @media (max-width:640px){
-  .bar{padding:10px 16px 6px;gap:10px} .brand span{display:none} .status{font-size:10.5px;gap:8px} .status .hide{display:none}
-  .tabs{overflow-x:auto;scrollbar-width:none;padding:0 8px;-webkit-mask-image:linear-gradient(90deg,#000 90%,transparent)} .tabs::-webkit-scrollbar{display:none}
-  .tabs .sp{display:none} .seg{margin-left:8px}
-  .wrap{padding:12px 12px 40px} .kpis{grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
-  .kv{font-size:18px} .panel{padding:12px 12px 10px} .ch,.ch.l{height:280px} .ch.s{height:220px}
-  .pt{white-space:normal} .ph{flex-wrap:wrap;gap:2px 10px} .pn{margin-left:0;width:100%;white-space:normal}
-  .i .tip{width:calc(100vw - 48px);right:-8px}
-  .tw table th:first-child,.tw table td:first-child{position:sticky;left:0;background:var(--panel);z-index:1}
+  .page{padding:.75rem .75rem 3rem} .kpis{grid-template-columns:repeat(2,minmax(0,1fr));gap:.625rem} .grid{gap:.75rem}
+  .kv{font-size:1.25rem} .panel{padding:.875rem .875rem .75rem} .ch,.ch.l{height:280px} .ch.s{height:220px}
+  .pt{white-space:normal} .ph{flex-wrap:wrap;gap:.125rem .75rem} .pn{margin-left:0;width:100%;white-space:normal}
+  .i .tip{width:calc(100vw - 3rem);right:-.5rem}
+  .tw table th:first-child,.tw table td:first-child{position:sticky;left:0;background:#1a1a18;z-index:1}
   table.gm td:nth-child(3),table.gm th:nth-child(3),table.gm td:nth-child(5),table.gm th:nth-child(5){display:none}
   table.gm td:first-child{white-space:normal}
-  .kl{white-space:normal;align-items:flex-start;line-height:1.3} .kl span.t{overflow:visible}
-  .kd{white-space:normal;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical}
+  .kl{white-space:normal;align-items:flex-start;line-height:1.3} .kd{white-space:normal}
+  .hero.big .hero-in{padding:1rem} .h-top{grid-template-columns:1fr} .h-top>div:last-child{justify-self:start} .mark{grid-row:1;font-size:.6875rem;letter-spacing:.16em}
+  .h-num{margin-top:4.5rem} .h-num strong{font-size:2.25rem} .h-num p{font-size:.9375rem} .how{grid-template-columns:1fr;gap:1rem}
+  .hero.mini .hero-in{padding:1.5rem 1rem 1.25rem} .hero.mini h1{font-size:1.4rem}
+  .badge{padding:.4rem .55rem;font-size:.6875rem}
 }
 </style>
 </head><body>
-<header class="top">
-  <div class="bar">
-    <div class="brand"><i class="mk"></i><b>STANDARD RESERVE</b><span>Protocol monitor · Robinhood Chain</span></div>
-    <div class="status" id="status"><span><i class="dot"></i>Compiled <b>__ASOF__ UTC</b></span></div>
+<div class="shell">
+  <aside class="side">
+    <div class="brand"><i></i><div><b>STANDARD RESERVE</b><span>MONITOR</span></div></div>
+    <nav class="nav" id="tabs"><div class="nlabel">Monitor</div>__NAV__<div class="nlabel gap">Information</div>
+      <a href="https://www.standardreserve.xyz/" target="_blank" rel="noopener">Standard Reserve</a>
+      <a href="https://github.com/standardrsvmonitor/standardrsvmonitor.github.io" target="_blank" rel="noopener">Source and methods</a></nav>
+    <div class="side-foot">Independent on-chain monitor.<br>Compiled __ASOF__ UTC.</div>
+  </aside>
+  <div class="main">
+    <header class="top"><div class="crumb">Monitor&nbsp;&nbsp;/&nbsp;&nbsp;<strong id="crumb">Overview</strong></div>
+      <div class="status" id="status"></div>
+      <div class="seg" id="range"><button data-n="7">7D</button><button data-n="30" class="on">30D</button><button data-n="0">All</button></div></header>
+    <main class="page">__BODY__
+      <div class="foot">Standard Reserve Monitor, an independent monitor compiled __ASOF__ UTC from the Standard Reserve indexer and markets API, the Robinhood Chain RPC,
+      DexScreener, GeckoTerminal and Coinbase. Figures are reconstructed from on-chain events; each ⓘ gives the method. Artwork: Standard Reserve.</div></main>
   </div>
-  <nav class="tabs" id="tabs">__NAV__<span class="sp"></span><span class="seg" id="range"><button data-n="7">7D</button><button data-n="30" class="on">30D</button><button data-n="0">ALL</button></span></nav>
-</header>
-<main class="wrap">__BODY__</main>
-<div class="foot">Standard Reserve Monitor · compiled __ASOF__ UTC · Sources: Standard Reserve indexer and markets API, Robinhood Chain RPC, DexScreener, GeckoTerminal, Coinbase.
-Figures are reconstructed from on-chain events; methods sit behind each ⓘ.</div>
-
+</div>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
 <script>
 const DATA = __DATA__;
 const L = DATA.live, S = DATA.series, E = DATA.epochs, LPD = DATA.launchpad || {};
-const C = {gold:'#e8b84a', blue:'#4f8ff7', teal:'#2fc4b2', violet:'#9d86f7', orange:'#f0915a', pink:'#ec6fae', green:'#34c88a', red:'#ff5f5a', grey:'#565d67', muted:'#868d97', fg2:'#bfc5cd'};
-const PCOL = {SPCX:'#4f8ff7', SKHY:'#2fc4b2', BABA:'#f0915a', ETH:'#9d86f7'};
-const STREAM = {tr:C.gold, pool:C.blue, lpad:C.teal, ch:C.violet};
+const C = {gold:'#deb553', gold2:'#ffdd8a', silver:'#c9cacd', celadon:'#a8c79a', sapphire:'#8fa2f0', red:'#e5484d', rose:'#e7a3aa', bronze:'#d5c4a5', violet:'#d7cce3',
+  sand:'#aaa79c', grey:'#77776c', fg:'#e8e3d9', up:'#b5c69b', dn:'#e7a3aa',
+  blue:'#8fa2f0', teal:'#a8c79a', green:'#b5c69b', orange:'#d5c4a5', pink:'#e7a3aa', muted:'#aaa79c', fg2:'#e8e3d9'};   // aliases keep older series names on the same palette
+const PCOL = {SPCX:'#c9cacd', SKHY:'#a8c79a', BABA:'#deb553', ETH:'#8fa2f0'};   // the site's own team colours: US silver, KR celadon, CN gold, ETH sapphire
+const STREAM = {tr:C.gold, pool:C.celadon, lpad:C.sapphire, ch:C.silver};
 const alpha = (h,a)=>{const n=parseInt(h.slice(1),16); return `rgba(${n>>16},${(n>>8)&255},${n&255},${a})`;};
 const fmt = {
   usd:(v,d)=>{if(v==null||isNaN(v))return '–';const s=v<0?'−':'';v=Math.abs(v);return s+(v>=1e9?'$'+(v/1e9).toFixed(d==null?2:d)+'B':v>=1e6?'$'+(v/1e6).toFixed(d==null?2:d)+'M':v>=1e3?'$'+(v/1e3).toFixed(d==null?1:d)+'K':'$'+v.toFixed(d==null?2:d));},
@@ -294,16 +376,16 @@ const dm = (d)=>new Date(d+'T00:00:00Z').toLocaleDateString('en-GB',{day:'numeri
 const MOBILE = window.matchMedia('(max-width:640px)').matches;
 if (window.Chart) {
   const D = Chart.defaults;
-  D.color = C.muted; D.font.family = getComputedStyle(document.documentElement).getPropertyValue('--mono'); D.font.size = 10.5; D.borderColor = 'rgba(255,255,255,.05)';
+  D.color = 'rgba(255,255,255,.42)'; D.font.family = getComputedStyle(document.documentElement).getPropertyValue('--sans'); D.font.size = 11; D.borderColor = 'rgba(255,255,255,.06)';
   D.plugins.legend.position = 'bottom'; D.plugins.legend.align = 'center';
-  Object.assign(D.plugins.legend.labels, {boxWidth:8, boxHeight:8, padding:MOBILE?10:16, color:C.fg2}); D.plugins.legend.labels.font = {size:10.5};
+  Object.assign(D.plugins.legend.labels, {boxWidth:6, boxHeight:6, padding:MOBILE?10:16, color:C.sand}); D.plugins.legend.labels.font = {size:11.5};
   D.layout.padding = {top:4, bottom:0};
   D.interaction = {mode:'index', intersect:false}; D.plugins.tooltip.mode = 'index'; D.plugins.tooltip.intersect = false;
-  D.plugins.tooltip.backgroundColor = '#15181d'; D.plugins.tooltip.borderColor = '#272c34'; D.plugins.tooltip.borderWidth = 1; D.plugins.tooltip.padding = 10;
-  D.plugins.tooltip.titleColor = '#e7e9ec'; D.plugins.tooltip.bodyColor = '#bfc5cd'; D.plugins.tooltip.footerColor = '#868d97'; D.plugins.tooltip.boxWidth = 8; D.plugins.tooltip.boxHeight = 8;
-  D.plugins.tooltip.titleFont = {weight:'600'}; D.plugins.tooltip.footerFont = {weight:'400'};
-  D.elements.point.radius = 0; D.elements.point.hitRadius = 10; D.elements.line.borderWidth = 1.6; D.elements.line.tension = .3; D.elements.line.cubicInterpolationMode = 'monotone';
-  D.elements.bar.borderRadius = 1.5; D.datasets.bar.maxBarThickness = 22; D.datasets.bar.categoryPercentage = .78; D.animation = false;
+  D.plugins.tooltip.backgroundColor = '#292925'; D.plugins.tooltip.borderColor = 'rgba(255,255,255,.15)'; D.plugins.tooltip.borderWidth = 1; D.plugins.tooltip.padding = 12; D.plugins.tooltip.cornerRadius = 8;
+  D.plugins.tooltip.titleColor = '#ffffff'; D.plugins.tooltip.bodyColor = '#e8e3d9'; D.plugins.tooltip.footerColor = '#aaa79c'; D.plugins.tooltip.boxWidth = 6; D.plugins.tooltip.boxHeight = 6; D.plugins.tooltip.bodySpacing = 5;
+  D.plugins.tooltip.titleFont = {weight:'500', size:12}; D.plugins.tooltip.bodyFont = {size:12}; D.plugins.tooltip.footerFont = {weight:'400', size:11.5};
+  D.elements.point.radius = 0; D.elements.point.hitRadius = 10; D.elements.line.borderWidth = 1.5; D.elements.line.tension = .3; D.elements.line.cubicInterpolationMode = 'monotone';
+  D.elements.bar.borderRadius = 2; D.datasets.bar.maxBarThickness = 20; D.datasets.bar.categoryPercentage = .72; D.animation = false;
   D.scale.ticks.maxTicksLimit = MOBILE ? 5 : 8; D.scale.border.display = false;
 }
 const last = (arr,n)=>n?arr.slice(Math.max(0,arr.length-n)):arr;
@@ -319,7 +401,7 @@ const burnLedger = (r)=>(r.licBurn||0)+(r.exitFeeBurn||0)+(r.revokeFeeBurn||0), 
 const pbOf = (r)=>r&&r.reserveUsd&&r.mcFloat ? r.mcFloat/r.reserveUsd : null;
 const bkOf = (r)=>r&&r.reserveUsd&&r.float ? r.reserveUsd/r.float : null;
 const served = (r)=>r.spVolMine!=null?r.spVolMine:(r.spVol||0);
-const GROUPS = [['team','Team wallet',C.pink],['bankers','Bankers',C.gold],['sbills','S-Bill holders',C.violet],['active','High-frequency wallets and bots',C.blue],['launch','Launch-week buyers',C.orange],['other','Other wallets',C.grey]];
+const GROUPS = [['team','Team wallet',C.rose],['bankers','Bankers',C.gold],['sbills','S-Bill holders',C.celadon],['active','High-frequency wallets and bots',C.sapphire],['launch','Launch-week buyers',C.silver],['other','Other wallets',C.grey]];
 const Sh = S.filter(r=>r.date<=L.date);
 const ep2 = E.length>1 ? fmt.dt(E[1].start) : '';
 const Sp = Sh.filter(r=>r.date<L.date);
@@ -331,7 +413,7 @@ E.forEach(e=>{for(let t=e.start+3600;t<e.end;t+=86400) regime[fmt.dt(t)] = isExp
 for(let t=L.epochStart+3600;t<L.epochEnd;t+=86400) regime[fmt.dt(t)] = L.epochNetFlow>=0;
 const bands = {id:'bands', beforeDatasetsDraw(ch){const o=(ch.options.plugins||{}).bands; if(!o||!o.dates||!o.dates.length) return; const x=ch.scales.x, a=ch.chartArea, ctx=ch.ctx;
   const w = o.dates.length>1 ? x.getPixelForValue(1)-x.getPixelForValue(0) : a.width; ctx.save();
-  o.dates.forEach((d,i)=>{if(regime[d]===false){ ctx.fillStyle='rgba(255,95,90,.04)'; ctx.fillRect(x.getPixelForValue(i)-w/2, a.top, w, a.height);} }); ctx.restore();}};
+  o.dates.forEach((d,i)=>{if(regime[d]===false){ ctx.fillStyle='rgba(229,72,77,.05)'; ctx.fillRect(x.getPixelForValue(i)-w/2, a.top, w, a.height);} }); ctx.restore();}};
 if (window.Chart) Chart.register(bands);
 const winEnd = (r,n)=>{const i=Sp.indexOf(r); return i>=n-1 ? Sp.slice(i-n+1,i+1) : null;};
 const recRoll = (r)=>{const w=winEnd(r,7); return w && w[0].date>=ep2 ? sum(w.map(rec)) : null;};
@@ -384,7 +466,7 @@ function renderKpis(){ derive();
       {l:'STANDARD price', v:fmt.px(L.price), c:chg(L.price, W0&&W0.price, {pol:1}), s:'7d', sp:lvl(r=>r.price), tip:'Live price from DexScreener for the STANDARD/ETH pool; history uses GeckoTerminal daily closes.'},
       {l:'Market cap, outstanding', v:fmt.usd(mcFloat), c:chg(mcFloat, W0&&W0.mcFloat, {pol:1}), s:`minted ${fmt.usd(mcTotal)}`, sp:lvl(r=>r.mcFloat), tip:'Price times outstanding supply: minted supply less STANDARD in the protocol’s own pool and the Incentives Vault. DexScreener quotes minted supply.'},
       {l:'Reserve assets', v:fmt.usd(L.reserve.totalUsd), c:chg(L.reserve.totalUsd, W0&&W0.reserveUsd, {pol:1}), s:`${fmt.x(pbNow)} P/B`, sp:lvl(r=>r.reserveUsd), col:C.blue, tip:'ETH and USDG in the reserve Safe, ETH in the policy vaults, equities held outside pools and the Safe’s Uniswap v4 positions, read at the compile block.'},
-      {l:'Recurring revenue, 7d', v:fmt.usd(rec7), c:chg(rec7, recP, {pol:1}), s:'vs prior 7d', sp:roll7(rec), col:C.teal, tip:`Token trading fees, pool fee income and the launchpad’s protocol share over the seven complete days to ${yd}. Charter sales excluded.`},
+      {l:'Recurring revenue, 7d', v:fmt.usd(rec7), c:chg(rec7, recP, {pol:1}), s:'vs prior 7d', sp:roll7(rec), col:C.gold, tip:`Token trading fees, pool fee income and the launchpad’s protocol share over the seven complete days to ${yd}. Charter sales excluded.`},
       {l:'Branches', v:fmt.int(L.branches), c:chg(L.branches, W0&&W0.branches, {pol:1}), s:`${fmt.int(L.activeCharters)} charters`, sp:lvl(r=>r.branches), col:C.violet, tip:'Branches outstanding, from the indexer census.'},
       {l:`Epoch ${L.epoch} net flow`, v:fmt.sx(L.epochNetFlow,1)+' ETH', c:{t:`${L.epochNetFlow>=0?'expansion':'contraction'}`, c:L.epochNetFlow>=0?'up':'dn'}, s:`${Math.floor(epLeft/86400)}d ${Math.floor(epLeft%86400/3600)}h left`,
         sp:E.slice(-12).map(e=>e.netFlow), col:L.epochNetFlow>=0?C.green:C.red, tip:`ETH bought less ETH sold through the STANDARD/ETH pool this epoch; its sign at settlement sets the regime. Multiplier ${fmt.x(L.multiplier)}. The line shows settled epochs.`},
@@ -444,12 +526,35 @@ function renderKpis(){ derive();
   renderStatus(); renderGM();
 }
 function renderStatus(){
-  const hm = LIVE ? fmt.hm(NOWTS) : '__ASOFHM__';
-  document.getElementById('status').innerHTML = `<span><i class="dot ${LIVE?'on':''}"></i>${LIVE?'Live':'Compiled'} <b>${LIVE?LIVEHM:'__ASOF__'} UTC</b></span>`+
-    `<span class="hide">block <b>${(LIVEB||DATA.tip).toLocaleString('en-US')}</b></span>`+
-    `<span class="chip ${L.epochNetFlow>=0?'exp':'con'}">E${L.epoch} ${L.epochNetFlow>=0?'expansion':'contraction'} · ${Math.floor(epLeft/86400)}d ${Math.floor(epLeft%86400/3600)}h</span>`+
-    `<span class="hide">STANDARD <b>${fmt.px(L.price)}</b></span><span class="hide">ETH <b>$${fmt.int(L.ethusd)}</b></span>`+
-    (LIVE?`<span class="hide">pools and reserve compiled <b>__ASOFHM__</b></span>`:'');
+  const reg_ = L.epochNetFlow>=0 ? 'exp' : 'con', left = `${Math.floor(epLeft/86400)}d ${Math.floor(epLeft%86400/3600)}h`;
+  document.getElementById('status').innerHTML =
+    `<span class="badge"><i class="${LIVE?'live':''}"></i>${LIVE?'Live':'Compiled'} <span>${LIVE?LIVEHM:'__ASOFHM__'} UTC</span></span>`+
+    `<span class="badge ${reg_} hide"><i></i><span>Epoch ${L.epoch}</span> ${reg_==='exp'?'Expansion':'Contraction'} · ${left}</span>`+
+    `<span class="badge hide"><span>STANDARD</span> ${fmt.px(L.price)}</span>`;
+  renderHero();
+}
+const MEDAL = {SPCX:'linear-gradient(90deg,#ebecef 0%,#c9cacd 50%,#83868c 100%)', SKHY:'linear-gradient(90deg,#d6ecc9 0%,#a8c79a 50%,#5f7a55 100%)',
+  BABA:'linear-gradient(90deg,#deb553 0%,#ffdd8a 37%,#bc973e 67%,#ab8834 100%)', ETH:'linear-gradient(90deg,#c9d3fa 0%,#8fa2f0 50%,#4a5fb8 100%)'};
+function renderHero(){
+  const el = document.getElementById('ov_hero'); if (!el) return;
+  const R_ = L.reserve, ethU = (R_.safeEth+R_.contractionEth+R_.expansionEth)*L.ethusd;
+  const parts = [...pools.map(p=>[pname(p), L.lp[p].valueUSD, MEDAL[p]||C.sand]), ['USDG', R_.safeUsdg, '#e8e3d9'], ['ETH', ethU, '#77776c'], ['Equities outside pools', R_.safeStockUsd, C.bronze]].filter(x=>x[1]>1);
+  const tot = sum(parts.map(x=>x[1])), left = `${Math.floor(epLeft/86400)}d ${Math.floor(epLeft%86400/3600)}h`;
+  const tok7 = sum(s7.map(r=>tr(r)+chs(r))), tokP = P7.length?sum(P7.map(r=>tr(r)+chs(r))):null, pf7 = sum(s7.map(r=>r.spFee||0)), sv7 = sum(s7.map(served));
+  const lp7 = sum(s7.map(lpp)), lv7 = sum(s7.map(lvol)), eqd = sum(s7.map(r=>sum(stockPools.map(p=>r['chainVol_'+p]||0)))), eqn = sum(s7.map(r=>sum(stockPools.map(p=>r['spVolMine_'+p]??r['spVol_'+p]??0))));
+  const cg = (a,b)=>{const c=chg(a,b,{pol:1}); return `<span class="${c.c}">${c.t}</span>`;};
+  el.innerHTML = `<div class="h-top"><div><span class="badge"><span>Robinhood Chain</span> Standard Reserve</span></div>
+      <div class="mark">Standard Reserve<i></i>Protocol monitor</div>
+      <div><span class="badge ${L.epochNetFlow>=0?'exp':'con'}"><i></i><span>Epoch ${L.epoch} settles</span> ${left}</span></div></div>
+    <div class="h-num"><strong>$${Math.round(L.reserve.totalUsd).toLocaleString('en-US')}</strong>
+      <p>in reserve assets behind <b>${fmt.n(L.float,2)}</b> outstanding STANDARD. The token trades at <b>${fmt.x(pbNow)}</b> backing.</p></div>
+    <div class="race">${parts.map(x=>`<span style="flex-grow:${(x[1]/tot*1000).toFixed(0)};background:${x[2]}"></span>`).join('')}</div>
+    <div class="totals"><ol>${parts.map(x=>`<li><i style="background:${x[2]}"></i><span>${x[0]}</span> ${fmt.pct(x[1]/tot,0)}</li>`).join('')}</ol>
+      <p>${fmt.usd(sum(s7.map(rec)))} <span>revenue, 7d</span> ${fmt.int(L.branches)} <span>branches</span></p></div>
+    <ul class="how">
+      <li><b>Token economy</b><strong>${fmt.usd(tok7)}</strong>Trading fees and charter sales over seven days, ${cg(tok7,tokP)} on the week before.</li>
+      <li><b>Liquidity business</b><strong>${fmt.usd(pf7)}</strong>Pool fees on ${fmt.usd(sv7)} of volume served, ${fmt.pct(eqd?eqn/eqd:null,0)} of chain equity volume.</li>
+      <li><b>Launchpad</b><strong>${fmt.usd(lp7)}</strong>Protocol share of launchpad fees on ${fmt.usd(lv7)} of volume, ${cg(lp7, P7.length?sum(P7.map(lpp)):null)} on the week before.</li></ul>`;
 }
 let LIVEHM = '', LIVEB = 0;
 
@@ -488,7 +593,7 @@ function renderGM(){
       level('S-Bills locked', L.sbills.locked, r=>r.sbLocked??r.sbills, v=>fmt.n(v,2), 1),
       level('Issuance multiplier', L.multiplier, r=>r.multiplier, v=>fmt.x(v), 1, {abs:true, f:v=>v.toFixed(2)})]],
   ];
-  const head = `<tr><th>Metric</th><th>Current</th><th>Week earlier</th><th>Change</th><th>30 days</th></tr>`;
+  const head = `<tr><th>Metric</th><th>Current</th><th>Week earlier</th><th>Change</th><th>Trend</th></tr>`;
   document.getElementById('t_gm').innerHTML = head + G.map(([g,rows])=>`<tr class="grp"><td colspan="5">${g}</td></tr>`+rows.map(m=>{
     const c = chg(m.cur, m.prev, m); const col = c.c==='up'?C.green:c.c==='dn'?C.red:C.muted;
     return `<tr><td>${m.label}${m.u?`<span class="u">${m.u}</span>`:''}</td><td>${m.fm(m.cur)}</td><td class="mut">${m.prev==null?'–':m.fm(m.prev)}</td><td class="c ${c.c}">${c.t}</td><td>${spark(m.sp, col, false)}</td></tr>`;}).join('')).join('');
@@ -502,8 +607,8 @@ function renderStatic(){
     E.slice().reverse().map(e=>`<tr><td>${e.epoch}</td><td>${fmt.dt(e.settledAt)}</td><td class="${e.netFlow>=0?'pos':'neg'}">${fmt.sx(e.netFlow,1)}</td><td><span class="chip ${isExp(e)?'exp':'con'}">${isExp(e)?'expansion':'contraction'}</span></td><td>${(e.routed-e.charterEth).toFixed(1)}</td><td>${e.charterEth.toFixed(1)}</td><td>${e.routed.toFixed(1)}</td><td>${e.toVault.toFixed(1)}</td><td>${e.toPol.toFixed(1)}</td><td>${e.team.toFixed(1)}</td><td>${e.multiplierAfter.toFixed(2)}×</td></tr>`).join('');
   const prow = pools.map(p=>{const v=L.lp[p], c=ctx[p]||{}; return {p, v, f7:sum(s7.map(r=>r['spFee_'+p]||0)), v1:pvm(Y,p), v7:sum(s7.map(r=>pvm(r,p)))};});
   const pt = {val:sum(prow.map(x=>x.v.valueUSD||0)), f7:sum(prow.map(x=>x.f7)), v1:sum(prow.map(x=>x.v1)), v7:sum(prow.map(x=>x.v7))};
-  document.getElementById('t_pools').innerHTML = `<tr><th>Pool</th><th>Position value</th><th>Price</th><th>Fee tier</th><th>Volume, 7d</th><th>Fees, 7d</th><th>Yield</th><th>Share of in-range liquidity</th><th>Share of chain volume, ${ydS}</th><th>Share of chain liquidity, ${ydS}</th><th>Rank</th><th>Venues</th></tr>` +
-    prow.map(({p,v,f7,v7})=>`<tr title="${Y['otherTvl_'+p]?'largest other venue '+fmt.usd(Y['otherTvl_'+p],1)+' '+Y['otherDex_'+p]:''}"><td><i style="display:inline-block;width:8px;height:8px;border-radius:2px;background:${PCOL[p]||C.muted};margin-right:8px"></i>${shortP(p)}</td><td>${fmt.usd(v.valueUSD)}</td><td>${pxf(v.price)}</td><td>${v.feeTier>=8388608?'session':(v.feeTier/1e4).toFixed(2)+'%'}</td><td>${fmt.usd(v7)}</td><td>${fmt.usd(f7,1)}</td><td>${v.valueUSD?fmt.pct(f7*365/7/v.valueUSD,0):'–'}</td><td>${v.share!=null?fmt.pct(v.share,0):'–'}</td><td>${Y['volShare_'+p]!=null?fmt.pct(Y['volShare_'+p],0):'–'}</td><td>${Y['liqShare_'+p]!=null?fmt.pct(Y['liqShare_'+p],0):'–'}</td><td>${Y['rank_'+p]?'#'+Y['rank_'+p]:'–'}</td><td>${Y['venues_'+p]??'–'}</td></tr>`).join('') +
+  document.getElementById('t_pools').innerHTML = `<tr><th>Pool</th><th>Position value</th><th>Price</th><th>Fee tier</th><th>Volume, 7d</th><th>Fees, 7d</th><th>Yield</th><th>Share of in-range liquidity</th><th>Share of chain volume</th><th>Share of chain liquidity</th><th>Rank on chain</th><th>Venues</th></tr>` +
+    prow.map(({p,v,f7,v7})=>`<tr title="${Y['otherTvl_'+p]?'largest other venue '+fmt.usd(Y['otherTvl_'+p],1)+' '+Y['otherDex_'+p]:''}"><td><i style="display:inline-block;width:6px;height:6px;background:${PCOL[p]||C.muted};margin-right:.5rem"></i>${shortP(p)}</td><td>${fmt.usd(v.valueUSD)}</td><td>${pxf(v.price)}</td><td>${v.feeTier>=8388608?'session':(v.feeTier/1e4).toFixed(2)+'%'}</td><td>${fmt.usd(v7)}</td><td>${fmt.usd(f7,1)}</td><td>${v.valueUSD?fmt.pct(f7*365/7/v.valueUSD,0):'–'}</td><td>${v.share!=null?fmt.pct(v.share,0):'–'}</td><td>${Y['volShare_'+p]!=null?fmt.pct(Y['volShare_'+p],0):'–'}</td><td>${Y['liqShare_'+p]!=null?fmt.pct(Y['liqShare_'+p],0):'–'}</td><td>${Y['rank_'+p]?'#'+Y['rank_'+p]:'–'}</td><td>${Y['venues_'+p]??'–'}</td></tr>`).join('') +
     `<tr class="tot"><td>Total</td><td>${fmt.usd(pt.val)}</td><td></td><td></td><td>${fmt.usd(pt.v7)}</td><td>${fmt.usd(pt.f7,1)}</td><td>${pt.val?fmt.pct(pt.f7*365/7/pt.val,0):'–'}</td><td></td><td></td><td></td><td></td><td></td></tr>`;
   const comp = (r)=>{const q=r&&r.reserveParts; if(!q) return null; const o={}; Object.entries(q.lp||{}).forEach(([k,v])=>o[pname(k)]=v); o['USDG']=q.usdg; o['ETH, Safe and vaults']=q.eth; o['Equities outside pools']=q.stocks; o['Total']=q.total; return o;};
   const RT = Sh[Sh.length-1], rc0 = comp(RT), rc1 = comp(Sh[Sh.length-2]), rc7 = comp(Sh[Sh.length-8]);
@@ -525,7 +630,7 @@ function renderStatic(){
   const al = {pool:0, lp:0, vExp:0, vCon:0, pol:0, team:0, open:0};
   s7.forEach(r=>{const tok=((r.tradingFeeEth||0)+(r.charterEth||0))*ethOf(r), e=epOfDate[r.date]; al.pool += r.spFee||0; al.lp += lpp(r);
     if(e && e.routed>0){ const v=tok*e.toVault/e.routed; if(isExp(e)) al.vExp+=v; else al.vCon+=v; al.pol += tok*e.toPol/e.routed; al.team += tok*e.team/e.routed; } else al.open += tok; });
-  const went = [['Reserve backing', al.pool+al.vExp, C.blue], ['Buybacks', al.vCon+al.pol, C.gold], ['Team', al.team, C.pink], ['Launchpad fee Safe', al.lp, C.teal], ['Not yet routed', al.open, C.grey]];
+  const went = [['Reserve backing', al.pool+al.vExp, C.celadon], ['Buybacks', al.vCon+al.pol, C.gold], ['Team', al.team, C.rose], ['Launchpad fee Safe', al.lp, C.sapphire], ['Not yet routed', al.open, C.grey]];
   const wTot = sum(went.map(w=>w[1]));
   document.getElementById('alloc').innerHTML = `<div class="abar">${went.map(w=>`<div style="width:${(100*w[1]/wTot).toFixed(2)}%;background:${w[2]}"></div>`).join('')}</div>`+
     `<div class="lg">${went.map(w=>`<i style="background:${w[2]}"></i><span>${w[0]}</span><span class="v">${fmt.usd(w[1])}</span><span class="p">${fmt.pct(w[1]/wTot,0)}</span>`).join('')}</div>`;
@@ -534,7 +639,7 @@ function renderStatic(){
   const GN = Object.fromEntries(GROUPS.map(g=>[g[0], g[1]]));
   const shortA = a=>`<a href="https://robin.etherscan.io/address/${a}" target="_blank" rel="noopener" style="text-decoration:none">${a.slice(0,6)}…${a.slice(-4)}</a>`;
   document.getElementById('t_sellers').innerHTML = '<tr><th>Wallet</th><th class="l">Group</th><th>Net sold</th><th>Sells</th><th>Buys</th></tr>' +
-    (DATA.sellers||[]).map(x=>`<tr><td style="font-family:var(--mono)">${shortA(x.addr)}</td><td class="l" style="font-family:var(--sans);color:var(--fg2)">${GN[x.group]||x.group}</td><td>${fmt.n(x.net,2)}</td><td>${x.sells}</td><td>${x.buys}</td></tr>`).join('');
+    (DATA.sellers||[]).map(x=>`<tr><td class="addr">${shortA(x.addr)}</td><td class="l">${GN[x.group]||x.group}</td><td>${fmt.n(x.net,2)}</td><td>${x.sells}</td><td>${x.buys}</td></tr>`).join('');
   const DP = DATA.depth;
   if (DP) {
     const pc = v=>v==null?'–':fmt.pct(v,1);
@@ -543,20 +648,20 @@ function renderStatic(){
     document.getElementById('slip_s').innerHTML = [['Pool fee and tax', `${fmt.pct(DP.fee,0)} · ${fmt.pct(DP.taxBuy,0)} buy, ${fmt.pct(DP.taxSell,0)} sell`], ['Depth within 5%', `${fmt.usd(DP.bid5)} bid · ${fmt.usd(DP.ask5)} ask`], ['Protocol share of in-range liquidity', fmt.pct(DP.protocolShare,0)]].map(x=>`<div>${x[0]}</div><div>${x[1]}</div>`).join('');
   }
   // launchpad: standings and the fee Safe
-  const TEAM = {US:['United States','SPCX'], CN:['China','BABA'], KR:['Korea','SKHY'], ETH:['ETH','WETH']};
+  const TEAM = {US:['United States','SPCX'], CN:['China','BABA'], KR:['South Korea','SKHY'], ETH:['ETH','ETH']}, TCOL = {US:C.silver, CN:C.gold, KR:C.celadon, ETH:C.sapphire};
   const tm = (LPD.teams||[]).slice().sort((a,b)=>b.points-a.points), tp = sum(tm.map(t=>t.points));
-  document.getElementById('t_kotm').innerHTML = '<tr><th>Team</th><th>Points</th><th>Share</th><th>Scored volume</th><th>Traders</th></tr>' +
-    tm.map((t,i)=>`<tr class="${i===0?'today':''}"><td>${(TEAM[t.country]||[t.country])[0]} <span class="mut" style="font-family:var(--mono);font-size:11px">${(TEAM[t.country]||[])[1]||''}</span></td><td>${fmt.n(t.points,1)}</td><td>${fmt.pct(tp?t.points/tp:null,0)}</td><td>${fmt.usd(t.volumeUsd,1)}</td><td>${fmt.int(t.traders)}</td></tr>`).join('');
+  document.getElementById('t_kotm').innerHTML = '<tr><th>Team</th><th>Points</th><th>Share</th><th>Scored volume</th></tr>' +
+    tm.map((t,i)=>`<tr class="${i===0?'today':''}" title="${fmt.int(t.traders)} traders"><td><i style="display:inline-block;width:6px;height:6px;margin-right:.5rem;background:${TCOL[t.country]||C.sand}"></i>${(TEAM[t.country]||[t.country])[0]} <span style="color:var(--dis);font-size:.75rem">$${(TEAM[t.country]||[])[1]||''}</span></td><td>${fmt.n(t.points,1)}</td><td>${fmt.pct(tp?t.points/tp:null,0)}</td><td>${fmt.usd(t.volumeUsd,1)}</td></tr>`).join('');
   const potFees = sum(Sh.map(lpot)), pot = (LPD.seedUsd||0)+potFees;
   document.getElementById('kotm_pool').innerHTML = [['Opening pot, per the protocol’s site', fmt.usd(LPD.seedUsd||0)], ['Reward pool share of fees, 20%', fmt.usd(potFees)], ['Incentives, 65%, by points', fmt.usd(pot*.65)], ['Jackpot, 35%, leading team', fmt.usd(pot*.35)]].map(x=>`<div>${x[0]}</div><div>${x[1]}</div>`).join('');
   document.getElementById('h_kotm').innerHTML = LPD.season ? `closes <em>${dm(fmt.dt(LPD.season.endsAt))} ${fmt.hm(LPD.season.endsAt)} UTC</em>` : '';
   const HP = {USDG:1, WETH:L.ethusd}; pools.forEach(p=>{HP[p]=L.lp[p].price;});
   const held = Object.entries(LPD.held||{}).filter(([s,a])=>a>1e-9).sort((a,b)=>b[1]*(HP[b[0]]||0)-a[1]*(HP[a[0]]||0));
   const hTot = sum(held.map(([s,a])=>a*(HP[s]||0)));
-  document.getElementById('t_fsafe').innerHTML = '<tr><th>Token</th><th>Balance</th><th>Price</th><th>Value</th></tr>' +
-    held.map(([s,a])=>`<tr><td>${s}</td><td>${a.toFixed(2)}</td><td>${pxf(HP[s]||0)}</td><td>${fmt.usd(a*(HP[s]||0))}</td></tr>`).join('') +
-    `<tr class="tot"><td>Total</td><td></td><td></td><td>${fmt.usd(hTot)}</td></tr>` +
-    `<tr><td>Withdrawn since launch</td><td></td><td></td><td>${fmt.usd(sum(S.map(r=>r.lpadSafeOut||0)))}</td></tr>`;
+  document.getElementById('t_fsafe').innerHTML = '<tr><th>Token</th><th>Balance</th><th>Value</th></tr>' +
+    held.map(([s,a])=>`<tr title="at ${pxf(HP[s]||0)}"><td>${s}</td><td>${a.toFixed(2)}</td><td>${fmt.usd(a*(HP[s]||0))}</td></tr>`).join('') +
+    `<tr class="tot"><td>Total</td><td></td><td>${fmt.usd(hTot)}</td></tr>` +
+    `<tr><td>Withdrawn since launch</td><td></td><td>${fmt.usd(sum(S.map(r=>r.lpadSafeOut||0)))}</td></tr>`;
   document.getElementById('h_fsafe').innerHTML = `<a href="https://robin.etherscan.io/address/${LPD.feeSafe||''}" target="_blank" rel="noopener" style="text-decoration:none">${(LPD.feeSafe||'').slice(0,6)}…${(LPD.feeSafe||'').slice(-4)}</a> · 2-of-4`;
 }
 function renderBridge(){
@@ -576,7 +681,7 @@ const line = (label, data, color, o={})=>({type:'line', label, data, borderColor
   yAxisID:o.ax||'y', stack:'l_'+label, fmt:o.fmt, spanGaps:o.gaps??false, pointRadius:o.pts||0, pointStyle:o.ps, pointBackgroundColor:color, ...(o.x||{})});
 function mk(el, labels, sets, o={}){
   const yf = o.y||(v=>v), scales = {x:{stacked:!!o.stacked, grid:{display:false}, ticks:{maxRotation:0, autoSkipPadding:14}},
-    y:{stacked:!!o.stacked, beginAtZero:o.zero!==false, min:o.ymin, max:o.ymax, grid:{color:'rgba(255,255,255,.045)'}, ticks:{callback:yf}}};
+    y:{stacked:!!o.stacked, beginAtZero:o.zero!==false, min:o.ymin, max:o.ymax, grid:{color:'rgba(255,255,255,.06)'}, ticks:{callback:yf}}};
   if (o.y1) scales.y1 = {position:'right', grid:{display:false}, beginAtZero:true, min:o.y1min, max:o.y1max, ticks:{callback:o.y1}};
   const cb = {label:c=>`${c.dataset.label}: ${(c.dataset.fmt||(c.dataset.yAxisID==='y1'?(o.tfy1||o.y1):null)||o.tf||yf)(c.parsed.y)}`};
   if (o.footer) cb.footer = o.footer; if (o.after) cb.afterBody = o.after; if (o.title) cb.title = o.title;
@@ -593,7 +698,7 @@ function drawTab(t){ (BUILT[t]||[]).forEach(c=>c.destroy()); BUILT[t]=[]; const 
 let TAB = 'overview';
 function show(t){ if(!REG[t] && !document.getElementById('t-'+t)) t='overview'; TAB=t;
   document.querySelectorAll('.tab').forEach(s=>s.classList.toggle('on', s.id==='t-'+t));
-  document.querySelectorAll('#tabs button[data-t]').forEach(b=>b.classList.toggle('on', b.dataset.t===t));
+  document.querySelectorAll('#tabs button[data-t]').forEach(b=>{b.classList.toggle('on', b.dataset.t===t); if(b.dataset.t===t) document.getElementById('crumb').textContent=b.textContent;});
   if (DIRTY[t]!==false || !BUILT[t]) drawTab(t); }
 function redrawAll(){ Object.keys(REG).forEach(t=>{DIRTY[t]=true;}); drawTab(TAB); }
 const usd0 = v=>fmt.usd(v,0), usd1 = v=>fmt.usd(v,1), pct0 = v=>fmt.pct(v,0), n0 = v=>fmt.n(v,0);
@@ -610,10 +715,10 @@ reg('overview', ({Rl, ll, dl})=>{ document.getElementById('h_pxb').innerHTML = `
     footer:i=>{const r=Rl[i[0].dataIndex]; return pbOf(r)!=null?`price to backing ${fmt.x(pbOf(r))}`:'';}}); });
 const resStack = (el, {Rl, ll, dl}, byPool)=>{ const parts = (r,k)=>(r.reserveParts||{})[k], lpv = (r,p)=>((r.reserveParts||{}).lp||{})[p];
   const sets = [...(byPool ? pools.map(p=>line(pname(p), Rl.map(r=>lpv(r,p)??null), PCOL[p])) : [line('Uniswap v4 positions', Rl.map(r=>{const q=(r.reserveParts||{}).lp; return q?sum(Object.values(q)):null;}), C.blue)]),
-    line('USDG', Rl.map(r=>parts(r,'usdg')??null), '#c9ced6'), line('ETH, Safe and vaults', Rl.map(r=>parts(r,'eth')??null), '#6b7483'), line('Equities outside pools', Rl.map(r=>parts(r,'stocks')??null), C.gold)];
-  sets.forEach((s,i)=>{s.fill = i===0?'origin':'-1'; s.backgroundColor = alpha(s.borderColor,.72); s.borderColor = alpha(s.borderColor,.95); s.borderWidth = 1; s.stack='res';});
+    line('USDG', Rl.map(r=>parts(r,'usdg')??null), '#e8e3d9'), line('ETH, Safe and vaults', Rl.map(r=>parts(r,'eth')??null), '#77776c'), line('Equities outside pools', Rl.map(r=>parts(r,'stocks')??null), C.bronze)];
+  sets.forEach((s,i)=>{s.fill = i===0?'origin':'-1'; s.backgroundColor = alpha(s.borderColor,.62); s.borderColor = s.borderColor; s.borderWidth = 1; s.stack='res';});
   return mk(el, ll, sets, {stacked:true, y:usd0, tf:v=>fmt.usd(v), footer:i=>{const r=Rl[i[0].dataIndex]; return r.reserveUsd?`total ${fmt.usd(r.reserveUsd)}`:'';}}); };
-reg('overview', (x)=>{ document.getElementById('h_reso').innerHTML = `<em>${fmt.usd(L.reserve.totalUsd)}</em>`; return resStack(c_reso, x, false); });
+reg('overview', (x)=>{ document.getElementById('h_reso').innerHTML = `<em>${fmt.usd(L.reserve.totalUsd)}</em>`; return resStack(c_reso, x, true); });
 reg('overview', ({Rl, ll, dl})=>{ document.getElementById('h_brco').innerHTML = `<em>${fmt.int(L.branches)}</em> branches · ${fmt.int(L.activeCharters)} charters`;
   return mk(c_brco, ll, [line('Branches', Rl.map(r=>r.branches), C.violet, {fill:true}), line('Active charters', Rl.map(r=>r.activeCharters), C.teal)], {y:n0, tf:fmt.int}); });
 
@@ -624,10 +729,10 @@ reg('revenue', ({Rf, lf, df})=>{ const r7 = sum(s7.map(rec)), c7 = sum(s7.map(ch
     {stacked:true, y:usd0, tf:usd1, bands:df, footer:i=>{const r=Rf[i[0].dataIndex]; return `recurring ${fmt.usd(rec(r),1)} · total ${fmt.usd(inc(r),1)}`;}}); });
 reg('revenue', ()=>{ const E2 = E.filter(e=>e.epoch>1); document.getElementById('h_epochs').innerHTML = `${E.filter(isExp).length} of ${E.length} settled epochs in expansion`;
   return new Chart(c_epochs, {type:'bar', data:{labels:E2.map(e=>'E'+e.epoch), datasets:[
-    {label:'Trading fees', data:E2.map(e=>e.routed-e.charterEth), backgroundColor:E2.map(e=>isExp(e)?alpha(C.green,.75):alpha(C.red,.75)), stack:'a'},
+    {label:'Trading fees', data:E2.map(e=>e.routed-e.charterEth), backgroundColor:E2.map(e=>isExp(e)?C.celadon:alpha(C.red,.8)), stack:'a'},
     {label:'Charter proceeds', data:E2.map(e=>e.charterEth), backgroundColor:STREAM.ch, stack:'a'}]},
-    options:{maintainAspectRatio:false, scales:{x:{stacked:true, grid:{display:false}}, y:{stacked:true, grid:{color:'rgba(255,255,255,.045)'}, ticks:{callback:v=>v+' ETH'}}},
-      plugins:{legend:{display:true, onClick:()=>{}, labels:{generateLabels:()=>[{text:'Trading fees, expansion', fillStyle:alpha(C.green,.75), strokeStyle:'transparent', fontColor:C.fg2}, {text:'Trading fees, contraction', fillStyle:alpha(C.red,.75), strokeStyle:'transparent', fontColor:C.fg2}, {text:'Charter proceeds', fillStyle:STREAM.ch, strokeStyle:'transparent', fontColor:C.fg2}]}},
+    options:{maintainAspectRatio:false, scales:{x:{stacked:true, grid:{display:false}}, y:{stacked:true, grid:{color:'rgba(255,255,255,.06)'}, ticks:{callback:v=>v+' ETH'}}},
+      plugins:{legend:{display:true, onClick:()=>{}, labels:{generateLabels:()=>[{text:'Trading fees, expansion', fillStyle:C.celadon, strokeStyle:'transparent', fontColor:C.sand}, {text:'Trading fees, contraction', fillStyle:alpha(C.red,.8), strokeStyle:'transparent', fontColor:C.sand}, {text:'Charter proceeds', fillStyle:STREAM.ch, strokeStyle:'transparent', fontColor:C.sand}]}},
         tooltip:{callbacks:{afterTitle:i=>{const e=E2[i[0].dataIndex]; return (isExp(e)?'expansion':'contraction')+' · net flow '+fmt.sx(e.netFlow,1)+' ETH';}, label:c=>c.dataset.label+': '+c.parsed.y.toFixed(1)+' ETH'}}}}}); });
 reg('revenue', ({Rf, lf, df})=>{ const v = prrOf(Y); document.getElementById('h_prr').innerHTML = v!=null?`<em>${fmt.x(v,1)}</em> ${yd}`:'';
   return mk(c_prr, lf, [line('Price to recurring revenue', Rf.map(prrOf), C.gold, {fill:true})], {legend:false, y:v=>v.toFixed(1)+'×', tf:v=>fmt.x(v,1)}); });
@@ -648,7 +753,7 @@ reg('liquidity', (x)=>{ document.getElementById('h_lshare').innerHTML = pools.ma
 reg('liquidity', ({Rf})=>{ const Rc = Rf.filter(r=>r.date>=LP0 && pools.some(p=>r['cpN_'+p]!=null));
   const c7 = Object.fromEntries(CPK.map(k=>[k, sum(s7.map(r=>ck(r,k)))])), t7 = sum(CPK.map(k=>c7[k]));
   document.getElementById('h_cpty').innerHTML = t7 ? `organic <em>${cpShares(s7).Org}%</em> of ${fmt.usd(t7)} · 7d` : '';
-  return mk(c_cpty, Rc.map(r=>dm(r.date)), [bar('Organic users', Rc.map(r=>ck(r,'Org')), C.green), bar('Cross-venue arbitrage', Rc.map(r=>ck(r,'Arb')), C.pink), bar('Other bots', Rc.map(r=>ck(r,'Bot')), C.blue), bar('Fee-exempt contract', Rc.map(r=>ck(r,'Fx')), C.grey)],
+  return mk(c_cpty, Rc.map(r=>dm(r.date)), [bar('Organic users', Rc.map(r=>ck(r,'Org')), C.celadon), bar('Cross-venue arbitrage', Rc.map(r=>ck(r,'Arb')), C.rose), bar('Other bots', Rc.map(r=>ck(r,'Bot')), C.sapphire), bar('Fee-exempt contract', Rc.map(r=>ck(r,'Fx')), C.grey)],
     {stacked:true, y:usd0, tf:usd1, footer:i=>{const r=Rc[i[0].dataIndex], t=sum(CPK.map(k=>ck(r,k))); return t?`organic share ${fmt.pct(ck(r,'Org')/t,0)}`:'';}}); });
 reg('liquidity', ({Rf})=>{ const Rq = Rf.filter(r=>r.date>=LP0), pnl = (r,p)=>r['lpVal_'+p]!=null ? r['lpVal_'+p]+r['lpFees_'+p]-r['holdVal_'+p] : null;
   const tot = r=>{const v=pools.map(p=>pnl(r,p)); return v.some(x=>x!=null)?sum(v):null;};
@@ -658,12 +763,12 @@ reg('liquidity', ({Rf})=>{ const Rq = Rf.filter(r=>r.date>=LP0), pnl = (r,p)=>r[
 // launchpad
 reg('launchpad', ({Rf})=>{ const Rq = Rf.filter(r=>r.date>=LP0);
   document.getElementById('h_lfee').innerHTML = `<em>${fmt.usd(sum(Sh.map(r=>(r.lpadSafe||0)+(r.lpadEsc||0))))}</em> since 14 Oct · protocol ${fmt.usd(sum(Sh.map(lpp)))}`;
-  return mk(c_lfee, Rq.map(r=>dm(r.date)), [bar('Protocol, 50%', Rq.map(lpp), C.teal), bar('Reward pool, 20%', Rq.map(lpot), C.gold), bar('Creators, 30% and module fees', Rq.map(lcr), C.violet)],
+  return mk(c_lfee, Rq.map(r=>dm(r.date)), [bar('Protocol, 50%', Rq.map(lpp), C.sapphire), bar('Reward pool, 20%', Rq.map(lpot), C.gold), bar('Creators, 30% and module fees', Rq.map(lcr), C.silver)],
     {stacked:true, y:usd0, tf:usd1, footer:i=>{const r=Rq[i[0].dataIndex]; return `implied launchpad volume ${fmt.usd(lvol(r),2)}`;}}); });
 reg('launchpad', ({Rf})=>{ const Rc = Rf.filter(r=>r.date>=LP0 && pools.some(p=>r['cpN_'+p]!=null)), lf_ = r=>sum(pools.map(p=>r['feeLpad_'+p]||0)), all_ = r=>r.spFee||0;
   const c7 = s7.filter(r=>pools.some(p=>r['cpN_'+p]!=null)), a = sum(c7.map(lf_)), b = sum(c7.map(all_));
   document.getElementById('h_lroute').innerHTML = b ? `<em>${fmt.pct(a/b,0)}</em> of pool fees · 7d` : '';
-  return mk(c_lroute, Rc.map(r=>dm(r.date)), [bar('Launchpad-routed trades', Rc.map(lf_), C.teal), bar('All other trades', Rc.map(r=>Math.max(0, all_(r)-lf_(r))), alpha(C.blue,.55))],
+  return mk(c_lroute, Rc.map(r=>dm(r.date)), [bar('Launchpad-routed trades', Rc.map(lf_), C.sapphire), bar('All other trades', Rc.map(r=>Math.max(0, all_(r)-lf_(r))), alpha(C.sand,.45))],
     {stacked:true, y:usd0, tf:usd1, footer:i=>{const r=Rc[i[0].dataIndex]; return all_(r)?`launchpad-routed share ${fmt.pct(lf_(r)/all_(r),0)}`:'';}}); });
 
 // reserve
@@ -729,7 +834,7 @@ const rkc = (l)=>l.prevRank==null ? '<td class="mut">–</td>' : (l.prevRank-l.r
 function renderLeaders(){
   document.getElementById('h_lead').innerHTML = `<em>${fmt.int(LD.bankers)}</em> bankers · ${fmt.int(LD.banks)} charters · ${fmt.int(LD.branches)} branches`;
   document.getElementById('t_lead').innerHTML = '<tr><th>Rank</th><th class="l">Banker</th><th>Charters</th><th>Branches</th><th>Share of branches</th><th>Emissions, this epoch</th><th>Emissions, lifetime</th><th>Rank change</th></tr>' +
-    LD.rows.map((l,i)=>`<tr class="${i>=10?'more':''}"><td>${l.rank}</td><td class="l" style="font-family:var(--mono)">${who(l)}</td><td>${l.banks}</td><td>${l.branches}</td><td>${fmt.pct(l.branchShare,1)}</td><td>${fmt.n(l.epochEmissions,1)}</td><td>${fmt.n(l.lifetimeEmissions,2)}</td>${rkc(l)}</tr>`).join('');
+    LD.rows.map((l,i)=>`<tr class="${i>=10?'more':''}"><td>${l.rank}</td><td class="l ${l.ens?'':'addr'}">${who(l)}</td><td>${l.banks}</td><td>${l.branches}</td><td>${fmt.pct(l.branchShare,1)}</td><td>${fmt.n(l.epochEmissions,1)}</td><td>${fmt.n(l.lifetimeEmissions,2)}</td>${rkc(l)}</tr>`).join('');
   document.getElementById('t_lead').classList.toggle('open', leadOpen);
   document.getElementById('lead_more').textContent = leadOpen ? 'Top 10' : 'Top 25';
 }
@@ -954,7 +1059,7 @@ goLive(); setInterval(goLive, 300000);
 </body></html>
 """
 
-html = (TEMPLATE.replace("__NAV__", NAV).replace("__BODY__", BODY).replace("__ASOFHM__", built.strftime("%H:%M")).replace("__ASOF__", built.strftime("%Y-%m-%d %H:%M"))
+html = (TEMPLATE.replace("__HERO__", HERO_IMG).replace("__NAV__", NAV).replace("__BODY__", BODY).replace("__ASOFHM__", built.strftime("%H:%M")).replace("__ASOF__", built.strftime("%Y-%m-%d %H:%M"))
         .replace("__DATA__", json.dumps({k: v for k, v in data.items() if k != "swaps"}, separators=(",", ":"))))
 open(os.path.join(os.path.dirname(os.path.abspath(__file__)), "index.html"), "w").write(html)
 print("index.html", len(html) // 1024, "KB")

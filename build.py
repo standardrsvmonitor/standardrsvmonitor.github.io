@@ -122,7 +122,8 @@ SECTIONS = {
     panel(6, "S-Bill principal and term rate, daily", "STANDARD locked in 15-day S-Bills and the term rate at each day’s close.", chart("c_sb"), "h_sb") +
     panel(6, "Issuance multiplier and resolution fee, daily", "The multiplier scales daily issuance of 700,000 STANDARD and moves at each epoch settlement within 0.20 to 1.25. "
           "The resolution fee, the exit fee on withdrawals, rises from 2% to 60% with seven-day exit pressure.", chart("c_mult"), "h_mult") +
-    panel(12, "Top bankers", "Ranked by lifetime emissions from the indexer leaderboard. Names are the owners’ primary ENS names on Ethereum mainnet. Rank change compares with "
+    panel(12, "Top bankers", "Ranked as the protocol’s own leaderboard ranks, by branches, which set each banker’s share of issuance, then by this epoch’s emissions. Share of "
+          "emissions is the banker’s part of everything issued to bankers this epoch. Names are the owners’ primary ENS names on Ethereum mainnet. Rank change compares with "
           "the previous epoch.", table("t_lead") + '<button class="btn" id="lead_more"></button>', "h_lead") + '</div>',
 
 "data": '<div class="grid">' +
@@ -520,7 +521,8 @@ function renderKpis(){ derive();
       {l:'Active charters', v:fmt.int(L.activeCharters), c:chg(L.activeCharters, W0&&W0.activeCharters, {pol:1}), s:'7d', sp:lvl(r=>r.activeCharters), col:C.violet},
       {l:'Issuance multiplier', v:fmt.x(L.multiplier), c:{t:`${fmt.n(L.baseIssuance*L.multiplier,0)} a day`, c:'nt'}, s:`${perBranch.toFixed(1)} per branch`, sp:lvl(r=>r.multiplier), col:C.gold},
       {l:'Ledger balance', v:fmt.n(L.pending,2), c:chg(L.pending, W0&&W0.pending, {}), s:'unminted', sp:lvl(r=>r.pending), col:C.fg2},
-      {l:'Resolution fee', v:fmt.pct(L.exitFeeNow,1), c:{t:`${fmt.n(L.w7,1)} withdrawn 7d`, c:'nt'}, sp:lvl(r=>r.exitFee), col:C.orange, tip:'The exit fee on withdrawals: 2%, rising to 60% as seven-day exit pressure approaches 10% of the ledger. Half is burned, half recycled to bankers.'},
+      {l:'Resolution fee', v:fmt.pct(L.exitFeeNow,1), c:{t:`stayers’ cut ${fmt.pct(L.exitFeeNow/2,1)}`, c:'nt'}, s:`${Math.round((L.exitPressure7d||0)/0.10*100)}% of threshold`, sp:lvl(r=>r.exitFee), col:C.orange,
+        tip:'The exit fee on withdrawals, 2% at rest rising to 60% as seven-day withdrawals approach the 10% threshold. Half is burned and half goes to the bankers who stay, the protocol’s “stayers’ cut”.'},
       {l:'S-Bills locked', v:fmt.n(L.sbills.locked,2), c:chg(L.sbills.locked, W0&&(W0.sbLocked??W0.sbills), {pol:1}), s:`${(L.sbills.rate*100).toFixed(2)}% per term`, sp:lvl(r=>r.sbLocked??r.sbills), col:C.teal},
     ],
   };
@@ -837,9 +839,9 @@ let LD = DATA.leaders || {rows:[]}, leadOpen = false;
 const who = (l)=>`<a href="https://robin.etherscan.io/address/${l.owner}" target="_blank" rel="noopener" style="text-decoration:none">${l.ens ? l.ens : l.owner.slice(0,6)+'…'+l.owner.slice(-4)}</a>`;
 const rkc = (l)=>l.prevRank==null ? '<td class="mut">–</td>' : (l.prevRank-l.rank===0 ? '<td class="mut">0</td>' : `<td class="${l.prevRank-l.rank>0?'pos':'neg'}">${l.prevRank-l.rank>0?'▲':'▼'} ${Math.abs(l.prevRank-l.rank)}</td>`);
 function renderLeaders(){
-  document.getElementById('h_lead').innerHTML = `<em>${fmt.int(LD.bankers)}</em> bankers · ${fmt.int(LD.banks)} charters · ${fmt.int(LD.branches)} branches`;
-  document.getElementById('t_lead').innerHTML = '<tr><th>Rank</th><th class="l">Banker</th><th>Charters</th><th>Branches</th><th>Share of branches</th><th>Emissions, this epoch</th><th>Emissions, lifetime</th><th>Rank change</th></tr>' +
-    LD.rows.map((l,i)=>`<tr class="${i>=10?'more':''}"><td>${l.rank}</td><td class="l ${l.ens?'':'addr'}">${who(l)}</td><td>${l.banks}</td><td>${l.branches}</td><td>${fmt.pct(l.branchShare,1)}</td><td>${fmt.n(l.epochEmissions,1)}</td><td>${fmt.n(l.lifetimeEmissions,2)}</td>${rkc(l)}</tr>`).join('');
+  document.getElementById('h_lead').innerHTML = `<em>${fmt.int(LD.bankers)}</em> bankers · ${fmt.int(LD.banks)} banks · ${fmt.int(LD.branches)} branches`;
+  document.getElementById('t_lead').innerHTML = '<tr><th>Rank</th><th class="l">Banker</th><th>Banks</th><th>Branches</th><th>Share of branches</th><th>Share of emissions, this epoch</th><th>Emissions, this epoch</th><th>Emissions, lifetime</th><th>Rank change</th></tr>' +
+    LD.rows.map((l,i)=>`<tr class="${i>=10?'more':''}"><td>${l.rank}</td><td class="l ${l.ens?'':'addr'}">${who(l)}</td><td>${l.banks}</td><td>${l.branches}</td><td>${fmt.pct(l.branchShare,1)}</td><td>${l.epochShare!=null?fmt.pct(l.epochShare,2):'–'}</td><td>${fmt.int(l.epochEmissions)}</td><td>${fmt.int(l.lifetimeEmissions)}</td>${rkc(l)}</tr>`).join('');
   document.getElementById('t_lead').classList.toggle('open', leadOpen);
   document.getElementById('lead_more').textContent = leadOpen ? 'Top 10' : 'Top 25';
 }
@@ -1043,10 +1045,10 @@ async function goLive(){
     if (A && TIP) { try { await replay(s, I(s.blockNumber)); } catch(e) { restoreRows(); console.warn('replay unavailable', e); } }
     if (lb && Array.isArray(lb.bankers)) {
       const ens = {}; (BASE.ld.rows||[]).forEach(r=>{ens[r.owner]=r.ens;});
-      const bk = lb.bankers.slice().sort((a,b)=>Number(BigInt(b.lifetimeEmissions||'0')-BigInt(a.lifetimeEmissions||'0')));
-      const tb = sum(bk.map(r=>+r.branches||0)) || 1;
+      const B_ = x=>BigInt(x||'0'), bk = lb.bankers.slice().sort((a,b)=>(+b.branches||0)-(+a.branches||0) || Number(B_(b.epochEmissions)-B_(a.epochEmissions)) || Number(B_(b.lifetimeEmissions)-B_(a.lifetimeEmissions)));
+      const tb = sum(bk.map(r=>+r.branches||0)) || 1, te = sum(bk.map(r=>W(r.epochEmissions||'0'))) || 1;
       LD = {bankers:bk.length, banks:sum(bk.map(r=>+r.banks||0)), branches:tb, rows:bk.slice(0,25).map((r,i)=>({rank:i+1, owner:r.owner.toLowerCase(), ens:ens[r.owner.toLowerCase()]||'',
-        banks:+r.banks||0, branches:+r.branches||0, branchShare:(+r.branches||0)/tb, epochEmissions:W(r.epochEmissions||'0'), lifetimeEmissions:W(r.lifetimeEmissions||'0'), prevRank:(r.previousRank||{}).lifetime}))};
+        banks:+r.banks||0, branches:+r.branches||0, branchShare:(+r.branches||0)/tb, epochShare:W(r.epochEmissions||'0')/te, epochEmissions:W(r.epochEmissions||'0'), lifetimeEmissions:W(r.lifetimeEmissions||'0'), prevRank:(r.previousRank||{}).epoch}))};
     }
     NOWTS = now; LIVE = true; LIVEHM = new Date(I(s.blockTimestamp)*1000).toISOString().slice(11,16); LIVEB = I(s.blockNumber);
     renderAll(); redrawAll();

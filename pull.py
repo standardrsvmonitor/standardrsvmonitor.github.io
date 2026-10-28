@@ -541,7 +541,9 @@ def main():
             "accruedEth": live_acc, "taxHookEth": bal.get("taxHook", {}).get("ETH", 0), "mStepUp": int(snap["bank"]["M_STEP_UP_WAD"]) / 1e18, "mStepDown": int(snap["bank"]["M_STEP_DOWN_WAD"]) / 1e18, "mMin": int(snap["bank"]["M_MIN_WAD"]) / 1e18, "mMax": int(snap["bank"]["M_MAX_WAD"]) / 1e18}
     # ---------- top bankers (indexer leaderboard) with ENS primary names from Ethereum mainnet ----------
     lbd = get(IX + f"leaderboard?chainId={CHAIN}")
-    bankers = sorted(lbd.get("bankers", []), key=lambda r: -int(r.get("lifetimeEmissions", 0)))
+    # ranked as the protocol's own leaderboard ranks: by branches, which set each banker's share of issuance, then this epoch's emissions
+    bankers = sorted(lbd.get("bankers", []), key=lambda r: (-int(r.get("branches", 0)), -int(r.get("epochEmissions", 0)), -int(r.get("lifetimeEmissions", 0))))
+    tot_ep = sum(int(r.get("epochEmissions", 0)) for r in bankers) or 1
     ensc = jload(os.path.join(C, "ens.json"), {})
     ETH_RPC = "https://ethereum-rpc.publicnode.com"
     def erpc(m, p):
@@ -566,8 +568,8 @@ def main():
             try: ensc[a] = {"name": ens_name(a), "t": now}
             except Exception: ensc.setdefault(a, {"name": "", "t": 0})
         leaders.append({"rank": i, "owner": a, "ens": ensc[a]["name"], "banks": int(r.get("banks", 0)), "branches": int(r.get("branches", 0)),
-                        "branchShare": int(r.get("branches", 0)) / tot_br, "epochEmissions": int(r.get("epochEmissions", 0)) / 1e18,
-                        "lifetimeEmissions": int(r.get("lifetimeEmissions", 0)) / 1e18, "topBank": r.get("topBank"), "prevRank": (r.get("previousRank") or {}).get("lifetime")})
+                        "branchShare": int(r.get("branches", 0)) / tot_br, "epochShare": int(r.get("epochEmissions", 0)) / tot_ep, "epochEmissions": int(r.get("epochEmissions", 0)) / 1e18,
+                        "lifetimeEmissions": int(r.get("lifetimeEmissions", 0)) / 1e18, "topBank": r.get("topBank"), "prevRank": (r.get("previousRank") or {}).get("epoch")})
     jsave(os.path.join(C, "ens.json"), ensc)
     out["leaders"] = {"rows": leaders, "bankers": len(bankers), "banks": sum(int(r.get("banks", 0)) for r in bankers), "branches": tot_br}
     log("leaderboard", len(bankers), "bankers; ENS names in top 25:", sum(1 for l in leaders if l["ens"]))

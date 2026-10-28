@@ -346,6 +346,9 @@ const pools = Object.keys(L.lp), stockPools = pools.filter(p=>!L.lp[p].isEth);
 const shortP = p=>p==='ETH'?'ETH/USDG':p, pname = (s)=>s==='ETH'?'ETH/USDG pool':s+' pool';
 const ck = (r,k,ps)=>sum((ps||pools).map(p=>r[`vol${k}_${p}`]||0));
 const CPK = ['Org','Arb','Bot','Fx'];
+const cpShares = (rows, ps)=>{const v=CPK.map(k=>sum(rows.map(r=>ck(r,k,ps)))), t=sum(v); if(!t) return null;   // largest remainder, so the four shares sum to exactly 100
+  const raw=v.map(x=>x/t*100), fl=raw.map(Math.floor), left=100-sum(fl); raw.map((x,i)=>[x-fl[i],i]).sort((a,b)=>b[0]-a[0]).slice(0,left).forEach(([,i])=>fl[i]++);
+  return Object.fromEntries(CPK.map((k,i)=>[k, fl[i]]));};
 
 // ---------- sparklines and change cells ----------
 const spark = (vals, color, fill)=>{const w=300, h=40, p=2, xs=vals.filter(v=>v!=null&&isFinite(v)); if(xs.length<2) return '<svg></svg>';
@@ -400,7 +403,7 @@ function renderKpis(){ derive();
       {l:'Fee yield, annualized', v:fmt.pct(poolLiq?pf7*365/7/poolLiq:null,0), c:{t:'on capital in pools', c:'nt'}, sp:roll7(r=>r.spFee||0), col:C.blue},
       {l:'Volume served, 7d', v:fmt.usd(sum(s7.map(served))), c:chg(sum(s7.map(served)), P7.length?sum(P7.map(served)):null, {pol:1}), sp:roll7(served), col:C.blue},
       {l:'Share of chain equity volume', v:fmt.pct(eqShare(s7),0), c:chg(eqShare(s7), P7.length?eqShare(P7):null, {pp:true, pol:1}), s:'7d', sp:rollRatio(r=>sum(stockPools.map(p=>r['spVolMine_'+p]??r['spVol_'+p]??0)), r=>sum(stockPools.map(p=>r['chainVol_'+p]||0))), col:C.teal},
-      {l:'Organic share of volume', v:fmt.pct(orgS(s7),0), c:chg(orgS(s7), P7.length?orgS(P7):null, {pp:true, pol:1}), s:`fee-paying ${fmt.pct(zf(s7),0)}`, sp:rollRatio(r=>ck(r,'Org'), r=>sum(CPK.map(k=>ck(r,k)))), col:C.green},
+      {l:'Organic share of volume', v:(cpShares(s7)||{}).Org!=null?cpShares(s7).Org+'%':'–', c:chg(orgS(s7), P7.length?orgS(P7):null, {pp:true, pol:1}), s:`fee-paying ${fmt.pct(zf(s7),0)}`, sp:rollRatio(r=>ck(r,'Org'), r=>sum(CPK.map(k=>ck(r,k)))), col:C.green},
     ],
     launchpad:[
       {l:'Launchpad volume, 7d', v:fmt.usd(lv7), c:chg(lv7, lvP, {pol:1}), s:'implied by fees', sp:roll7(lvol), col:C.teal, tip:'Trading volume implied by the 0.7% of every launchpad trade that reaches the fee Safe.'},
@@ -507,10 +510,7 @@ function renderStatic(){
   const dcell = (a,b)=>a!=null&&b!=null ? `<td class="${Math.abs(a-b)<0.5?'mut':a-b>0?'pos':'neg'}">${fmt.sgn(a-b)}${fmt.usd(a-b,1)}</td><td class="${Math.abs(a-b)<0.5?'mut':a-b>0?'pos':'neg'}">${b?fmt.sgn(a-b)+fmt.pct((a-b)/b,1):'–'}</td>` : '<td>–</td><td>–</td>';
   document.getElementById('t_resd').innerHTML = rc0 ? '<tr><th>Component</th><th>Today</th><th>Share</th><th>Change, 1 day</th><th>%</th><th>Change, 7 days</th><th>%</th></tr>' +
     Object.keys(rc0).map(k=>`<tr class="${k==='Total'?'tot':''}"><td>${k}</td><td>${fmt.usd(rc0[k])}</td><td class="mut">${k==='Total'?'':fmt.pct(rc0[k]/rc0.Total,1)}</td>${dcell(rc0[k], rc1&&rc1[k])}${dcell(rc0[k], rc7&&rc7[k])}</tr>`).join('') : '';
-  const cpRow = (ps)=>{const v=Object.fromEntries(CPK.map(k=>[k, sum(s7.map(r=>ck(r,k,ps)))])), t=sum(CPK.map(k=>v[k]));
-    const raw = CPK.map(k=>t?v[k]/t*100:0), fl = raw.map(Math.floor), left = 100-sum(fl);
-    raw.map((x,i)=>[x-fl[i],i]).sort((a,b)=>b[0]-a[0]).slice(0, t?left:0).forEach(([,i])=>fl[i]++);
-    return CPK.map((k,i)=>`<td>${t?fl[i]+'%':'–'}</td>`).join('');};
+  const cpRow = (ps)=>{const q=cpShares(s7, ps); return CPK.map(k=>`<td>${q?q[k]+'%':'–'}</td>`).join('');};
   document.getElementById('t_cpty').innerHTML = '<tr><th>Pool</th><th>Organic</th><th>Arbitrage</th><th>Bots</th><th>Fee-exempt</th></tr>' +
     pools.map(p=>`<tr><td>${shortP(p)}</td>${cpRow([p])}</tr>`).join('') + `<tr class="tot"><td>All pools</td>${cpRow(pools)}</tr>`;
   const pnlOf = (r,p)=>r['lpVal_'+p]!=null ? {lp:r['lpVal_'+p], hold:r['holdVal_'+p], cost:r['lpCost_'+p], fees:r['lpFees_'+p]} : null;
@@ -647,7 +647,7 @@ reg('liquidity', (x)=>{ document.getElementById('h_vshare').innerHTML = pools.ma
 reg('liquidity', (x)=>{ document.getElementById('h_lshare').innerHTML = pools.map(p=>`${shortP(p)} <em>${fmt.pct(Y['liqShare_'+p],0)}</em>`).join(' · '); return shareChart(c_lshare, 'liqShare_', (r,p)=>((r.reserveParts||{}).lp||{})[p], 'chainTvl_', 'position')(x); });
 reg('liquidity', ({Rf})=>{ const Rc = Rf.filter(r=>r.date>=LP0 && pools.some(p=>r['cpN_'+p]!=null));
   const c7 = Object.fromEntries(CPK.map(k=>[k, sum(s7.map(r=>ck(r,k)))])), t7 = sum(CPK.map(k=>c7[k]));
-  document.getElementById('h_cpty').innerHTML = t7 ? `organic <em>${fmt.pct(c7.Org/t7,0)}</em> of ${fmt.usd(t7)} · 7d` : '';
+  document.getElementById('h_cpty').innerHTML = t7 ? `organic <em>${cpShares(s7).Org}%</em> of ${fmt.usd(t7)} · 7d` : '';
   return mk(c_cpty, Rc.map(r=>dm(r.date)), [bar('Organic users', Rc.map(r=>ck(r,'Org')), C.green), bar('Cross-venue arbitrage', Rc.map(r=>ck(r,'Arb')), C.pink), bar('Other bots', Rc.map(r=>ck(r,'Bot')), C.blue), bar('Fee-exempt contract', Rc.map(r=>ck(r,'Fx')), C.grey)],
     {stacked:true, y:usd0, tf:usd1, footer:i=>{const r=Rc[i[0].dataIndex], t=sum(CPK.map(k=>ck(r,k))); return t?`organic share ${fmt.pct(ck(r,'Org')/t,0)}`:'';}}); });
 reg('liquidity', ({Rf})=>{ const Rq = Rf.filter(r=>r.date>=LP0), pnl = (r,p)=>r['lpVal_'+p]!=null ? r['lpVal_'+p]+r['lpFees_'+p]-r['holdVal_'+p] : null;

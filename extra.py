@@ -612,6 +612,17 @@ def counterparties(x, reg, lp_pools, first_day, last_day, max_days=3):
     while d <= end:
         if d.isoformat() not in c["days"]: todo.append(d.isoformat())
         d += dt.timedelta(1)
+    # transaction counts that an earlier run failed to read (a rate-limited batch returns nothing for that wallet) are retried on every run;
+    # cpty_classes() never treats a wallet without a count as organic
+    need = sorted({dr[1] for v in c["days"].values() for p in v.values() for dr in p["draws"] if dr[1]} - set(c["nonce"]))[:2000]
+    for k in range(0, len(need), 10):
+        part = need[k:k + 10]
+        try: res = x.rpcb([("eth_getTransactionCount", [a, "latest"]) for a in part])
+        except Exception: time.sleep(5); continue
+        for a, n in zip(part, res):
+            if n: c["nonce"][a] = int(n, 16)
+        time.sleep(0.25)
+    if need: x.js("cpty.json", c); x.log("counterparties: transaction counts backfilled", sum(1 for a in need if a in c["nonce"]), "of", len(need))
     for ds in todo[:max_days]:
         t0 = day_end(ds) - 86400; lo, hi = max(0, x.B(t0 - 7200)), min(x.tip, x.B(t0 + 86400 + 7200)); rec = {}   # interpolated blocks; logs are then filtered on their timestamps
         try:
@@ -736,8 +747,8 @@ def cpty_classes(c, tiers=None, hf=1000, routers=()):
         for p in v.values():
             for snd, frm, fee, arb in p["draws"]:
                 if frm: via[snd].add(frm)
-    def public(snd):
-        ns = [nonce.get(a, 0) for a in via.get(snd, ())]
+    def public(snd):   # judged on wallets with a known transaction count only
+        ns = [nonce[a] for a in via.get(snd, ()) if a in nonce]
         return len(ns) >= 2 and min(ns) < 0.1 * max(ns)
     out = {}
     for d, v in c["days"].items():
@@ -750,7 +761,7 @@ def cpty_classes(c, tiers=None, hf=1000, routers=()):
             cnt = collections.Counter(); fw = collections.Counter()
             for snd, frm, fee, arb in p["draws"]:
                 fee = lpf(fee)
-                k = "Arb" if arb else ("Bot" if (not public(snd) or nonce.get(frm, 0) >= hf) else "Org")
+                k = "Arb" if arb else ("Bot" if (not public(snd) or frm not in nonce or nonce[frm] >= hf) else "Org")
                 cnt[k] += 1; fw[k] += fee
                 if snd.lower() in routers: cnt["Lpad"] += 1; fw["Lpad"] += fee   # executed by a launchpad router (a cross-cut of the classes above)
             for k in ("Org", "Arb", "Bot", "Lpad"):

@@ -614,7 +614,11 @@ def counterparties(x, reg, lp_pools, first_day, last_day, max_days=3):
         d += dt.timedelta(1)
     # transaction counts that an earlier run failed to read (a rate-limited batch returns nothing for that wallet) are retried on every run;
     # cpty_classes() never treats a wallet without a count as organic
-    need = sorted({dr[1] for v in c["days"].values() for p in v.values() for dr in p["draws"] if dr[1]} - set(c["nonce"]))[:2000]
+    # once a UTC day every count below 1,000 is read again, so wallets are compared at one moment: counts read on different days made a
+    # growing bot fleet's newest wallets look ten times less active than its oldest, and the fleet's executor look like a public router
+    need = sorted({dr[1] for v in c["days"].values() for p in v.values() for dr in p["draws"] if dr[1]} - set(c["nonce"]))
+    if c.get("nonceAt") != day(x.tip_ts): need += sorted(a for a, n in c["nonce"].items() if n < 1000); c["nonceAt"] = day(x.tip_ts)
+    need = need[:4000]
     for k in range(0, len(need), 10):
         part = need[k:k + 10]
         try: res = x.rpcb([("eth_getTransactionCount", [a, "latest"]) for a in part])
@@ -622,7 +626,7 @@ def counterparties(x, reg, lp_pools, first_day, last_day, max_days=3):
         for a, n in zip(part, res):
             if n: c["nonce"][a] = int(n, 16)
         time.sleep(0.25)
-    if need: x.js("cpty.json", c); x.log("counterparties: transaction counts backfilled", sum(1 for a in need if a in c["nonce"]), "of", len(need))
+    if need: x.js("cpty.json", c); x.log("counterparties: transaction counts read", len(need))
     for ds in todo[:max_days]:
         t0 = day_end(ds) - 86400; lo, hi = max(0, x.B(t0 - 7200)), min(x.tip, x.B(t0 + 86400 + 7200)); rec = {}   # interpolated blocks; logs are then filtered on their timestamps
         try:
@@ -748,7 +752,8 @@ def cpty_classes(c, tiers=None, hf=1000, routers=()):
             for snd, frm, fee, arb in p["draws"]:
                 if frm: via[snd].add(frm)
     def public(snd):   # judged on wallets with a known transaction count only
-        ns = [nonce[a] for a in via.get(snd, ()) if a in nonce]
+        ns = sorted(nonce[a] for a in via.get(snd, ()) if a in nonce)
+        if len(ns) >= 20 and ns[int(.75 * (len(ns) - 1))] < 5 * max(1, ns[int(.25 * (len(ns) - 1))]): return False   # a fleet: many wallets, the middle half within fivefold of each other
         return len(ns) >= 2 and min(ns) < 0.1 * max(ns)
     out = {}
     for d, v in c["days"].items():

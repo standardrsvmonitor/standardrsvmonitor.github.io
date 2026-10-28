@@ -677,7 +677,55 @@ def counterparties(x, reg, lp_pools, first_day, last_day, max_days=3):
     return c
 
 
-def cpty_classes(c, tiers=None, hf=1000):
+# ---------- launchpad fees ----------
+LPAD = {"start": 88_360_200,   # first launchpad block (14 Oct 2026)
+        "feeSafe": "0x047829087f9ac81fdb05f7b750458afe3d72415f",   # 2-of-4 Safe, same signers as the reserve Safe: KOTM reward pool (20% of the base fee) plus the protocol (50%)
+        "escrows": ["0xcbc8f65ef158c829379472dee771cf3e7741440e", "0x479b2997a7283f7d3baacc984558fe4e1d7467af"],   # creator fee escrows, first and second launchpad
+        "routers": ["0x190b452d16e12e3beedd76a030ea991fe3856c33", "0x3c7476e8be0efd5b9667421448a99e217b806e80"],
+        "tokens": {"USDG": ("0x5fc5360d0400a0fd4f2af552add042d716f1d168", 6), "SPCX": ("0x4a0e65a3eccec6dbe60ae065f2e7bb85fae35eea", 18),
+                   "SKHY": ("0x84cab63bc87912e71ad199ff14a0ba45de68fef8", 18), "BABA": ("0xad25ac6c84d497db898fa1e8387bf6af3532a1c4", 18),
+                   "WETH": ("0x0bd7d308f8e1639fab988df18a8011f41eacad73", 18)}}
+
+
+def launchpad(x, lp_pools, closes, eth_day):
+    """Launchpad base fee by UTC day. Every launchpad-token trade pays 1% of its stock or WETH side: 30% to the creator (fee escrow), 20% to
+    the King of the Markets reward pool and 50% to the protocol, the last two into one fee Safe. Transfers into the Safe and the escrows are
+    summed per day and token from Transfer logs (incremental), and valued at the day's closing pool price (WETH at the day's ETH close).
+    Returns {date: {lpadSafe, lpadEsc, lpadSafeOut}} in USD."""
+    c = x.jl("launchpad.json", {"last": LPAD["start"] - 1, "days": {}})
+    by_tok = {a: s for s, (a, _) in LPAD["tokens"].items()}; dec = {s: d for s, (_, d) in LPAD["tokens"].items()}
+    who = {LPAD["feeSafe"]: "safe", **{e: "esc" for e in LPAD["escrows"]}}
+    if c["last"] < x.tip:
+        lo = c["last"] + 1; toks = [a for a, _ in LPAD["tokens"].values()]
+        ins = x.getlogs({"address": toks, "topics": [x.TR, None, [x.pad(a) for a in who]]}, lo, x.tip, 100000)
+        outs = x.getlogs({"address": toks, "topics": [x.TR, x.pad(LPAD["feeSafe"])]}, lo, x.tip, 100000)
+        for side, L in (("in", ins), ("out", outs)):
+            for l in L:
+                s = by_tok[l["address"].lower()]; b = int(l["blockNumber"], 16); d = day(int(l.get("blockTimestamp") or "0x0", 16) or x.T(b))
+                k = (who["0x" + l["topics"][2][-40:]] if side == "in" else "safeOut")
+                o = c["days"].setdefault(d, {}).setdefault(k, {}); o[s] = o.get(s, 0.0) + int(l["data"], 16) / 10 ** dec[s]
+        c["last"] = x.tip; x.js("launchpad.json", c)
+    pid = {s: p["pool"] for s, p in lp_pools.items()}
+    def px(s, d):
+        if s == "USDG": return 1.0
+        if s == "WETH":
+            ks = sorted(k for k in eth_day if k <= d); return eth_day[ks[-1]] if ks else None
+        sp = close_on(closes.get(pid.get(s), {}), d, first=True)
+        if not sp: return None
+        P = (sp / 2 ** 96) ** 2; return 1e12 / P if lp_pools[s]["usdg0"] else P * 1e12   # USDG 6 dp, stocks 18 dp
+    out = {}
+    for d, v in c["days"].items():
+        o = out.setdefault(d, {})
+        for k, key in (("safe", "lpadSafe"), ("esc", "lpadEsc"), ("safeOut", "lpadSafeOut")):
+            o[key] = round(sum(a * (px(s, d) or 0) for s, a in (v.get(k) or {}).items()), 2)
+    held = collections.Counter()
+    for v in c["days"].values():
+        for s, a in (v.get("safe") or {}).items(): held[s] += a
+        for s, a in (v.get("safeOut") or {}).items(): held[s] -= a
+    return out, dict(held)
+
+
+def cpty_classes(c, tiers=None, hf=1000, routers=()):
     """Classes per day and pool from the cached draws: Arb (the transaction also trades the asset the other way on another pool), Bot (a private
     contract, one whose sending wallets are a single wallet or wallets of similar activity, as a bot operator's rotating wallets are; or a
     sending wallet with `hf` or more transactions), Org (a wallet with fewer transactions trading through a public router, one whose sending
@@ -704,7 +752,8 @@ def cpty_classes(c, tiers=None, hf=1000):
                 fee = lpf(fee)
                 k = "Arb" if arb else ("Bot" if (not public(snd) or nonce.get(frm, 0) >= hf) else "Org")
                 cnt[k] += 1; fw[k] += fee
-            for k in ("Org", "Arb", "Bot"):
+                if snd.lower() in routers: cnt["Lpad"] += 1; fw["Lpad"] += fee   # executed by a launchpad router (a cross-cut of the classes above)
+            for k in ("Org", "Arb", "Bot", "Lpad"):
                 o[f"vol{k}_{sym}"] = round(p["nf"] * cnt[k] / n, 2) if n else 0.0
                 o[f"fee{k}_{sym}"] = round(p["fee"] * adj * fw[k] / fr, 4) if n else 0.0
             o[f"cpN_{sym}"] = n

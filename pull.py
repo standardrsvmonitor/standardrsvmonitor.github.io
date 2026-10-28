@@ -619,12 +619,23 @@ def main():
         log("pool fees, swap estimate vs positions", s_, round(pnl[last_][s_]["fees"] / k_) if last_ else None, round(owed_ or 0))
     yday = (dt.datetime.fromtimestamp(x.tip_ts, dt.timezone.utc).date() - dt.timedelta(1)).isoformat()   # complete days only
     cp = extra.counterparties(x, reg, lp_pools, "2026-10-14", yday)
-    cls = extra.cpty_classes(cp, {s_: p_["tier"] for s_, p_ in lp_pools.items()})
+    cls = extra.cpty_classes(cp, {s_: p_["tier"] for s_, p_ in lp_pools.items()}, routers=set(extra.LPAD["routers"]))
+    lpad, lpad_held = extra.launchpad(x, lp_pools, closes, eth_day)
     for row in series:
-        d_ = row["date"]; row.update({k_: v_ for k_, v_ in (shares.get(d_) or {}).items()}); row.update(cls.get(d_, {}))
+        d_ = row["date"]; row.update({k_: v_ for k_, v_ in (shares.get(d_) or {}).items()}); row.update(cls.get(d_, {})); row.update(lpad.get(d_, {}))
         for s_ in lp_pools:   # the reserve's share of chain volume is the volume its liquidity served, not the whole pool's (it shares the ETH/USDG pool)
             if row.get("chainVol_" + s_): row["volShare_" + s_] = (row.get("spVolMine_" + s_) or 0) / row["chainVol_" + s_]
         for s_, v_ in (pnl.get(d_) or {}).items(): row.update({f"lpVal_{s_}": v_["lp"], f"holdVal_{s_}": v_["hold"], f"lpCost_{s_}": v_["cost"], f"lpFees_{s_}": v_["fees"]})
+    # King of the Markets standings and the indexer's own launchpad fee total (the markets API allows only standardreserve.xyz in the browser)
+    MK = "https://markets.standardreserve.xyz/v1/"
+    ks_, kp_ = get(MK + "pilot/summary", tries=2), get(MK + "pilot/pool?limit=1", tries=2)
+    lp_px = {s_: v_["price"] for s_, v_ in lp.items()}; lp_px.update({"USDG": 1.0, "WETH": ethusd})
+    out["launchpad"] = {"feeSafe": extra.LPAD["feeSafe"], "held": lpad_held, "heldUsd": sum(a_ * (lp_px.get(s_) or 0) for s_, a_ in lpad_held.items()),
+                        "feeSafeEth": int(rpc("eth_getBalance", [extra.LPAD["feeSafe"], "latest"]).get("result") or "0x0", 16) / 1e18,
+                        "indexerFeesUsd": kp_.get("feesUsd"), "indexerAsOf": kp_.get("asOfTime"),
+                        "season": ks_.get("season"), "teams": ks_.get("countries"), "seedUsd": 1_100_000}
+    log("launchpad: fee Safe", {k_: round(v_, 3) for k_, v_ in lpad_held.items()}, "| received, all days", round(sum(v_.get("lpadSafe", 0) for v_ in lpad.values())),
+        "| indexer", kp_.get("feesUsd"))
     chk_ = [(row["date"], s_, round(row.get("poolVolChain_" + s_) or 0), round(row.get("spVol_" + s_) or 0)) for row in series[-3:-1] for s_ in lp_pools]
     log("venues", len(reg), "| reserve pool volume, chain scan vs swap cache:", chk_, "| counterparty days", len(cp["days"]))
     hist = jload(os.path.join(D, "history.json"), {})

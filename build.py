@@ -545,7 +545,7 @@ function renderHero(){
   const tok7 = sum(s7.map(r=>tr(r)+chs(r))), tokP = P7.length?sum(P7.map(r=>tr(r)+chs(r))):null, pf7 = sum(s7.map(r=>r.spFee||0)), sv7 = sum(s7.map(served));
   const lp7 = sum(s7.map(lpp)), lv7 = sum(s7.map(lvol)), eqd = sum(s7.map(r=>sum(stockPools.map(p=>r['chainVol_'+p]||0)))), eqn = sum(s7.map(r=>sum(stockPools.map(p=>r['spVolMine_'+p]??r['spVol_'+p]??0))));
   const cg = (a,b)=>{const c=chg(a,b,{pol:1}); return `<span class="${c.c}">${c.t}</span>`;};
-  el.innerHTML = `<div class="h-top"><div><span class="badge"><span>Robinhood Chain</span> Standard Reserve</span></div>
+  el.innerHTML = `<div class="h-top"><div></div>
       <div class="mark">Standard Reserve<i></i>Protocol monitor</div>
       <div><span class="badge ${L.epochNetFlow>=0?'exp':'con'}"><i></i><span>Epoch ${L.epoch} settles</span> ${left}</span></div></div>
     <div class="h-num"><strong>$${Math.round(L.reserve.totalUsd).toLocaleString('en-US')}</strong>

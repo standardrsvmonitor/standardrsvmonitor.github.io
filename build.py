@@ -19,7 +19,7 @@ def table(tid, cls=""): return f'<div class="tw"><table id="{tid}" class="{cls}"
 def kpis(tab): return f'<div class="kpis" id="k_{tab}"></div>'
 
 TABS = [("overview", "Overview"), ("revenue", "Revenue"), ("liquidity", "Liquidity"), ("launchpad", "Launchpad"), ("reserve", "Reserve"),
-        ("token", "Token"), ("banking", "Banking"), ("data", "Data")]
+        ("token", "Token"), ("banks", "Banks"), ("data", "Data")]
 
 SECTIONS = {
 "overview": kpis("overview") + '<div class="grid">' +
@@ -28,8 +28,9 @@ SECTIONS = {
           "Shares change in percentage points. Green marks a move that favours the protocol, red one that works against it, grey a neutral measure. "
           "Trends cover 30 days: rolling seven-day sums for flows, daily closes for levels.", table("t_gm", "gm")) +
     '<div class="col w5">' +
-    panel(12, "Revenue by stream, weekly", "Seven-day blocks ending on the last complete UTC day. Recurring revenue is token trading fees, the reserve’s pool fee income and the "
-          "protocol’s 50% share of launchpad fees. Charter sales are auction proceeds for new charters.", chart("c_wrev", "s"), "h_wrev") +
+    panel(12, "Revenue by stream, weekly", "Seven-day blocks ending on the last complete UTC day, following the range: All shows every complete week since the launch epoch "
+          "(the launch week’s genesis fees are left out), 30D the last four weeks, 7D the last seven days by day. Recurring revenue is token trading fees, the reserve’s pool "
+          "fee income and the protocol’s 50% share of launchpad fees. Charter sales are auction proceeds for new charters.", chart("c_wrev", "s"), "h_wrev", "p_wrev") +
     panel(12, "Price and backing per token, daily", "Token price against reserve assets per outstanding token. The gap between the lines is the premium to backing.",
           chart("c_pxb", "s"), "h_pxb") + '</div>' +
     panel(6, "Reserve assets by component, daily", "Reserve assets at each day’s close, rebuilt from on-chain events and valued at the day’s closing prices. "
@@ -79,8 +80,9 @@ SECTIONS = {
     panel(5, "King of the Markets standings", "Season 1 points by team from the launchpad’s markets API. Launchpad-token trades score five points a dollar; stock trades through "
           "reserve markets scored one point a dollar until 21 Oct 13:55 UTC. The reward pool opens with $1.1M from the Standard Reserve, as the protocol’s site states; "
           "the fee Safe holds none of it. 65% is shared by points and 35% goes to the leading team.", table("t_kotm") + '<div class="kv2" id="kotm_pool"></div>', "h_kotm") +
-    panel(7, "Reserve pool fees from launchpad trades, daily", "Launchpad trades paid in USDG or ETH cross the reserve’s stock pools on the way in and out. Estimated from the "
-          "sampled trades whose swap was executed by a launchpad router; the rest is all other trading.", chart("c_lroute"), "h_lroute") +
+    panel(7, "Reserve pool fees from launchpad trades, daily", "Launchpad trades paid in USDG or ETH cross the reserve’s stock pools on the way in and out. Every swap in "
+          "the reserve’s pools executed by one of the launchpad’s two routers is counted exactly. Launchpad trades sent through Uniswap’s router or an aggregator are not "
+          "identifiable from the pool swap and fall under all other trades, so the launchpad figure is a floor.", chart("c_lroute"), "h_lroute") +
     panel(5, "Launchpad fee Safe holdings", "Balances received by the fee Safe from launchpad trades, valued at current prices. Nothing has left the Safe since the launchpad opened.",
           table("t_fsafe"), "h_fsafe") + '</div>',
 
@@ -108,7 +110,7 @@ SECTIONS = {
     panel(12, "STANDARD burned by source, daily", "Expansion licenses paid from ledger balances, the burned half of resolution and revocation fees, and buybacks and other token "
           "burns. The line is the cumulative total as a share of the 1 billion hard cap.", chart("c_burn"), "h_burn") + '</div>',
 
-"banking": kpis("banking") + '<div class="grid">' +
+"banks": kpis("banks") + '<div class="grid">' +
     panel(6, "Bank deposits, withdrawals and ledger balance, daily", "Deposits against gross withdrawals, with bankers’ ledger balance, which is minted only on withdrawal.",
           chart("c_bank"), "h_bank") +
     panel(6, "Branches and active charters, daily", "A charter opens with one branch and licenses add up to nine more. Withdrawals and revocations destroy branches.",
@@ -134,12 +136,12 @@ SECTIONS = {
 
 SUB = {"revenue": "Income from the token economy, the reserve’s pools and the launchpad.", "liquidity": "The reserve as market maker for stock tokens and ETH.",
        "launchpad": "Fees from tokens launched against reserve markets, and King of the Markets.", "reserve": "The assets behind STANDARD, rebuilt daily from on-chain events.",
-       "token": "Price, supply, burns and who is selling.", "banking": "Branches, charters, auctions, issuance and S-Bills.", "data": "Every daily observation since genesis."}
+       "token": "Price, supply, burns and who is selling.", "banks": "Bank charters and branches, issuance, the Auction House and S-Bills.", "data": "Every daily observation since genesis."}
 def hero(k, n):
     if k == "overview": return '<div class="hero big"><div class="hero-in" id="ov_hero"></div></div>'
     return f'<div class="hero mini"><div class="hero-in"><h1>{n}</h1><p>{SUB[k]}</p></div></div>'
 BODY = "".join(f'<section class="tab" id="t-{k}">{hero(k, n)}{SECTIONS[k]}</section>' for k, n in TABS)
-NAV = "".join(f'<button data-t="{k}"><i></i>{n}</button>' for k, n in TABS)
+NAV = "".join(f'<button data-t="{k}">{n}</button>' for k, n in TABS)
 
 TEMPLATE = r"""<!doctype html>
 <html lang="en"><head>
@@ -334,7 +336,7 @@ table.gm td.c{min-width:80px}
 <div class="shell">
   <aside class="side">
     <div class="brand"><i></i><div><b>STANDARD RESERVE</b><span>MONITOR</span></div></div>
-    <nav class="nav" id="tabs"><div class="nlabel">Monitor</div>__NAV__<div class="nlabel gap">Information</div>
+    <nav class="nav" id="tabs">__NAV__<div class="nlabel gap">Information</div>
       <a href="https://www.standardreserve.xyz/" target="_blank" rel="noopener">Standard Reserve</a>
       <a href="https://github.com/standardrsvmonitor/standardrsvmonitor.github.io" target="_blank" rel="noopener">Source and methods</a></nav>
     <div class="side-foot">Independent on-chain monitor.<br>Compiled __ASOF__ UTC.</div>
@@ -513,7 +515,7 @@ function renderKpis(){ derive();
       {l:'Burned forever', v:fmt.n(capRemoved,2), c:{t:fmt.pct(capRemoved/1e9,1)+' of the 1B cap', c:'nt'}, sp:(()=>{let c=0; return last(Sp.map(r=>c+=burnAll(r)),30);})(), col:C.orange,
         tip:'The protocol’s own figure: the 1 billion hard cap less the current maximum supply. Token burns plus ledger removals that are never minted.'},
     ],
-    banking:[
+    banks:[
       {l:'Branches', v:fmt.int(L.branches), c:chg(L.branches, W0&&W0.branches, {pol:1}), s:'7d', sp:lvl(r=>r.branches), col:C.violet},
       {l:'Active charters', v:fmt.int(L.activeCharters), c:chg(L.activeCharters, W0&&W0.activeCharters, {pol:1}), s:'7d', sp:lvl(r=>r.activeCharters), col:C.violet},
       {l:'Issuance multiplier', v:fmt.x(L.multiplier), c:{t:`${fmt.n(L.baseIssuance*L.multiplier,0)} a day`, c:'nt'}, s:`${perBranch.toFixed(1)} per branch`, sp:lvl(r=>r.multiplier), col:C.gold},
@@ -704,11 +706,14 @@ function redrawAll(){ Object.keys(REG).forEach(t=>{DIRTY[t]=true;}); drawTab(TAB
 const usd0 = v=>fmt.usd(v,0), usd1 = v=>fmt.usd(v,1), pct0 = v=>fmt.pct(v,0), n0 = v=>fmt.n(v,0);
 
 // overview
-reg('overview', ()=>{ const B=[]; for(let e=Sp.length; e-7>=0 && B.length<8; e-=7) { const b=Sp.slice(e-7,e); if (b[0].date<ep2) break; B.unshift(b); }
-  const lab = B.map(b=>dm(b[6].date)), S_ = f=>B.map(b=>sum(b.map(f)));
+reg('overview', ()=>{ const B=[], daily = N===7, maxW = N===0 ? 99 : Math.floor(N/7);
+  if (daily) last(Sp,7).forEach(r=>B.push([r]));
+  else for(let e=Sp.length; e-7>=0 && B.length<maxW; e-=7) { const b=Sp.slice(e-7,e); if (b[0].date<ep2) break; B.unshift(b); }
+  document.querySelector('#p_wrev .pt').textContent = daily ? 'Revenue by stream, last seven days' : 'Revenue by stream, weekly';
+  const lab = B.map(b=>dm(b[b.length-1].date)), S_ = f=>B.map(b=>sum(b.map(f)));
   const c = mk(c_wrev, lab, [bar('Token trading fees', S_(tr), STREAM.tr), bar('Pool fees', S_(r=>r.spFee||0), STREAM.pool), bar('Launchpad, protocol share', S_(lpp), STREAM.lpad), bar('Charter sales', S_(chs), STREAM.ch)],
-    {stacked:true, y:usd0, tf:usd1, title:i=>`7 days to ${lab[i[0].dataIndex]}`, footer:i=>{const b=B[i[0].dataIndex]; return `recurring ${fmt.usd(sum(b.map(rec)))} · with charter sales ${fmt.usd(sum(b.map(inc)))}`;}});
-  const lb = B[B.length-1], pb = B[B.length-2]; document.getElementById('h_wrev').innerHTML = lb ? `<em>${fmt.usd(sum(lb.map(inc)))}</em> last 7d${pb?` · ${chg(sum(lb.map(inc)), sum(pb.map(inc)),{pol:1}).t}`:''}` : '';
+    {stacked:true, y:usd0, tf:usd1, title:i=>daily ? lab[i[0].dataIndex] : `7 days to ${lab[i[0].dataIndex]}`, footer:i=>{const b=B[i[0].dataIndex]; return `recurring ${fmt.usd(sum(b.map(rec)))} · with charter sales ${fmt.usd(sum(b.map(inc)))}`;}});
+  const i7 = sum(s7.map(inc)), p7 = P7.length ? sum(P7.map(inc)) : null; document.getElementById('h_wrev').innerHTML = `<em>${fmt.usd(i7)}</em> last 7d${p7!=null?` · ${chg(i7, p7, {pol:1}).t}`:''}`;
   return c; });
 reg('overview', ({Rl, ll, dl})=>{ document.getElementById('h_pxb').innerHTML = `<em>${fmt.x(pbNow)}</em> price to backing`;
   return mk(c_pxb, ll, [line('Price', Rl.map(r=>r.price), C.gold, {fill:true}), line('Backing per outstanding token', Rl.map(bkOf), C.blue)], {y:v=>'$'+v.toFixed(3), tf:fmt.px,
@@ -765,11 +770,11 @@ reg('launchpad', ({Rf})=>{ const Rq = Rf.filter(r=>r.date>=LP0);
   document.getElementById('h_lfee').innerHTML = `<em>${fmt.usd(sum(Sh.map(r=>(r.lpadSafe||0)+(r.lpadEsc||0))))}</em> since 14 Oct · protocol ${fmt.usd(sum(Sh.map(lpp)))}`;
   return mk(c_lfee, Rq.map(r=>dm(r.date)), [bar('Protocol, 50%', Rq.map(lpp), C.sapphire), bar('Reward pool, 20%', Rq.map(lpot), C.gold), bar('Creators, 30% and module fees', Rq.map(lcr), C.silver)],
     {stacked:true, y:usd0, tf:usd1, footer:i=>{const r=Rq[i[0].dataIndex]; return `implied launchpad volume ${fmt.usd(lvol(r),2)}`;}}); });
-reg('launchpad', ({Rf})=>{ const Rc = Rf.filter(r=>r.date>=LP0 && pools.some(p=>r['cpN_'+p]!=null)), lf_ = r=>sum(pools.map(p=>r['feeLpad_'+p]||0)), all_ = r=>r.spFee||0;
-  const c7 = s7.filter(r=>pools.some(p=>r['cpN_'+p]!=null)), a = sum(c7.map(lf_)), b = sum(c7.map(all_));
-  document.getElementById('h_lroute').innerHTML = b ? `<em>${fmt.pct(a/b,0)}</em> of pool fees · 7d` : '';
+reg('launchpad', ({Rf})=>{ const Rc = Rf.filter(r=>r.date>=LP0), lf_ = r=>r.spFeeLpad||0, all_ = r=>r.spFee||0;
+  const a = sum(s7.map(lf_)), b = sum(s7.map(all_));
+  document.getElementById('h_lroute').innerHTML = b ? `<em>${fmt.usd(a)}</em>, ${fmt.pct(a/b,1)} of pool fees · 7d` : '';
   return mk(c_lroute, Rc.map(r=>dm(r.date)), [bar('Launchpad-routed trades', Rc.map(lf_), C.sapphire), bar('All other trades', Rc.map(r=>Math.max(0, all_(r)-lf_(r))), alpha(C.sand,.45))],
-    {stacked:true, y:usd0, tf:usd1, footer:i=>{const r=Rc[i[0].dataIndex]; return all_(r)?`launchpad-routed share ${fmt.pct(lf_(r)/all_(r),0)}`:'';}}); });
+    {stacked:true, y:usd0, tf:usd1, footer:i=>{const r=Rc[i[0].dataIndex]; return all_(r)?`launchpad-routed share ${fmt.pct(lf_(r)/all_(r),1)} · ${fmt.usd(r.spVolLpad||0)} of volume`:'';}}); });
 
 // reserve
 reg('reserve', (x)=>{ document.getElementById('h_res').innerHTML = `<em>${fmt.usd(L.reserve.totalUsd)}</em>`; return resStack(c_res, x, true); });
@@ -805,25 +810,25 @@ reg('token', ({Rf, lf, df})=>{ document.getElementById('h_burn').innerHTML = `<e
     bar('Buybacks and other token burns', Rf.map(burnTokens), C.red), line('Cumulative, share of the 1B cap', cw.map(v=>v/1e9), C.fg2, {ax:'y1'})],
     {stacked:true, y:n0, tf:v=>fmt.n(v,2), y1:v=>fmt.pct(v,1), after:i=>[`cumulative ${fmt.n(cw[i[0].dataIndex],2)} STANDARD`]}); });
 
-// banking
-reg('banking', ({Rf, lf, df})=>{ document.getElementById('h_bank').innerHTML = `ledger <em>${fmt.n(L.pending,2)}</em> · resolution fee ${fmt.pct(L.exitFeeNow,1)}`;
+// banks
+reg('banks', ({Rf, lf, df})=>{ document.getElementById('h_bank').innerHTML = `ledger <em>${fmt.n(L.pending,2)}</em> · resolution fee ${fmt.pct(L.exitFeeNow,1)}`;
   return mk(c_bank, lf, [bar('Deposits', Rf.map(r=>r.deposits||0), C.green), bar('Withdrawals, gross', Rf.map(r=>-(r.wdGross||0)), C.orange), line('Ledger balance', Rf.map(r=>r.pending), C.gold, {ax:'y1'})],
     {stacked:true, zero:false, y:n0, y1:v=>fmt.n(v,1), tf:v=>fmt.n(v,2)}); });
-reg('banking', ({Rl, ll, dl})=>{ document.getElementById('h_policy').innerHTML = `<em>${fmt.int(L.branches)}</em> branches · ${fmt.int(L.activeCharters)} charters`;
+reg('banks', ({Rl, ll, dl})=>{ document.getElementById('h_policy').innerHTML = `<em>${fmt.int(L.branches)}</em> branches · ${fmt.int(L.activeCharters)} charters`;
   return mk(c_policy, ll, [line('Branches', Rl.map(r=>r.branches), C.violet, {fill:true}), line('Active charters', Rl.map(r=>r.activeCharters), C.teal)], {y:n0, tf:fmt.int}); });
 const CH = DATA.charters, LP = DATA.licensePeriods;
-reg('banking', ()=>{ const open = (L.charterRemaining||0)>0;
+reg('banks', ()=>{ const open = (L.charterRemaining||0)>0;
   document.getElementById('h_charter').innerHTML = `last <em>${L.charterLastSale.toFixed(2)} ETH</em> · ${open?'quote '+L.charterPriceNow.toFixed(2)+' ETH':'next '+fmt.hm(L.charterNextOpen)+' UTC at '+L.charterNextStart.toFixed(2)+' ETH'}`;
   return mk(c_charter, CH.map(c=>dm(fmt.dt(c.ts))), [line('Clearing price', CH.map(c=>c.eth), C.violet, {fill:true, pts:CH.map(c=>c.viaContract?3.5:1.8), ps:CH.map(c=>c.viaContract?'triangle':'circle')}),
     ...(open?[{type:'line', label:'Current quote', data:CH.map((c,i)=>i===CH.length-1?L.charterPriceNow:null), borderColor:C.gold, backgroundColor:C.gold, pointRadius:4, pointStyle:'rectRot', showLine:false}]:[])],
     {y:v=>v+' ETH', tf:v=>v.toFixed(2)+' ETH', title:i=>{const c=CH[i[0].dataIndex]; return 'charter #'+c.id+' · '+fmt.dt(c.ts)+(c.viaContract?' · via contract':'');}}); });
-reg('banking', ()=>{ const open = (L.licenseRemaining||0)>0;
+reg('banks', ()=>{ const open = (L.licenseRemaining||0)>0;
   document.getElementById('h_license').innerHTML = `last <em>${fmt.int(L.licenseLastSale)}</em> · ${open?'quote '+fmt.int(L.licensePriceNow)+', '+L.licenseRemaining+' left':'next '+fmt.hm(L.licenseNextOpen)+' UTC at '+fmt.int(L.licenseNextStart)}`;
   return mk(c_license, LP.map(p=>dm(fmt.dt(p.start))+(new Date(p.start*1000).getUTCHours()<12?' am':' pm')), [bar('Licenses sold', LP.map(p=>p.sold), alpha(C.violet,.45), {ax:'y1'}), line('Period close price, STANDARD', LP.map(p=>p.close), C.gold)],
     {y:v=>fmt.n(v,1), y1:n0, tf:v=>fmt.int(v), after:i=>{const p=LP[i[0].dataIndex]; return [`burned ${fmt.n(p.burned,1)} STANDARD`];}}); });
-reg('banking', ({Rl, ll, dl})=>{ document.getElementById('h_sb').innerHTML = `<em>${fmt.n(L.sbills.locked,2)}</em> · ${(L.sbills.rate*100).toFixed(2)}% per term`;
+reg('banks', ({Rl, ll, dl})=>{ document.getElementById('h_sb').innerHTML = `<em>${fmt.n(L.sbills.locked,2)}</em> · ${(L.sbills.rate*100).toFixed(2)}% per term`;
   return mk(c_sb, ll, [line('S-Bill principal', Rl.map(r=>r.sbLocked??r.sbills??null), C.teal, {fill:true, gaps:true}), line('Term rate', Rl.map(r=>r.sbRate??null), C.gold, {ax:'y1', gaps:true})], {y:n0, tf:v=>fmt.n(v,2), y1:v=>fmt.pct(v,1), ymin:0}); });
-reg('banking', ({Rl, ll, dl})=>{ document.getElementById('h_mult').innerHTML = `<em>${fmt.x(L.multiplier)}</em> · resolution fee ${fmt.pct(L.exitFeeNow,1)}`;
+reg('banks', ({Rl, ll, dl})=>{ document.getElementById('h_mult').innerHTML = `<em>${fmt.x(L.multiplier)}</em> · resolution fee ${fmt.pct(L.exitFeeNow,1)}`;
   return mk(c_mult, ll, [line('Issuance multiplier', Rl.map(r=>r.multiplier??null), C.gold, {x:{stepped:true}}), line('Resolution fee', Rl.map(r=>r.exitFee??null), C.orange, {ax:'y1'})],
     {y:v=>v.toFixed(2)+'×', tf:v=>v.toFixed(2), y1:v=>fmt.pct(v,0), ymin:0, ymax:1.3}); });
 

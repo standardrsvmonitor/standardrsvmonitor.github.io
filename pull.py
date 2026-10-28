@@ -389,12 +389,14 @@ def main():
         if f == "team": days[d]["teamOut"] += a
         if f == "polBuyback" or t == "polBuyback": days[d]["polBuybackFlow"] += a if t == "polBuyback" else -a
     tier = {p_["stock"]: p_["fee"] for p_ in pools.values()}
+    LPAD_SND = {r_[:10] for r_ in extra.LPAD["routers"]}   # the swap cache keeps the executor's first ten characters
     for r in sw["rows"]:
         b, s, usdg, fee, snd = r[:5]; share = r[5] if len(r) > 5 else 1.0; d = day(T(b))
         if tier.get(s, 1 << 23) < 1 << 23: fee = min(fee, tier[s])   # a fixed-tier pool's swap fee includes Uniswap's protocol fee (ETH/USDG: 125 of 625 pips); providers earn the tier
         days[d]["spVol"] += usdg; days[d]["spFee"] += usdg * fee / 1e6 * share; days[d]["spFeeGross"] += usdg * fee / 1e6; days[d]["spSwaps"] += 1
         days[d]["spVol_" + s] += usdg; days[d]["spFee_" + s] += usdg * fee / 1e6 * share; days[d]["spFeeGross_" + s] += usdg * fee / 1e6
         days[d]["spVolMine"] += usdg * share; days[d]["spVolMine_" + s] += usdg * share   # volume served by the reserve's own in-range liquidity
+        if snd in LPAD_SND: days[d]["spFeeLpad"] += usdg * fee / 1e6 * share; days[d]["spVolLpad"] += usdg * share   # swaps executed by the launchpad's routers, exact
         if fee == 0: days[d]["spVolZeroFee"] += usdg
     # issuance accrued per day (ledger), by epoch multiplier
     d0 = dt.datetime.utcfromtimestamp(genesis_ts).date(); dn = dt.datetime.utcfromtimestamp(now).date()

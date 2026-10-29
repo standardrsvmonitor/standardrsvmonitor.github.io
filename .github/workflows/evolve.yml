@@ -14,6 +14,11 @@ on:
       task:
         description: "Optional task for this run (otherwise the agent picks from the gate, the watcher and ROADMAP.md)"
         required: false
+      model:
+        description: "Model: auto picks Opus for hard runs and Sonnet for routine ones"
+        type: choice
+        options: [auto, sonnet, opus]
+        default: auto
 
 permissions:
   contents: write
@@ -67,6 +72,34 @@ jobs:
           printf '#!/bin/sh\nwhile read l lsha r rsha; do case "$r" in refs/heads/main) echo "push to main refused" >&2; exit 1;; esac; done\n' > .git/hooks/pre-push
           chmod +x .git/hooks/pre-push
           git config user.name "sr-monitor-agent"; git config user.email "actions@users.noreply.github.com"
+      - name: Pick the model (Opus for hard runs, Sonnet for routine ones)
+        id: pick
+        if: steps.auth.outputs.ok == '1'
+        env:
+          FORCE: ${{ github.event.inputs.model }}
+        run: |
+          python3 -I - >> "$GITHUB_OUTPUT" <<'PY'
+          import json, os
+          def load(p, d):
+              try: return json.load(open(p))
+              except Exception: return d
+          force = os.environ.get("FORCE") or "auto"
+          why = []
+          if load("qa/out/open_gate_issues.json", []): why.append("the deploy gate is failing")
+          rep = load("qa/out/last-refresh/report.json", {})
+          if any(r.get("section") == "reconcile" and not r.get("ok") for r in rep.get("results", [])): why.append("a reconciliation is outside tolerance")
+          if load("qa/out/sr_watch.json", {}).get("changed"): why.append("the protocol's site names new contracts")
+          sec = item = None
+          for line in open("ROADMAP.md"):
+              if line.startswith("## "): sec = line[3:].strip()
+              if line.lstrip().startswith("- [ ]"): item = line; break
+          if sec == "Correctness": why.append("the next roadmap item is a correctness fix")
+          if item and "needs Opus" in item: why.append("the next roadmap item is marked needs Opus")
+          model = force if force in ("opus", "sonnet") else ("opus" if why else "sonnet")
+          print("model=" + model)
+          print("why=" + ("chosen by hand" if force in ("opus", "sonnet") else "; ".join(why) or "routine depth work"))
+          PY
+          cat "$GITHUB_OUTPUT" | tail -2
       - uses: anthropics/claude-code-action@v1
         id: claude
         if: steps.auth.outputs.ok == '1'
@@ -74,7 +107,7 @@ jobs:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
           github_token: ${{ github.token }}
           claude_args: >-
-            --model opus --max-turns 250
+            --model ${{ steps.pick.outputs.model }} --max-turns 250
             --allowedTools "Bash,Read,Edit,Write,Glob,Grep,WebFetch"
             --disallowedTools "Bash(git push origin main*),Bash(git push -f*),Bash(git push --force*),Bash(gh pr merge*),Bash(gh repo edit*),Bash(gh secret*),Bash(gh api -X*),Bash(gh workflow*)"
           prompt: |
@@ -83,6 +116,10 @@ jobs:
             open_gate_issues.json, open_prs.json and sr_watch.json (protocol changes found on standardreserve.xyz).
 
             Task given for this run, if any: ${{ github.event.inputs.task }}
+
+            This run uses ${{ steps.pick.outputs.model }} (${{ steps.pick.outputs.why }}). On Sonnet, take routine depth work. If the task turns
+            out to need a deep investigation (a reconciliation gap, an unexplained number, a protocol change), do not guess: write up what you
+            found in a pull request that only edits ROADMAP.md, and add "needs Opus" to that item so the next run takes it on Opus.
 
             Choose one task in the order CLAUDE.md sets, do it on a new branch auto/<yyyy-mm-dd>-<slug>, run the full pipeline
             (python -I pull.py; python -I build.py; python -I qa/render.py index.html qa/out/render.json --api site/api;
@@ -98,3 +135,21 @@ jobs:
           F: ${{ steps.claude.outputs.execution_file }}
         run: |
           if [ -f "$F" ]; then python3 -I -c "import json,sys; d=json.load(open(sys.argv[1])); [print(m.get('type'), m.get('subtype'), m.get('error') or '', str(m.get('result') or '')[:600]) for m in d if m.get('type') == 'result' or m.get('error')]" "$F"; else echo "no execution file"; fi
+      - name: Record the run's model and usage on its summary page
+        if: always() && steps.claude.outcome != 'skipped' && steps.claude.outcome != ''
+        env:
+          F: ${{ steps.claude.outputs.execution_file }}
+          M: ${{ steps.pick.outputs.model }}
+          W: ${{ steps.pick.outputs.why }}
+        run: |
+          python3 -I - "$F" >> "$GITHUB_STEP_SUMMARY" <<'PY'
+          import json, os, sys
+          m, w = os.environ.get("M"), os.environ.get("W")
+          try: r = next(x for x in json.load(open(sys.argv[1])) if x.get("type") == "result")
+          except Exception: r = {}
+          u = {}
+          for v in (r.get("modelUsage") or {}).values():
+              for k in ("inputTokens", "outputTokens", "cacheReadInputTokens", "cacheCreationInputTokens"): u[k] = u.get(k, 0) + (v.get(k) or 0)
+          print(f"\n**Model** {m} ({w}) · **turns** {r.get('num_turns')} · **tokens** input {u.get('inputTokens', 0):,}, cache read {u.get('cacheReadInputTokens', 0):,}, "
+                f"cache write {u.get('cacheCreationInputTokens', 0):,}, output {u.get('outputTokens', 0):,} · API-equivalent ${r.get('total_cost_usd') or 0:,.2f}")
+          PY

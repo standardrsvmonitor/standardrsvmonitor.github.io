@@ -64,3 +64,7 @@ Out of scope, by the owner's decision: Token Terminal-style financial statements
 6. Stop and write up the problem in the pull request or the issue when the same failure comes back twice, when a fix would need a design
    change, or when the task turns out to need a decision from the owner.
 7. Record what a run learned that the next run needs in `ROADMAP.md` (findings), not in chat.
+
+The workflow picks the model before the run: Opus when the gate is failing, a reconciliation is outside tolerance, the protocol's site names
+new contracts, the next roadmap item is under Correctness, or it is marked "needs Opus"; Sonnet otherwise. A Sonnet run that meets a task
+needing deep investigation writes up what it found and marks the item "needs Opus" instead of guessing.

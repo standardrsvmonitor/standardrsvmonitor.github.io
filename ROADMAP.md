@@ -13,10 +13,12 @@ Owners may reorder, add or strike items at any time.
   SKHY −3.6%, BABA +5.3%, ETH/USDG +4.1% against the fees read from the reserve's positions (reconciliation `poolfees_*`, watch, 5%).
   The stock pools are sole-LP, so the gap should be near zero. Find the cause (fee tier, input-side fee, protocol fee, in-range share,
   a position modification that collected fees) and fix the daily figure. Done: every pool within 1%, gate item at 2%.
-- [ ] **Ledger balance against the indexer.** The rebuilt ledger ran 8.4K STANDARD (0.08%) above `totalPendingLive` on 28 Oct 08:10 UTC
-  and 15.8K (0.16%) on 29 Oct 05:20 UTC, so the gap is growing. Suspects: the contract's recycle (`recycleRate`, `recycleBuffer`,
-  `cumulativeRecycled` in the indexer's bank snapshot), how a revocation settles the revoked charter's ledger (two multi-branch charters
-  were revoked on 28 and 29 Oct), snapshot timing. Close it or document it in the ⓘ note. Done: within 0.02%, gate tolerance tightened.
+- [ ] **Ledger balance against the indexer: the recycle buffer.** Cause found 29 Oct: the stayers' cut (half of every exit and revocation
+  fee) is not credited to banks at once; the bank parks it in a recycle buffer and releases it gradually (indexer bank fields `recycleBuffer`,
+  `cumulativeRecycled`, `recycleRate`). The rebuild credits it immediately, so it runs ahead by what sits in the buffer: on 29 Oct the buffer
+  held 15,153 STANDARD against a 15,716 gap, and recycled plus buffer (349,236) matches the stayers' cut credited (349,531). Model the buffer:
+  read the release rule from the bank contract, credit the stayers' cut as it is released, and show it in the bank flows chart as released.
+  Done: ledger within 0.02% of `totalPendingLive`, gate tolerance tightened to 0.05%.
 - [ ] **Launchpad fees at trade time.** Fee Safe receipts are valued at daily closes and sit about 1% below the markets API's trade-time
   total. Value each receipt at the pool price of its own block. Done: within 0.3% of the API.
 - [ ] **Counterparty sampling error.** 150 receipts per pool and day leave about eight points of error on a daily organic share. Read

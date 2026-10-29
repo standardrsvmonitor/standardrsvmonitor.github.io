@@ -56,7 +56,7 @@ Out of scope, by the owner's decision: Token Terminal-style financial statements
 - **Fees** are what users pay. **Revenue** is what the protocol keeps: **STANDARD trading fees** (the buy and sell tax, always named with STANDARD so they are not confused with LP or launchpad fees), **LP fees** earned by
   the reserve's pool positions, **launchpad revenue** (the protocol's 50% of the 1% base fee) and **charter sales**. **Launchpad fees** are the full
   base fee, all recipients. **Price to revenue** is market cap over annualized seven-day revenue.
-- Routed fees: **where fees land**, **fee routing**, **fee engine**. Never "income", "recurring revenue", "outstanding supply" or "minted supply".
+- Routed fees: **fee routing**, **fee engine**; the panel showing where revenue went is **Revenue by destination** (the protocol's own phrase, "where fees land", goes in its note). Never "income", "recurring revenue", "outstanding supply" or "minted supply".
 
 ## House style (the gate enforces what it can)
 

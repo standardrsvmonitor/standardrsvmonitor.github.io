@@ -42,7 +42,7 @@ SECTIONS = {
     panel(7, "Revenue by stream, daily", "STANDARD trading fees, the buy and sell tax, are known per three-day epoch and spread evenly over its days; the live epoch is estimated from ETH held in the tax hook "
           "and fee splitter. LP fees replay every swap in the reserve’s pools tick by tick and value each swap’s fee at the pool price of that swap. The launchpad line is the protocol’s 50% of the 1% base fee, "
           "held in the launchpad fee Safe. Charter sales are recorded on the sale date.", chart("c_rev", "l"), "h_rev") +
-    panel(5, "Where fees land, trailing seven days", "Where the last seven complete days of revenue went. STANDARD trading fees and charter sales are routed by the fee engine at settlement: 70% to the "
+    panel(5, "Revenue by destination, trailing seven days", "Where the last seven complete days of revenue went: the protocol’s own phrase is where fees land. STANDARD trading fees and charter sales are routed by the fee engine at settlement: 70% to the "
           "reserve in expansion or to buybacks in contraction, 15% to POL buybacks and 15% to the team. LP fees accrue inside the reserve’s positions. The launchpad’s "
           "protocol share sits in the fee Safe and has not been routed.", '<div class="alloc" id="alloc"></div>', "h_alloc") +
     panel(7, "Fee routing by epoch", "STANDARD trading fees and charter proceeds routed by the fee engine at each settlement, in ETH, for the epochs settled inside the selected range. "

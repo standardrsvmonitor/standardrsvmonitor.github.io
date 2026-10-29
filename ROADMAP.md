@@ -5,6 +5,10 @@ Owners may reorder, add or strike items at any time.
 
 ## Correctness
 
+- [ ] **Readability pass, every chart and table.** The owner found two charts that read backwards on 29 Oct (bank deposits looked automatic;
+  net sales plotted upward looked like buying). Go through every panel against the readability rule in `CLAUDE.md`: what a holder would
+  conclude from the chart alone, without the ⓘ note, must be true. Fix signs, labels, colours and headline wording; no restyling. Done: one
+  pull request listing each panel checked, what a reader would have concluded before, and what changed.
 - [x] **Pool fee income against the positions' uncollected fees.** On 29 Oct the swap-based totals since seeding ran SPCX +2.1%,
   SKHY −3.6%, BABA +5.3%, ETH/USDG +4.1% against the fees read from the reserve's positions (reconciliation `poolfees_*`, watch, 5%).
   The stock pools are sole-LP, so the gap should be near zero. Find the cause (fee tier, input-side fee, protocol fee, in-range share,

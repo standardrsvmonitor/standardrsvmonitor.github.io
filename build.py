@@ -103,7 +103,8 @@ SECTIONS = {
     panel(7, "Price and market capitalization, daily", "GeckoTerminal daily close for the STANDARD/ETH pool. Market cap is price times circulating supply, every STANDARD minted, as the protocol’s "
           "site and DexScreener show it. In wallets leaves out the protocol’s own liquidity and the Incentives vault. Shaded days are contraction epochs.", chart("c_price", "l"), "h_price") +
     panel(5, "Supply reconciliation", "From the genesis mint to circulating supply, the STANDARD in wallets and free float, at one block.", '<div class="bridge" id="bridge"></div>') +
-    panel(7, "Net sales into the pool by holder group, daily", "STANDARD sold into the protocol’s STANDARD/ETH pool less STANDARD bought from it. Groups apply in order: team "
+    panel(7, "Net buying of STANDARD by holder group, daily", "STANDARD bought from the protocol’s STANDARD/ETH pool less STANDARD sold into it, by the group of the "
+          "wallet behind each trade. Above zero a group bought more than it sold; below zero it sold more. Groups apply in order: team "
           "wallet, bankers, S-Bill holders, wallets with 300 or more pool trades, launch-week buyers, others. A wallet’s group is its standing at the compile, so a "
           "wallet that later becomes a banker moves into Bankers for its whole history; each day’s total does not change.", chart("c_sell"), "h_sell") +
     panel(5, "Largest net sellers, trailing seven days", "Net STANDARD sold into the pool by wallet over the last seven complete days; trades through routers are assigned to the "
@@ -119,7 +120,10 @@ SECTIONS = {
           "burns. The line is the cumulative total as a share of the 1 billion hard cap.", chart("c_burn"), "h_burn") + '</div>',
 
 "banks": kpis("banks") + '<div class="grid">' +
-    panel(6, "Bank deposits, withdrawals and STANDARD in banks, daily", "Deposits against gross withdrawals, with the STANDARD in banks, bankers’ ledger balances, minted only on withdrawal.",
+    panel(6, "STANDARD in banks, inflows and outflows, daily", "Every movement of the STANDARD held in banks; each day’s bars sum to the change in the line. In: "
+          "issuance, which every branch earns automatically, STANDARD bankers deposit from their wallets, and the stayers’ cut, half of every exit and "
+          "revocation fee, paid to the bankers who stay. Out: STANDARD spent on expansion licenses, which is burned, STANDARD withdrawn by closing "
+          "branches (before the exit fee), and the balances of revoked charters. STANDARD in banks is ledger value, minted only when withdrawn.",
           chart("c_bank"), "h_bank") +
     panel(6, "Branches and active charters, daily", "A charter opens with one branch and licenses add up to nine more. Withdrawals and revocations destroy branches.",
           chart("c_policy"), "h_policy") +
@@ -151,7 +155,7 @@ SECTIONS = {
 
 SUB = {"revenue": "Fees and revenue from the token economy, the reserve’s pools and the launchpad.", "liquidity": "The reserve as market maker for stock tokens and ETH.",
        "launchpad": "Fees from tokens launched against reserve markets, and King of the Markets.", "reserve": "The assets behind STANDARD, rebuilt daily from on-chain events.",
-       "token": "Price, supply, burns and who is selling.", "banks": "Bank charters and branches, issuance, the Auction House and S-Bills.", "data": "Every daily observation since genesis, its reconciliation and the open data files."}
+       "token": "Price, supply, burns, and who is buying and selling.", "banks": "Bank charters and branches, issuance, the Auction House and S-Bills.", "data": "Every daily observation since genesis, its reconciliation and the open data files."}
 def hero(k, n):
     if k == "overview": return '<div class="hero big"><div class="hero-in" id="ov_hero"></div></div>'
     return f'<div class="hero mini"><div class="hero-in"><h1>{n}</h1><p>{SUB[k]}</p></div></div>'
@@ -600,7 +604,7 @@ function renderGM(){
       level('STANDARD price', L.price, r=>r.price, fmt.px, 1),
       level('Market cap', mcTotal, r=>r.mcTotal, fmt.usd, 1),
       level('Market cap, in wallets', mcFloat, r=>r.mcFloat, fmt.usd, 1),
-      flow('Net market sales, STANDARD', r=>r.mktNet||0, v=>fmt.sx(v/1e6,2)+'M', -1, {abs:true, f:v=>fmt.n(v,2)}),
+      flow('Net buying, STANDARD', r=>-(r.mktNet||0), v=>fmt.sx(v/1e6,2)+'M', 1, {abs:true, f:v=>fmt.n(v,2)}),
       flow('STANDARD burned', burnAll, v=>fmt.n(v,2), 1)]],
     ['Balance sheet', [
       level('Reserve assets', L.reserve.totalUsd, r=>r.reserveUsd, fmt.usd, 1),
@@ -609,7 +613,7 @@ function renderGM(){
     ['Banks', [
       level('Branches', L.branches, r=>r.branches, fmt.int, 1),
       level('Active charters', L.activeCharters, r=>r.activeCharters, fmt.int, 1),
-      flow('Deposits less withdrawals, STANDARD', r=>(r.deposits||0)-(r.wdGross||0), v=>fmt.sx(v/1e6,2)+'M', 1, {abs:true, f:v=>fmt.n(v,2)}),
+      flow('Withdrawn from banks, STANDARD', r=>r.wdGross||0, v=>fmt.n(v,2), -1),
       level('In banks, ledger balance', L.pending, r=>r.pending, v=>fmt.n(v,2), 0),
       level('S-Bills locked', L.sbills.locked, r=>r.sbLocked??r.sbills, v=>fmt.n(v,2), 1),
       level('Issuance multiplier', L.multiplier, r=>r.multiplier, v=>fmt.x(v), 1, {abs:true, f:v=>v.toFixed(2)})]],
@@ -688,7 +692,7 @@ function renderStatic(){
 function renderBridge(){
   const mintAll = sum(S.map(r=>r.mint||0)), bbAll = sum(S.map(r=>r.burnBuyback||0)), depAll = sum(S.map(r=>r.depositBurn||0)), othAll = sum(S.map(r=>r.burnOther||0));
   const sbLock = L.sbills.locked||0, sbPot = Math.max(0, L.sbillsStd - sbLock), resid = L.totalSupply-(100e6+mintAll-bbAll-othAll-depAll);
-  const br = [['Genesis liquidity mint', 100e6], ['+ Withdrawals minted', mintAll], ['− Buybacks burned', -bbAll], ['− Tax hook burns', -othAll], ['− Deposits to ledger', -depAll],
+  const br = [['Genesis liquidity mint', 100e6], ['+ Withdrawn from banks, minted', mintAll], ['− Buybacks burned', -bbAll], ['− Tax hook burns', -othAll], ['− Deposited into banks', -depAll],
     ...(Math.abs(resid)>=0.5?[['± Unreconciled', resid]]:[]), ['= Circulating supply', L.totalSupply, 'tot'],
     ['− Protocol liquidity', -L.poolStd], ['− Incentives vault', -L.incentivesStd], ['= In wallets', L.float, 'tot'],
     ['− S-Bill principal', -sbLock], ['− S-Bill premium pot', -sbPot], ['− Team wallet', -L.teamStd], ['= Free float', L.float-L.sbillsStd-L.teamStd, 'tot']];
@@ -805,9 +809,10 @@ reg('reserve', ({Rl, ll, dl})=>{ document.getElementById('h_pb').innerHTML = `<e
 reg('token', ({Rl, ll, dl})=>{ document.getElementById('h_price').innerHTML = `<em>${fmt.px(L.price)}</em> · ${fmt.usd(mcTotal)} market cap · ${fmt.usd(mcFloat)} in wallets`;
   return mk(c_price, ll, [line('Price', Rl.map(r=>r.price), C.gold, {fill:true}), line('Market cap', Rl.map(r=>r.mcTotal), C.blue, {ax:'y1'})],
     {y:v=>'$'+v.toFixed(2), tf:fmt.px, y1:usd0, tfy1:usd1, bands:dl, footer:i=>{const r=Rl[i[0].dataIndex]; return r.mcFloat?`market cap, in wallets ${fmt.usd(r.mcFloat)}`:'';}}); });
-reg('token', ({Rf, lf, df})=>{ const ms7 = sum(s7.map(r=>r.mktNet||0)); document.getElementById('h_sell').innerHTML = `<em>${fmt.sgn(ms7)}${fmt.n(ms7,2)}</em> net, 7d`;
-  return mk(c_sell, lf, [...GROUPS.map(([k,n,c])=>bar(n, Rf.map(r=>r['sell_'+k]||0), c)), line('Net market sales', Rf.map(r=>r.mktNet||0), C.fg2, {pts:2})],
-    {stacked:true, zero:false, y:n0, tf:v=>fmt.sgn(v)+fmt.n(v,2), footer:i=>{const r=Rf[i[0].dataIndex]; return r.price?`net ${fmt.usd((r.mktNet||0)*r.price)} at the close; positive is net selling`:'';}}); });
+reg('token', ({Rf, lf, df})=>{ const nb7 = -sum(s7.map(r=>r.mktNet||0));   // net buying: STANDARD bought from the pool less STANDARD sold into it
+  document.getElementById('h_sell').innerHTML = `net ${nb7>=0?'buying':'selling'} <em>${fmt.n(Math.abs(nb7),2)}</em> STANDARD, 7d`;
+  return mk(c_sell, lf, [...GROUPS.map(([k,n,c])=>bar(n, Rf.map(r=>-(r['sell_'+k]||0)), c)), line('Net buying, all groups', Rf.map(r=>-(r.mktNet||0)), C.fg2, {pts:2})],
+    {stacked:true, zero:false, y:n0, tf:v=>fmt.sgn(v)+fmt.n(v,2), footer:i=>{const r=Rf[i[0].dataIndex], v=-(r.mktNet||0); return r.price?`net ${v>=0?'buying':'selling'} ${fmt.usd(Math.abs(v)*r.price)} at the close`:'';}}); });
 reg('token', ({Rl, ll, dl})=>{ document.getElementById('h_mc').innerHTML = `<em>${fmt.n(L.float,2)}</em> in wallets · ${fmt.n(L.pending,2)} in banks`;
   const sets = [line('In wallets', Rl.map(r=>r.float), C.gold), line('Protocol liquidity and Incentives vault', Rl.map(r=>(r.pool||0)+(r.incentives||0)), C.blue), line('In banks', Rl.map(r=>r.pending), C.violet)];
   sets.forEach((s,i)=>{s.fill=i===0?'origin':'-1'; s.backgroundColor=alpha(s.borderColor,.4); s.borderWidth=1; s.stack='sup';});
@@ -816,8 +821,8 @@ reg('token', ({Rf, lf, df})=>{ const ofl = (r)=>{const i=Sh.indexOf(r), p=i>0?Sh
     const dF=r.float-p.float, W=(r.mint||0), Dist=(r.fromIncentives||0), Fees=(r.feesToTeam||0), Mk=-(r.mktNet||0), Dep=-(r.depositBurn||0), Ob=-((r.burn||0)-(r.depositBurn||0)-(r.burn_contraction||0)-(r.burnOther||0));
     return {dF, W, Dist, Fees, Mk, Dep, Ob, Oth:dF-(W+Dist+Fees+Mk+Dep+Ob)};};
   const OF = Rf.map(ofl), of = (k)=>OF.map(o=>o?o[k]:null);
-  return mk(c_flows, lf, [bar('Withdrawals minted', of('W'), C.green), bar('Incentives Vault distributions', of('Dist'), C.teal), bar('Position fees to the team', of('Fees'), C.pink),
-    bar('Net market purchases', of('Mk'), C.blue), bar('Deposits, converted to ledger', of('Dep'), C.grey), bar('S-Bill burns', of('Ob'), C.red),
+  return mk(c_flows, lf, [bar('Withdrawn from banks, minted', of('W'), C.green), bar('Incentives Vault distributions', of('Dist'), C.teal), bar('Position fees to the team', of('Fees'), C.pink),
+    bar('Net buying', of('Mk'), C.blue), bar('Deposited into banks', of('Dep'), C.grey), bar('S-Bill burns', of('Ob'), C.red),
     ...(OF.some(o=>o&&Math.abs(o.Oth)>=0.5)?[bar('Protocol contracts, other', of('Oth'), C.orange)]:[]), line('Change in wallets', of('dF'), C.fg2, {pts:2})],
     {stacked:true, zero:false, y:n0, tf:v=>fmt.sgn(v)+fmt.n(v,2)}); });
 reg('token', ({Rl, ll, dl})=>{ const DP=DATA.depth||{}; document.getElementById('h_depth').innerHTML = `<em>${fmt.usd(DP.bid2)}</em> bid within 2%`;
@@ -831,8 +836,12 @@ reg('token', ({Rf, lf, df})=>{ document.getElementById('h_burn').innerHTML = `<e
 
 // banks
 reg('banks', ({Rf, lf, df})=>{ document.getElementById('h_bank').innerHTML = `in banks <em>${fmt.n(L.pending,2)}</em> · resolution fee ${fmt.pct(L.exitFeeNow,1)}`;
-  return mk(c_bank, lf, [bar('Deposits', Rf.map(r=>r.deposits||0), C.green), bar('Withdrawals, gross', Rf.map(r=>-(r.wdGross||0)), C.orange), line('In banks', Rf.map(r=>r.pending), C.gold, {ax:'y1'})],
-    {stacked:true, zero:false, y:n0, y1:v=>fmt.n(v,1), tf:v=>fmt.n(v,2)}); });
+  return mk(c_bank, lf, [bar('Issued to banks', Rf.map(r=>r.issuance||0), C.gold), bar('Deposited by bankers', Rf.map(r=>r.deposits||0), C.celadon),
+    bar('Stayers’ cut', Rf.map(r=>(r.exitFeeRedis||0)+(r.revokeFeeBurn||0)), C.violet), bar('Spent on licenses, burned', Rf.map(r=>-(r.licBurn||0)), C.grey),
+    bar('Withdrawn by closing branches', Rf.map(r=>-(r.wdGross||0)), C.orange), bar('Revoked charters', Rf.map(r=>-(r.revokeGross||0)), C.red),
+    line('In banks', Rf.map(r=>r.pending), C.fg2, {ax:'y1'})],
+    {stacked:true, zero:false, y:n0, y1:v=>fmt.n(v,1), tf:v=>fmt.sgn(v)+fmt.n(v,2), tfy1:v=>fmt.n(v,2),
+     footer:i=>{const r=Rf[i[0].dataIndex], k=Sh.indexOf(r), p=k>0?Sh[k-1]:null; return p&&p.pending!=null&&r.pending!=null?`change in banks ${fmt.sgn(r.pending-p.pending)}${fmt.n(r.pending-p.pending,2)}`:'';}}); });
 reg('banks', ({Rl, ll, dl})=>{ document.getElementById('h_policy').innerHTML = `<em>${fmt.int(L.branches)}</em> branches · ${fmt.int(L.activeCharters)} charters`;
   return mk(c_policy, ll, [line('Branches', Rl.map(r=>r.branches), C.violet, {fill:true}), line('Active charters', Rl.map(r=>r.activeCharters), C.teal)], {y:n0, tf:fmt.int}); });
 const CH = DATA.charters, LP = DATA.licensePeriods, CHall = CH, LPall = LP;
@@ -886,11 +895,11 @@ const cols = [
   ['Branches', r=>fmt.int(r.branches), r=>r.branches],
   ['Charters', r=>fmt.int(r.activeCharters), r=>r.activeCharters],
   ['Multiplier', r=>r.multiplier!=null?r.multiplier.toFixed(2)+'×':'–', r=>r.multiplier],
-  ['Issued', r=>fmt.n(r.issuance||0,1), r=>r.issuance||0],
+  ['Issued to banks', r=>fmt.n(r.issuance||0,1), r=>r.issuance||0],
   ['Buyback burn', r=>fmt.n(r.burnBuyback||0,1), r=>r.burnBuyback||0],
   ['POL buyback', r=>fmt.n(r.toIncentives||0,1), r=>r.toIncentives||0],
-  ['Deposits', r=>fmt.n(r.deposits||0,1), r=>r.deposits||0],
-  ['Withdrawn', r=>fmt.n(r.wdGross||0,1), r=>r.wdGross||0],
+  ['Deposited by bankers', r=>fmt.n(r.deposits||0,1), r=>r.deposits||0],
+  ['Withdrawn by closing branches', r=>fmt.n(r.wdGross||0,1), r=>r.wdGross||0],
   ['In banks', r=>fmt.n(r.pending,2), r=>r.pending],
   ['Resolution fee', r=>fmt.pct(r.exitFee,1), r=>r.exitFee],
   ['S-Bill rate', r=>r.sbRate!=null?(r.sbRate*100).toFixed(2)+'%':'–', r=>r.sbRate==null?'':r.sbRate],
@@ -900,7 +909,7 @@ const cols = [
   ['Served by reserve', r=>fmt.usd(served(r),1), r=>served(r)],
   ['Reserve', r=>r.reserveUsd!=null?fmt.usd(r.reserveUsd):'–', r=>r.reserveUsd??''],
   ['Price to backing', r=>pbOf(r)!=null?pbOf(r).toFixed(2)+'×':'–', r=>pbOf(r)??''],
-  ['Net market sales', r=>r.mktNet!=null?fmt.sgn(r.mktNet)+fmt.n(r.mktNet,1):'–', r=>r.mktNet??''],
+  ['Net buying', r=>r.mktNet!=null?fmt.sgn(-r.mktNet)+fmt.n(-r.mktNet,1):'–', r=>r.mktNet!=null?-r.mktNet:''],
   ['Depth ±2%, bid', r=>r.bid2!=null?fmt.usd(r.bid2,1):'–', r=>r.bid2??''],
   ['Regime', r=>regime[r.date]===undefined?'–':regime[r.date]?'expansion':'contraction', r=>regime[r.date]===undefined?'':regime[r.date]?'expansion':'contraction'],
 ];
@@ -984,7 +993,9 @@ const API_FIELDS = [
   ['resolutionFee', 'Exit fee on withdrawals at the day’s close', r=>r.exitFee],
   ['sbillsLocked', 'STANDARD locked in S-Bills at the day’s close', r=>r.sbLocked??r.sbills],
   ['sbillRate', 'S-Bill term rate at the day’s close', r=>r.sbRate],
-  ['netMarketSales', 'STANDARD sold into the protocol pool less STANDARD bought from it; positive is net selling', r=>r.mktNet],
+  ['netBuying', 'STANDARD bought from the protocol pool less STANDARD sold into it; negative is net selling', r=>r.mktNet!=null?-r.mktNet:null],
+  ['depositedByBankers', 'STANDARD bankers deposited into their banks from their wallets', r=>r.deposits||0],
+  ['withdrawnByClosingBranches', 'STANDARD withdrawn from banks by closing branches, before the exit fee', r=>r.wdGross||0],
   ['bidDepth2pctUsd', 'ETH, in USD, that sellers receive taking the price down 2% at the close', r=>r.bid2],
   ['regime', 'Epoch regime: expansion or contraction', r=>regime[r.date]===undefined?null:regime[r.date]?'expansion':'contraction'],
 ];

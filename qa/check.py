@@ -83,10 +83,10 @@ try:
        rx(r"([\d,]+) branches", head("banks", "Top bankers")))
     eq("active charters", kv("banks", "Active charters"), gm("Active charters")[1], rx(r"([\d,]+) charters", head("overview", "Branches and active charters, daily")),
        rx(r"([\d,]+) charters", (kpi("overview", "Branches") or [""] * 3)[2]))
-    eq("in banks", kv("banks", "In banks"), gm("In banks, ledger balance")[1], em("banks", "Bank deposits, withdrawals and STANDARD in banks, daily"))
+    eq("in banks", kv("banks", "In banks"), gm("In banks, ledger balance")[1], em("banks", "STANDARD in banks, inflows and outflows, daily"))
     eq("S-Bills locked", kv("banks", "S-Bills locked"), gm("S-Bills locked")[1], em("banks", "S-Bill principal and term rate, daily"))
     eq("issuance multiplier", kv("banks", "Issuance multiplier"), gm("Issuance multiplier")[1], em("banks", "Issuance multiplier and resolution fee, daily"))
-    eq("resolution fee", kv("banks", "Resolution fee"), rx(r"resolution fee (\S+)", head("banks", "Bank deposits, withdrawals and STANDARD in banks, daily")))
+    eq("resolution fee", kv("banks", "Resolution fee"), rx(r"resolution fee (\S+)", head("banks", "STANDARD in banks, inflows and outflows, daily")))
     eq("burned", kv("token", "Burned"), em("token", "STANDARD burned by source, daily"))
     br = T["token"]["blocks"].get("bridge", [])
     eq("STANDARD in wallets", kv("token", "In wallets"), em("token", "STANDARD supply composition, daily"), br[br.index("= In wallets") + 1] if "= In wallets" in br else None)

@@ -66,6 +66,10 @@ Out of scope, by the owner's decision: Token Terminal-style financial statements
 - Every chart follows the 7D / 30D / All range. No dashed series lines. Legends bottom-centred. Tooltips in index mode.
 - No decorative badges, bullets, labels or icons. No banned words (see `BANNED` in `qa/check.py`).
 - Plain, complete sentences in method notes. No marketing tone.
+- Readable at a glance, without the method note: above zero always means more of what the chart is named for (buying, inflows), below zero
+  less (selling, outflows); name what happened in plain words a holder would use ("deposited by bankers", "withdrawn by closing branches",
+  "net buying"), never a signed quantity the reader has to decode; headlines say "net buying" or "net selling" rather than a sign; when bars
+  explain a line, they sum to its change exactly and the note says so; no two series in one chart share a near-identical colour.
 
 ## How the scheduled agent works
 

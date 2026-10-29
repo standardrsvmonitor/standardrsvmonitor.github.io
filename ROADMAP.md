@@ -5,7 +5,7 @@ Owners may reorder, add or strike items at any time.
 
 ## Correctness
 
-- [ ] **Pool fee income against the positions' uncollected fees.** On 29 Oct the swap-based totals since seeding ran SPCX +2.1%,
+- [x] **Pool fee income against the positions' uncollected fees.** On 29 Oct the swap-based totals since seeding ran SPCX +2.1%,
   SKHY −3.6%, BABA +5.3%, ETH/USDG +4.1% against the fees read from the reserve's positions (reconciliation `poolfees_*`, watch, 5%).
   The stock pools are sole-LP, so the gap should be near zero. Find the cause (fee tier, input-side fee, protocol fee, in-range share,
   a position modification that collected fees) and fix the daily figure. Done: every pool within 1%, gate item at 2%.
@@ -66,3 +66,11 @@ Owners may reorder, add or strike items at any time.
   The replay had counted one, which matched until multi-branch charters 641 (4 branches) and 492 (5) were revoked on 28 and 29 Oct;
   the page then overstated branches by 7 and charters by 2. Fixed; reconciled each compile against the census and per banker against
   the leaderboard.
+- 29 Oct 2026: pool fee income is replayed swap by swap (`extra.pool_fees`, cache `pool_fees.json`): each swap walked tick by tick against
+  every provider's liquidity rebuilt from ModifyLiquidity events, fee on the input token, split by in-range liquidity. The replay's
+  uncollected fees match the positions to within 0.001% in all four pools and its liquidity matches every Swap event's (0 mismatches). The
+  old 2–5% gaps were valuation, not missing fees: in the stock pools the in-range-share estimate was within 0.5% of trade-time fees, but
+  the positions' reading values the stock-side fees at today's price (BABA 7,425 USD at trade time against 7,001 today). ETH/USDG also
+  carried a final-tick share error and the fees settled by the 14 Oct 2026 liquidity add (0.0097 ETH, 26.00 USDG). The RPC keeps no
+  historical state (eth_call at old blocks fails), so the replay's starting tick map is today's map with every change since seeding
+  undone. A rebuild takes about 7 minutes and can outlast the compile block's state, so the cache is committed.

@@ -154,7 +154,7 @@ def tol_for(k):   # (relative, absolute floor); None = judged another way
     if k.startswith("sell_"): return None                                              # holder groups are today's membership; the day's total, mktNet, is held
     if re.match(r"(venues|rank)_", k): return (0, 2)                                   # venue counts move as new pools are found
     if re.match(r"(chainVol|chainTvl|otherTvl|liqShare|volShare|poolVolChain)_", k): return (0.15, 1e-3)
-    if re.match(r"(lpFees|lpVal|holdVal|lpCost)_", k): return (0.03, 1e-3)              # rescaled to the positions' fees at each compile
+    if re.match(r"(lpVal|holdVal|lpCost)_", k): return (0.03, 1e-3)
     if k in ("dPrice", "dSupply"): return (0.02, 1e-3)
     return (0.005, 1e-3)
 def accepted(k, d, acc):

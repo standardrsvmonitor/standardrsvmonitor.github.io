@@ -596,6 +596,132 @@ def lp_pnl(x, lp_pools, closes, dates, res_hist, fees_by_day):
     return out
 
 
+DONATE = "0x29ef05caaff9404b7cb6d1c0e9bbae9eaa7ab2541feba1a9c4248594c08156cb"   # Donate(bytes32 indexed id, address indexed sender, uint256, uint256)
+
+
+def _sqrt_at(t): return math.sqrt(1.0001 ** t) * 2 ** 96
+
+
+def _pool_start(x, pid, spacing):
+    """The pool's state just before the reserve seeded it: the tick map read now at the compile block, with every liquidity change since the
+    seeding block undone, and the price of the last swap (or the initialization) before that block."""
+    SVc = lambda data: ("eth_call", [{"to": x.SV, "data": data}, hex(x.tip)])
+    I = lambda v, n=64: format(v % (1 << 256), "0" + str(n) + "x")
+    def batch(calls):   # small batches, retried; the rebuild fails rather than start from a partial tick map
+        import time
+        out_ = []
+        for k in range(0, len(calls), 10):
+            for t in range(6):
+                try: res = x.rpcb(calls[k:k + 10]); break
+                except Exception: time.sleep(5 * (t + 1))
+            else: raise RuntimeError("pool fees: tick map unreadable for " + pid)
+            if any(r is None for r in res): raise RuntimeError("pool fees: tick map incomplete for " + pid)
+            out_ += res; time.sleep(0.3)
+        return out_
+    lo, hi = (-887272 // spacing) >> 8, (887272 // spacing) >> 8; words_ = list(range(lo, hi + 1)); ticks = []
+    for w_, r in zip(words_, batch([SVc(x.sel("getTickBitmap(bytes32,int16)") + pid[2:] + I(w_)) for w_ in words_])):
+        bm = int(r, 16); ticks += [((w_ << 8) + k) * spacing for k in range(256) if bm >> k & 1]
+    net = {t_: s256(r[66:130]) for t_, r in zip(ticks, batch([SVc(x.sel("getTickLiquidity(bytes32,int24)") + pid[2:] + I(t_)) for t_ in ticks]))}
+    logs = x.getlogs({"address": x.PM, "topics": [None, pid]}, x.SEED_BLOCK, x.tip, 2000000)
+    for l in logs:
+        if l["topics"][0] == x.ML:
+            w = words(l["data"]); tl, tu, dl = s256(w[0]), s256(w[1]), s256(w[2]); net[tl] = net.get(tl, 0) - dl; net[tu] = net.get(tu, 0) + dl
+    sp = tick = None
+    for span in (20000, 200000, 2000000, 20000000):
+        lg = x.getlogs({"address": x.PM, "topics": [x.SW, pid]}, max(0, x.SEED_BLOCK - span), x.SEED_BLOCK - 1, 4000000)
+        if lg: w = words(lg[-1]["data"]); sp, tick = int(w[2], 16), s256(w[4]); break
+        lg = x.getlogs({"address": x.PM, "topics": [x.INIT, pid]}, max(0, x.SEED_BLOCK - span), x.SEED_BLOCK - 1, 4000000)
+        if lg: w = words(lg[-1]["data"]); sp, tick = int(w[3], 16), s256(w[4]); break
+    net = {t_: v for t_, v in net.items() if v}
+    return {"last": x.SEED_BLOCK - 1, "sp": sp, "tick": tick, "L": sum(v for t_, v in net.items() if tick is not None and t_ <= tick),
+            "net": {str(t_): v for t_, v in net.items()}, "mine": {}, "acc": {}, "collected": {}, "days": {}, "mismatch": 0}, logs
+
+
+def pool_fees(x, lp_pools, routers=()):
+    """Fees earned by the reserve's positions, replayed swap by swap. Each swap is walked from the pool's price before it to the price after
+    it, one initialized tick at a time, with the pool's active liquidity rebuilt from every ModifyLiquidity event (all providers, not only
+    the reserve). The fee on each step is charged on the input token, less Uniswap's protocol fee, and split by liquidity among the providers
+    in range on that step, as the PoolManager does. Returns per pool: fees by day in token units and in USD at the pool price of each swap,
+    the fees accrued and not yet collected per position (to reconcile with the positions), and the count of swaps whose reported liquidity
+    differed from the replay's."""
+    c = x.jl("pool_fees.json", {}); ids = {int(i) for i in x.pos_ids} | set(x.jl("positions.json", {"ids": []})["ids"]); rt = {r.lower() for r in routers}
+    out = {}
+    for s, p in lp_pools.items():
+        pid = p["pool"]; e = c.get(pid); logs = None
+        if e is None: x.log("pool fees: rebuilding", s, "from the seeding block"); e, logs = _pool_start(x, pid, p["spacing"])
+        if e["last"] < x.tip:
+            if logs is None: logs = x.getlogs({"address": x.PM, "topics": [None, pid]}, e["last"] + 1, x.tip, 2000000)
+            logs.sort(key=lambda l: (int(l["blockNumber"], 16), int(l["logIndex"], 16)))
+            net = {int(t_): v for t_, v in e["net"].items()}; tks = sorted(net); sp, tick, L = e["sp"], e["tick"], e["L"]
+            mine = {int(k): v for k, v in e["mine"].items()}; acc = {int(k): v for k, v in e["acc"].items()}
+            days = e["days"]; tier = p["tier"]
+            for l in logs:
+                k = l["topics"][0]; w = words(l["data"]); b = int(l["blockNumber"], 16)
+                if k == x.INIT: sp, tick = int(w[3], 16), s256(w[4]); continue
+                if k == x.ML:
+                    tl, tu, dl, salt = s256(w[0]), s256(w[1]), s256(w[2]), int(w[3], 16)
+                    for t_, d_ in ((tl, dl), (tu, -dl)):
+                        if t_ not in net: bisect.insort(tks, t_); net[t_] = 0
+                        net[t_] += d_
+                    if tick is not None and tl <= tick < tu: L += dl
+                    if l["topics"][2][-40:] == x.POSM[2:].lower() and salt in ids:   # a change to a position settles its accrued fees to the owner
+                        if salt in mine:
+                            col = e["collected"].setdefault(str(salt), [0.0, 0.0]); a_ = acc.get(salt, [0.0, 0.0])
+                            col[0] += a_[0]; col[1] += a_[1]; acc[salt] = [0.0, 0.0]; mine[salt][2] += dl
+                        else: mine[salt] = [tl, tu, dl]
+                    continue
+                if k not in (x.SW, DONATE) or sp is None: continue
+                d = day(x.T(b)); row = days.setdefault(d, [0.0, 0.0, 0.0, 0.0])
+                if k == DONATE:
+                    a0, a1 = int(w[0], 16), int(w[1], 16); m_ = sum(ml for tl, tu, ml in mine.values() if tl <= tick < tu)
+                    if L and m_:
+                        f_ = [a0 * m_ / L, a1 * m_ / L]
+                        for sid, (tl, tu, ml) in mine.items():
+                            if tl <= tick < tu and ml: a_ = acc.setdefault(sid, [0.0, 0.0]); a_[0] += a0 * ml / L; a_[1] += a1 * ml / L
+                        row[0] += f_[0]; row[1] += f_[1]; P = (sp / 2 ** 96) ** 2
+                        row[2] += (f_[0] + f_[1] / P) / 1e6 if p["usdg0"] else (f_[0] * P + f_[1]) / 1e6
+                    continue
+                S1, evL, evT, fee = int(w[2], 16), int(w[3], 16), s256(w[4]), int(w[5], 16)
+                pf = 0
+                if tier < 1 << 23 and fee > tier:   # a fixed-tier pool: the swap fee includes Uniswap's protocol fee, fee = p + tier - p * tier / 1e6
+                    pf = fee - tier
+                    while pf + tier - pf * tier // 1_000_000 < fee: pf += 1
+                z = S1 < sp; s_ = float(sp); got = [0.0, 0.0]
+                while True:
+                    if z:
+                        i = bisect.bisect_right(tks, tick) - 1; nt = tks[i] if i >= 0 else -887272; tgt = _sqrt_at(nt)
+                        end = max(tgt, S1); amt = L * (2 ** 96 / end - 2 ** 96 / s_) if L and end < s_ else 0.0; side = 0
+                        cross = i >= 0 and (tgt > S1 * (1 + 1e-13) or (tgt >= S1 * (1 - 1e-13) and evT < nt))
+                    else:
+                        i = bisect.bisect_right(tks, tick); nt = tks[i] if i < len(tks) else 887272; tgt = _sqrt_at(nt)
+                        end = min(tgt, S1); amt = L * (end - s_) / 2 ** 96 if L and end > s_ else 0.0; side = 1
+                        cross = i < len(tks) and (tgt < S1 * (1 - 1e-13) or (tgt <= S1 * (1 + 1e-13) and evT >= nt))
+                    if amt > 0 and fee:
+                        fa = amt * fee / (1e6 - fee)
+                        if pf: fa -= fa if pf == fee else (amt + fa) * pf / 1e6
+                        for sid, (tl, tu, ml) in mine.items():
+                            if tl <= tick < tu and ml: v_ = fa * ml / L; acc.setdefault(sid, [0.0, 0.0])[side] += v_; got[side] += v_
+                    s_ = end
+                    if not cross: break
+                    if z: L -= net[nt]; tick = nt - 1
+                    else: L += net[nt]; tick = nt
+                sp, tick = S1, evT
+                if L != evL: e["mismatch"] += 1; L = evL
+                if got[0] or got[1]:
+                    P = (S1 / 2 ** 96) ** 2; usd = (got[0] + got[1] / P) / 1e6 if p["usdg0"] else (got[0] * P + got[1]) / 1e6
+                    row[0] += got[0]; row[1] += got[1]; row[2] += usd
+                    if "0x" + l["topics"][2][-40:] in rt: row[3] += usd
+            e.update({"last": x.tip, "sp": sp, "tick": tick, "L": L, "net": {str(t_): v for t_, v in net.items() if v}, "mine": {str(k_): v for k_, v in mine.items()},
+                      "acc": {str(k_): v for k_, v in acc.items()}, "days": days})
+            c[pid] = e
+        acc_ = [sum(v[0] for v in e["acc"].values()), sum(v[1] for v in e["acc"].values())]
+        out[s] = {"days": e["days"], "uncollected": acc_, "mismatch": e["mismatch"],
+                  "collected": [sum(v[0] for v in e["collected"].values()), sum(v[1] for v in e["collected"].values())]}
+        x.log("pool fees", s, "uncollected raw", [round(v_) for v_ in acc_], "liquidity mismatches", e["mismatch"])
+    x.js("pool_fees.json", c)
+    return out
+
+
 def counterparties(x, reg, lp_pools, first_day, last_day, max_days=3):
     """Who trades against the reserve, by UTC day. Fee-exempt swaps (zero fee) are summed exactly. The rest are sampled: 150 draws per pool
     and day with probability proportional to the volume the reserve's own liquidity served, each sampled transaction read from its receipt

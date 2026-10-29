@@ -66,13 +66,12 @@ try:
     eq("revenue, 7d", kv("overview", "Revenue, 7d"), kv("revenue", "Revenue, 7d"), gm("Revenue")[1], em("revenue", "Revenue by stream, daily"))
     eq("STANDARD trading fees, 7d", kv("revenue", "STANDARD trading fees, 7d"), gm("STANDARD trading fees")[1])
     eq("LP fees, 7d", kv("revenue", "LP fees, 7d"), kv("liquidity", "LP fees, 7d"), gm("LP fees")[1], em("liquidity", "LP fees by pool, daily"),
-       row("liquidity", "t_pools", "Total")[5], alloc[1] if len(alloc) > 1 else None)
-    eq("launchpad revenue, 7d", kv("revenue", "Launchpad revenue, 7d"), kv("launchpad", "Launchpad revenue, 7d"), gm("Launchpad revenue")[1],
-       alloc[alloc.index("Launchpad fee Safe") + 1] if "Launchpad fee Safe" in alloc else None)
+       row("liquidity", "t_pools", "Total")[5])
+    eq("launchpad revenue, 7d", kv("revenue", "Launchpad revenue, 7d"), kv("launchpad", "Launchpad revenue, 7d"), gm("Launchpad revenue")[1])
     eq("charter sales, 7d", kv("revenue", "Charter sales, 7d"), gm("Charter sales")[1])
     eq("volume served, 7d", kv("liquidity", "Volume served, 7d"), gm("Volume served by the reserve")[1], em("liquidity", "Volume served by the reserve, by pool, daily"),
        row("liquidity", "t_pools", "Total")[4])
-    eq("organic share", kv("liquidity", "Organic share of volume"), em("liquidity", "Pool volume by counterparty, daily"), row("liquidity", "t_cpty", "All pools")[1])
+    eq("organic share", kv("liquidity", "Organic share of volume"), em("liquidity", "Pool volume by counterparty, daily"))
     eq("launchpad volume, 7d", kv("launchpad", "Launchpad volume, 7d"), gm("Launchpad trading volume")[1])
     eq("launchpad revenue, to date", kv("launchpad", "Launchpad revenue, to date"), rx(r"protocol (\S+)", head("launchpad", "Launchpad fees by recipient, daily")))
     eq("launchpad fees, to date", rx(r"of (\S+) fees", (kpi("launchpad", "Launchpad revenue, to date") or [""] * 3)[2]), em("launchpad", "Launchpad fees by recipient, daily"))
@@ -110,6 +109,8 @@ try:
     for nm, a, b in (("revenue, 7d", usd(tr + pf + lp + ch), kv("revenue", "Revenue, 7d")), ("STANDARD trading fees, 7d", usd(tr), kv("revenue", "STANDARD trading fees, 7d")),
                      ("LP fees, 7d", usd(pf), kv("revenue", "LP fees, 7d")), ("launchpad revenue, 7d", usd(lp), kv("revenue", "Launchpad revenue, 7d")),
                      ("charter sales, 7d", usd(ch), kv("revenue", "Charter sales, 7d")),
+                     ("revenue by destination, trailing 30 days (the page opens on 30D)", usd(sum((r.get("tradingFeeEth") or 0) * eth(r) + (r.get("spFee") or 0) + (r.get("lpadSafe") or 0) * 5 / 7
+                      + (r.get("charterEth") or 0) * eth(r) for r in S[-30:])), em("revenue", "Revenue by destination, trailing 30 days")),
                      ("launchpad revenue, to date", usd(sum((r.get("lpadSafe") or 0) * 5 / 7 for r in D["series"])), kv("launchpad", "Launchpad revenue, to date")),
                      ("reserve assets", usd(L["reserve"]["totalUsd"]), kv("reserve", "Reserve assets")),
                      ("market cap, in wallets", usd(L["price"] * L["float"]), kv("token", "Market cap, in wallets")),

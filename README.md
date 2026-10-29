@@ -6,8 +6,8 @@ branches, the Auction House and S-Bills. Live at https://standardrsvmonitor.gith
 
 ## Sources and method
 
-Figures are rebuilt from Robinhood Chain logs and balances (public RPC) and the Standard Reserve indexer and markets API, with prices from
-GeckoTerminal (daily closes), DexScreener (live) and Coinbase (ETH). Every panel's ⓘ note gives its method. Between compiles the page
+Figures are rebuilt from Robinhood Chain logs and balances (public RPC) and the Standard Reserve indexer and markets API, with STANDARD's price from
+its own pool on chain (daily closes) and DexScreener (live), ETH from Coinbase, and GeckoTerminal as a cross-check. Every panel's ⓘ note gives its method. Between compiles the page
 replays the blocks after the compile in the browser, so tiles, the current day and the top bankers describe the latest block.
 
 ## Publication and checks
@@ -15,7 +15,7 @@ replays the blocks after the compile in the browser, so tiles, the current day a
 GitHub Actions compiles the page every 30 minutes. A compile is published only when `qa/check.py` passes:
 
 - **Reconciliation.** Each rebuilt figure is set against an independent reading of the same quantity: balances read directly at the compile
-  block, the indexer, GeckoTerminal, DexScreener and Coinbase. The results are on the Data tab and in `api/recon.json`.
+  block, the indexer, GeckoTerminal, DexScreener and Coinbase. The results are published in `api/recon.json` and `api/qa.json`, linked from the Data tab.
 - **Consistency.** Every figure shown in more than one place reads the same, and headline totals match a separate recomputation.
 - **History.** No figure for a day three or more days old may move from the published page unless a dated entry in `qa/accept.json` explains why.
 - **Freshness and completeness** of the last complete day, and the house style (every chart follows the range selector, nothing clipped).

@@ -1,6 +1,40 @@
 [
- {"fields": ["price", "mcTotal", "mcFloat", "dPrice", "dSupply"], "from": "2026-10-19", "to": "2026-10-28", "until": "2026-11-01",
-  "why": "GeckoTerminal closes had been cached mid-day; corrected to the day's close on 29 Oct 2026"},
- {"fields": ["spFee", "spFee_.*", "spFeeLpad", "lpFees_.*"], "from": "2026-10-14", "to": "2026-10-28", "until": "2026-11-04",
-  "why": "pool fee income replayed swap by swap, valued at each swap's pool price, replacing the in-range share estimate rescaled to the positions; 29 Oct 2026"}
+ {
+  "fields": [
+   "price",
+   "mcTotal",
+   "mcFloat",
+   "dPrice",
+   "dSupply"
+  ],
+  "from": "2026-10-19",
+  "to": "2026-10-28",
+  "until": "2026-11-01",
+  "why": "GeckoTerminal closes had been cached mid-day; corrected to the day's close on 29 Oct 2026"
+ },
+ {
+  "fields": [
+   "spFee",
+   "spFee_.*",
+   "spFeeLpad",
+   "lpFees_.*"
+  ],
+  "from": "2026-10-14",
+  "to": "2026-10-28",
+  "until": "2026-11-04",
+  "why": "pool fee income replayed swap by swap, valued at each swap's pool price, replacing the in-range share estimate rescaled to the positions; 29 Oct 2026"
+ },
+ {
+  "fields": [
+   "price",
+   "mcTotal",
+   "mcFloat",
+   "dPrice",
+   "dSupply"
+  ],
+  "from": "2026-09-14",
+  "to": "2026-10-28",
+  "until": "2026-11-06",
+  "why": "Daily closes moved from GeckoTerminal (last trade with the 1% pool fee) to the pool's own price on chain; 30 Oct 2026"
+ }
 ]

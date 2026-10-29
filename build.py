@@ -27,9 +27,8 @@ SECTIONS = {
           "Shares change in percentage points. Green marks a move that favours the protocol, red one that works against it, grey a neutral measure. "
           "Trends cover 30 days: rolling seven-day sums for flows, daily closes for levels.", table("t_gm", "gm")) +
     '<div class="col w5">' +
-    panel(12, "Revenue by stream, weekly", "Seven-day blocks ending on the last complete UTC day, following the range: All shows every complete week since the launch epoch "
-          "(the launch week’s genesis fees are left out), 30D the last four weeks, 7D the last seven days by day. Revenue is what the protocol keeps: STANDARD trading "
-          "fees (the buy and sell tax), LP fees earned by the reserve’s pool positions, the protocol’s 50% of the launchpad base fee, and charter sales.", chart("c_wrev", "s"), "h_wrev", "p_wrev") +
+    panel(12, "Revenue by stream, daily", "Revenue each complete UTC day over the selected range: STANDARD trading fees, LP fees earned by the reserve’s "
+          "pool positions, the protocol’s 50% of the launchpad base fee, and charter sales.", chart("c_wrev", "s"), "h_wrev", "p_wrev") +
     panel(12, "Price and backing per token, daily", "Token price against reserve assets per STANDARD in wallets, the tokens holders own; the protocol’s own liquidity and the Incentives vault are left out. The gap between the lines is the premium to backing.",
           chart("c_pxb", "s"), "h_pxb") + '</div>' +
     panel(6, "Reserve assets by component, daily", "Reserve assets at each day’s close, rebuilt from on-chain events and valued at the day’s closing prices. "
@@ -41,9 +40,9 @@ SECTIONS = {
     panel(7, "Revenue by stream, daily", "STANDARD trading fees, the buy and sell tax, are known per three-day epoch and spread evenly over its days; the live epoch is estimated from ETH held in the tax hook "
           "and fee splitter. LP fees replay every swap in the reserve’s pools tick by tick and value each swap’s fee at the pool price of that swap. The launchpad line is the protocol’s 50% of the 1% base fee, "
           "held in the launchpad fee Safe. Charter sales are recorded on the sale date.", chart("c_rev", "l"), "h_rev") +
-    panel(5, "Revenue by destination, trailing seven days", "Where the last seven complete days of revenue went: the protocol’s own phrase is where fees land. STANDARD trading fees and charter sales are routed by the fee engine at settlement: 70% to the "
+    panel(5, "Revenue by destination, trailing 30 days", "Where revenue over the selected range went: the protocol’s own phrase is where fees land. STANDARD trading fees and charter sales are routed by the fee engine at settlement: 70% to the "
           "reserve in expansion or to buybacks in contraction, 15% to POL buybacks and 15% to the team. LP fees accrue inside the reserve’s positions. The launchpad’s "
-          "protocol share sits in the fee Safe and has not been routed.", '<div class="alloc" id="alloc"></div>', "h_alloc") +
+          "protocol share sits in the fee Safe and has not been routed.", '<div class="alloc" id="alloc"></div>', "h_alloc", "p_alloc") +
     panel(7, "Fee routing by epoch", "STANDARD trading fees and charter proceeds routed by the fee engine at each settlement, in ETH, for the epochs settled inside the selected range. "
           "Green bars are expansion epochs, red contraction.",
           chart("c_epochs"), "h_epochs") +
@@ -69,8 +68,8 @@ SECTIONS = {
     panel(7, "Pool volume by counterparty, daily", "Fee-exempt swaps are summed exactly. The rest is estimated from 150 size-weighted trades per pool and day, read from receipts. "
           "Arbitrage trades the asset the other way on another pool in the same transaction. Organic users are wallets with fewer than 1,000 transactions trading through a "
           "public router. Other bots are everything else. Daily shares carry up to eight points of sampling error, seven-day shares about three.", chart("c_cpty"), "h_cpty") +
-    panel(5, "Counterparty mix, trailing seven days", "Share of the volume the reserve’s liquidity served in each pool over the last seven complete days. Rows sum to 100%.",
-          table("t_cpty")) +
+    panel(5, "Counterparty mix, trailing 30 days", "Share of the volume the reserve’s liquidity served in each pool over the selected range. Rows sum to 100%.",
+          table("t_cpty"), None, "p_cptymix") +
     panel(7, "Pool profit and loss against holding, cumulative", "Fees earned plus divergence, the position’s value less the value of holding the deposited tokens, since "
           "each pool was seeded. Position, holding and the fee tokens earned to date are all valued at the same day’s closing pool price.", chart("c_pnl"), "h_pnl") +
     panel(5, "Pool profit and loss since seeding", "Net against holding is fees plus divergence. Net in USD compares value plus fees with the USD cost of the deposits, so it also "
@@ -99,7 +98,7 @@ SECTIONS = {
     panel(12, "Reserve composition, daily change", "Each component today, read at the compile block, against the close one and seven days earlier.", table("t_resd")) + '</div>',
 
 "token": kpis("token") + '<div class="grid">' +
-    panel(7, "Price and market capitalization, daily", "GeckoTerminal daily close for the STANDARD/ETH pool. Market cap is price times circulating supply, every STANDARD minted, as the protocol’s "
+    panel(7, "Price and market capitalization, daily", "Daily close: the protocol STANDARD/ETH pool’s own price after its last trade of the UTC day, at Coinbase’s ETH close; today is live. Market cap is price times circulating supply, every STANDARD minted, as the protocol’s "
           "site and DexScreener show it. In wallets leaves out the protocol’s own liquidity and the Incentives vault. Shaded days are contraction epochs.", chart("c_price", "l"), "h_price") +
     panel(5, "Supply reconciliation", "From the genesis mint to circulating supply, the STANDARD in wallets and free float, at one block.", '<div class="bridge" id="bridge"></div>') +
     panel(7, "Net buying of STANDARD by holder group, daily", "STANDARD bought from the protocol’s STANDARD/ETH pool less STANDARD sold into it, by the group of the "
@@ -138,14 +137,9 @@ SECTIONS = {
           "the previous epoch.", table("t_lead") + '<button class="btn" id="lead_more"></button>', "h_lead") + '</div>',
 
 "data": '<div class="grid">' +
-    panel(12, "Reconciliation with independent sources", "Each figure the monitor rebuilds from on-chain events, set against an independent reading of the same quantity: "
-          "balances read directly at the compile block, the protocol’s own indexer, GeckoTerminal, DexScreener and Coinbase. Gate items stop publication when they fall outside "
-          "tolerance, and the previous page stays up. Watched items are published with their gap. Every compile is also checked for figures that disagree across panels, "
-          "recomputed totals, freshness, and any figure for a day three or more days old that has moved since the last published page.", table("t_recon"), "h_recon") +
-    panel(12, "Open data", "Files published with every compile at the same address, written from the rendered page after it passes the checks, so every figure in them is "
-          "the page’s own. Field definitions travel with the JSON.", '<div class="kv2 files" id="files"></div>', "h_files") +
     panel(12, "Daily data log", "One observation per UTC day since genesis, every field reconstructed from protocol events and transfer logs. The current day is partial.",
-          table("t_log") + '<div class="btns"><button class="btn" id="more"></button><button class="btn" id="csv">Export CSV</button></div>', "h_log") +
+          table("t_log") + '<div class="btns"><button class="btn" id="more"></button><button class="btn" id="csv">Export CSV</button>'
+          '<a class="btn" href="api/daily.json" target="_blank" rel="noopener">JSON</a><a class="btn" href="api/qa.json" target="_blank" rel="noopener">Checks</a></div>', "h_log") +
     panel(12, "Epoch settlement ledger", "Net flow is ETH bought less ETH sold through the pool during the epoch; its sign sets the regime. Routed comprises STANDARD trading fees and charter "
           "proceeds.", table("t_epochs")) +
     panel(12, "Supply reconciliation, circulating to in wallets, daily", "STANDARD in wallets equals circulating supply less protocol liquidity less the Incentives vault. Every row ties.",
@@ -154,7 +148,7 @@ SECTIONS = {
 
 SUB = {"revenue": "Fees and revenue from the token economy, the reserve’s pools and the launchpad.", "liquidity": "The reserve as market maker for stock tokens and ETH.",
        "launchpad": "Fees from tokens launched against reserve markets, and King of the Markets.", "reserve": "The assets behind STANDARD, rebuilt daily from on-chain events.",
-       "token": "Price, supply, burns, and who is buying and selling.", "banks": "Bank charters and branches, issuance, the Auction House and S-Bills.", "data": "Every daily observation since genesis, its reconciliation and the open data files."}
+       "token": "Price, supply, burns, and who is buying and selling.", "banks": "Bank charters and branches, issuance, the Auction House and S-Bills.", "data": "Every daily observation since genesis."}
 def hero(k, n):
     if k == "overview": return '<div class="hero big"><div class="hero-in" id="ov_hero"></div></div>'
     return f'<div class="hero mini"><div class="hero-in"><h1>{n}</h1><p>{SUB[k]}</p></div></div>'
@@ -261,7 +255,6 @@ a{color:inherit}
 .how b{display:block;margin-bottom:.25rem;color:var(--fg);font-weight:500}
 .how span{white-space:nowrap}
 #t_pools th,#t_lead th{white-space:normal;vertical-align:bottom;line-height:1.25;max-width:7rem}
-#t_recon td.l{white-space:normal;line-height:1.35;min-width:9rem}
 .how strong{display:block;font-size:1.5rem;font-weight:450;letter-spacing:-.02em;color:var(--white);margin:.15rem 0}
 /* grid and panels */
 .grid{display:grid;grid-template-columns:repeat(12,minmax(0,1fr));gap:1rem}
@@ -313,7 +306,7 @@ table.gm td .u{margin-left:.4rem;color:var(--dis);font-size:.75rem}
 table.gm td svg{display:block;width:72px;height:20px;margin-left:auto}
 table.gm td.c{min-width:80px}
 .btn{display:inline-flex;align-items:center;height:2.125rem;margin-top:.875rem;padding:0 .8125rem;border:0;border-radius:.5rem;background:rgb(255 255 255 / 8%);box-shadow:inset 0 0 12px rgb(255 255 255 / 10%);color:var(--white);font:inherit;font-size:.75rem;cursor:pointer}
-.btn:hover{background:rgb(255 255 255 / 14%)}
+.btn:hover{background:rgb(255 255 255 / 14%)} a.btn{text-decoration:none}
 .btns{display:flex;gap:.5rem}
 .chip{display:inline-flex;align-items:center;gap:.4rem;padding:.25rem .5rem;border:1px solid var(--line);border-radius:.375rem;font-size:.6875rem;text-transform:uppercase;letter-spacing:.04em;color:var(--fg)}
 .chip::before{content:"";width:5px;height:5px;border-radius:50%;background:var(--dim)}
@@ -323,7 +316,6 @@ table.gm td.c{min-width:80px}
 .bridge .tot{color:var(--white);font-weight:500;border-top:1px dashed var(--dash);padding-top:.4rem}
 .kv2{display:grid;grid-template-columns:auto 1fr;gap:.35rem 1rem;margin-top:.875rem;font-size:.8125rem}
 .kv2 div:nth-child(odd){color:var(--sec)} .kv2 div:nth-child(even){text-align:right;color:var(--fg)}
-.kv2.files div:nth-child(even){text-align:left;color:var(--sec)} .kv2.files a{color:var(--fg);text-decoration:none;font-family:var(--mono);font-size:.75rem} .kv2.files a:hover{color:var(--white)}
 .alloc .abar{display:flex;gap:3px;height:6px;margin-top:1.25rem} .alloc .abar>div{height:100%;border-radius:2px}
 .alloc .lg{display:grid;grid-template-columns:auto 1fr auto auto;gap:.6rem .75rem;margin-top:1.25rem;font-size:.8125rem;align-items:center}
 .alloc .lg i{width:6px;height:6px;display:inline-block}
@@ -486,7 +478,7 @@ function renderKpis(){ derive();
   const zf = (rows)=>{const t=sum(rows.map(served)); return t?1-sum(rows.map(r=>r.spVolZeroFee||0))/t:null;};
   const K = {
     overview:[
-      {l:'STANDARD price', v:fmt.px(L.price), c:chg(L.price, W0&&W0.price, {pol:1}), s:'7d', sp:lvl(r=>r.price), tip:'Live price from DexScreener for the STANDARD/ETH pool; history uses GeckoTerminal daily closes.'},
+      {l:'STANDARD price', v:fmt.px(L.price), c:chg(L.price, W0&&W0.price, {pol:1}), s:'7d', sp:lvl(r=>r.price), tip:'Live price of the protocol’s STANDARD/ETH pool, from DexScreener. Past days use the pool’s own price after its last trade of the day.'},
       {l:'Market cap', v:fmt.usd(mcTotal), c:chg(mcTotal, W0&&W0.mcTotal, {pol:1}), s:`in wallets ${fmt.usd(mcFloat)}`, sp:lvl(r=>r.mcTotal), tip:'Price times circulating supply, every STANDARD minted, the figure the protocol’s site and DexScreener show. In wallets leaves out the protocol’s own liquidity and the Incentives vault.'},
       {l:'Reserve assets', v:fmt.usd(L.reserve.totalUsd), c:chg(L.reserve.totalUsd, W0&&W0.reserveUsd, {pol:1}), s:`${fmt.x(pbNow)} P/B`, sp:lvl(r=>r.reserveUsd), col:C.blue, tip:'ETH and USDG in the reserve Safe, ETH in the policy vaults, equities held outside pools and the Safe’s Uniswap v4 positions, read at the compile block.'},
       {l:'Revenue, 7d', v:fmt.usd(rev7), c:chg(rev7, revP, {pol:1}), sp:roll7(inc), col:C.gold, tip:`What the protocol kept over the seven complete days to ${yd}: STANDARD trading fees, LP fees, the launchpad’s 50% and charter sales.`},
@@ -640,9 +632,6 @@ function renderStatic(){
   const dcell = (a,b)=>a!=null&&b!=null ? `<td class="${Math.abs(a-b)<0.5?'mut':a-b>0?'pos':'neg'}">${fmt.sgn(a-b)}${fmt.usd(a-b,1)}</td><td class="${Math.abs(a-b)<0.5?'mut':a-b>0?'pos':'neg'}">${b?fmt.sgn(a-b)+fmt.pct((a-b)/b,1):'–'}</td>` : '<td>–</td><td>–</td>';
   document.getElementById('t_resd').innerHTML = rc0 ? '<tr><th>Component</th><th>Today</th><th>Share</th><th>Change, 1 day</th><th>%</th><th>Change, 7 days</th><th>%</th></tr>' +
     Object.keys(rc0).map(k=>`<tr class="${k==='Total'?'tot':''}"><td>${k}</td><td>${fmt.usd(rc0[k])}</td><td class="mut">${k==='Total'?'':fmt.pct(rc0[k]/rc0.Total,1)}</td>${dcell(rc0[k], rc1&&rc1[k])}${dcell(rc0[k], rc7&&rc7[k])}</tr>`).join('') : '';
-  const cpRow = (ps)=>{const q=cpShares(s7, ps); return CPK.map(k=>`<td>${q?q[k]+'%':'–'}</td>`).join('');};
-  document.getElementById('t_cpty').innerHTML = '<tr><th>Pool</th><th>Organic</th><th>Arbitrage</th><th>Bots</th><th>Fee-exempt</th></tr>' +
-    pools.map(p=>`<tr><td>${shortP(p)}</td>${cpRow([p])}</tr>`).join('') + `<tr class="tot"><td>All pools</td>${cpRow(pools)}</tr>`;
   const pnlOf = (r,p)=>r['lpVal_'+p]!=null ? {lp:r['lpVal_'+p], hold:r['holdVal_'+p], cost:r['lpCost_'+p], fees:r['lpFees_'+p]} : null;
   const PY = pools.map(p=>[p, pnlOf(Y,p)]).filter(x=>x[1]);
   const t7 = PY.reduce((a,[p,v])=>({lp:a.lp+v.lp, hold:a.hold+v.hold, cost:a.cost+v.cost, fees:a.fees+v.fees}), {lp:0,hold:0,cost:0,fees:0});
@@ -650,16 +639,6 @@ function renderStatic(){
   document.getElementById('t_pnl').innerHTML = '<tr><th>Pool</th><th>Fees</th><th>Divergence</th><th>Net vs holding</th><th>Net in USD</th></tr>' +
     PY.map(([p,v])=>`<tr title="cost ${fmt.usd(v.cost,2)} · value ${fmt.usd(v.lp,2)} · holding ${fmt.usd(v.hold,2)}"><td>${shortP(p)}</td><td>${fmt.usd(v.fees,1)}</td>${pcell(v.lp-v.hold)}${pcell(v.lp+v.fees-v.hold)}${pcell(v.lp+v.fees-v.cost)}</tr>`).join('') +
     (PY.length?`<tr class="tot" title="cost ${fmt.usd(t7.cost,2)} · value ${fmt.usd(t7.lp,2)} · holding ${fmt.usd(t7.hold,2)}"><td>Total</td><td>${fmt.usd(t7.fees,1)}</td>${pcell(t7.lp-t7.hold)}${pcell(t7.lp+t7.fees-t7.hold)}${pcell(t7.lp+t7.fees-t7.cost)}</tr>`:'');
-  // where fees land, over the same seven days as the revenue figures
-  const epOfDate = {}; E.forEach(e=>{for(let t=e.start+3600;t<e.end;t+=86400) epOfDate[fmt.dt(t)] = e;});
-  const al = {pool:0, lp:0, vExp:0, vCon:0, pol:0, team:0, open:0};
-  s7.forEach(r=>{const tok=((r.tradingFeeEth||0)+(r.charterEth||0))*ethOf(r), e=epOfDate[r.date]; al.pool += r.spFee||0; al.lp += lpp(r);
-    if(e && e.routed>0){ const v=tok*e.toVault/e.routed; if(isExp(e)) al.vExp+=v; else al.vCon+=v; al.pol += tok*e.toPol/e.routed; al.team += tok*e.team/e.routed; } else al.open += tok; });
-  const went = [['Reserve backing', al.pool+al.vExp, C.celadon], ['Buybacks', al.vCon+al.pol, C.gold], ['Team', al.team, C.rose], ['Launchpad fee Safe', al.lp, C.sapphire], ['Not yet routed', al.open, C.grey]];
-  const wTot = sum(went.map(w=>w[1]));
-  document.getElementById('alloc').innerHTML = `<div class="abar">${went.map(w=>`<div style="width:${(100*w[1]/wTot).toFixed(2)}%;background:${w[2]}"></div>`).join('')}</div>`+
-    `<div class="lg">${went.map(w=>`<i style="background:${w[2]}"></i><span>${w[0]}</span><span class="v">${fmt.usd(w[1])}</span><span class="p">${fmt.pct(w[1]/wTot,0)}</span>`).join('')}</div>`;
-  document.getElementById('h_alloc').innerHTML = `<em>${fmt.usd(wTot)}</em>`;
   // holder groups, sellers, depth
   const GN = Object.fromEntries(GROUPS.map(g=>[g[0], g[1]]));
   const shortA = a=>`<a href="https://robin.etherscan.io/address/${a}" target="_blank" rel="noopener" style="text-decoration:none">${a.slice(0,6)}…${a.slice(-4)}</a>`;
@@ -729,15 +708,10 @@ function redrawAll(){ Object.keys(REG).forEach(t=>{DIRTY[t]=true;}); drawTab(TAB
 const usd0 = v=>fmt.usd(v,0), usd1 = v=>fmt.usd(v,1), pct0 = v=>fmt.pct(v,0), n0 = v=>fmt.n(v,0);
 
 // overview
-reg('overview', ()=>{ const B=[], daily = N===7, maxW = N===0 ? 99 : Math.floor(N/7);
-  if (daily) last(Sp,7).forEach(r=>B.push([r]));
-  else for(let e=Sp.length; e-7>=0 && B.length<maxW; e-=7) { const b=Sp.slice(e-7,e); if (b[0].date<ep2) break; B.unshift(b); }
-  document.querySelector('#p_wrev .pt').textContent = daily ? 'Revenue by stream, last seven days' : 'Revenue by stream, weekly';
-  const lab = B.map(b=>dm(b[b.length-1].date)), S_ = f=>B.map(b=>sum(b.map(f)));
-  const c = mk(c_wrev, lab, [bar('STANDARD trading fees', S_(tr), STREAM.tr), bar('LP fees', S_(r=>r.spFee||0), STREAM.pool), bar('Launchpad revenue', S_(lpp), STREAM.lpad), bar('Charter sales', S_(chs), STREAM.ch)],
-    {stacked:true, y:usd0, tf:usd1, title:i=>daily ? lab[i[0].dataIndex] : `7 days to ${lab[i[0].dataIndex]}`, footer:i=>{const b=B[i[0].dataIndex]; return `revenue ${fmt.usd(sum(b.map(inc)))}`;}});
-  const i7 = sum(s7.map(inc)), p7 = P7.length ? sum(P7.map(inc)) : null; document.getElementById('h_wrev').innerHTML = `<em>${fmt.usd(i7)}</em> last 7d${p7!=null?` · ${chg(i7, p7, {pol:1}).t}`:''}`;
-  return c; });
+reg('overview', ({Rf, lf})=>{ const i7 = sum(s7.map(inc)), p7 = P7.length ? sum(P7.map(inc)) : null;
+  document.getElementById('h_wrev').innerHTML = `<em>${fmt.usd(i7)}</em> last 7d${p7!=null?` · ${chg(i7, p7, {pol:1}).t}`:''}`;
+  return mk(c_wrev, lf, [bar('STANDARD trading fees', Rf.map(tr), STREAM.tr), bar('LP fees', Rf.map(r=>r.spFee||0), STREAM.pool), bar('Launchpad revenue', Rf.map(lpp), STREAM.lpad), bar('Charter sales', Rf.map(chs), STREAM.ch)],
+    {stacked:true, y:usd0, tf:usd1, footer:i=>`revenue ${fmt.usd(inc(Rf[i[0].dataIndex]),1)}`}); });
 reg('overview', ({Rl, ll, dl})=>{ document.getElementById('h_pxb').innerHTML = `<em>${fmt.x(pbNow)}</em> price to backing`;
   return mk(c_pxb, ll, [line('Price', Rl.map(r=>r.price), C.gold, {fill:true}), line('Backing per STANDARD in wallets', Rl.map(bkOf), C.blue)], {y:v=>'$'+v.toFixed(3), tf:fmt.px,
     footer:i=>{const r=Rl[i[0].dataIndex]; return pbOf(r)!=null?`price to backing ${fmt.x(pbOf(r))}`:'';}}); });
@@ -755,6 +729,18 @@ reg('revenue', ({Rf, lf, df})=>{ const r7 = sum(s7.map(inc)), c7 = sum(s7.map(ch
   document.getElementById('h_rev').innerHTML = `<em>${fmt.usd(r7)}</em> 7d`;
   return mk(c_rev, lf, [bar('STANDARD trading fees', Rf.map(tr), STREAM.tr), bar('LP fees', Rf.map(r=>r.spFee||0), STREAM.pool), bar('Launchpad revenue', Rf.map(lpp), STREAM.lpad), bar('Charter sales', Rf.map(chs), STREAM.ch)],
     {stacked:true, y:usd0, tf:usd1, bands:df, footer:i=>{const r=Rf[i[0].dataIndex]; return `revenue ${fmt.usd(inc(r),1)}`;}}); });
+const winName = ()=>N===0 ? 'since launch' : `trailing ${N} days`;   // tables and blocks that follow the range name it in their title
+const EPD = {}; E.forEach(e=>{for(let t=e.start+3600;t<e.end;t+=86400) EPD[fmt.dt(t)] = e;});
+reg('revenue', ({Rf})=>{ document.querySelector('#p_alloc .pt').textContent = `Revenue by destination, ${winName()}`;
+  const al = {pool:0, lp:0, vExp:0, vCon:0, pol:0, team:0, open:0};
+  Rf.forEach(r=>{const tok=((r.tradingFeeEth||0)+(r.charterEth||0))*ethOf(r), e=EPD[r.date]; al.pool += r.spFee||0; al.lp += lpp(r);
+    if(e && e.routed>0){ const v=tok*e.toVault/e.routed; if(isExp(e)) al.vExp+=v; else al.vCon+=v; al.pol += tok*e.toPol/e.routed; al.team += tok*e.team/e.routed; } else al.open += tok; });
+  const went = [['Reserve backing', al.pool+al.vExp, C.celadon], ['Buybacks', al.vCon+al.pol, C.gold], ['Team', al.team, C.rose], ['Launchpad fee Safe', al.lp, C.sapphire], ['Not yet routed', al.open, C.grey]];
+  const wTot = sum(went.map(w=>w[1]));
+  document.getElementById('alloc').innerHTML = `<div class="abar">${went.map(w=>`<div style="width:${(100*w[1]/wTot).toFixed(2)}%;background:${w[2]}"></div>`).join('')}</div>`+
+    `<div class="lg">${went.map(w=>`<i style="background:${w[2]}"></i><span>${w[0]}</span><span class="v">${fmt.usd(w[1])}</span><span class="p">${fmt.pct(w[1]/wTot,0)}</span>`).join('')}</div>`;
+  document.getElementById('h_alloc').innerHTML = `<em>${fmt.usd(wTot)}</em>`;
+  return null; });
 reg('revenue', ()=>{ const E2 = E.filter(e=>e.epoch>1 && inRange(e.settledAt)); document.getElementById('h_epochs').innerHTML = `${E.filter(isExp).length} of ${E.length} settled epochs in expansion`;
   return new Chart(c_epochs, {type:'bar', data:{labels:E2.map(e=>'E'+e.epoch), datasets:[
     {label:'STANDARD trading fees', data:E2.map(e=>e.routed-e.charterEth), backgroundColor:E2.map(e=>isExp(e)?C.celadon:alpha(C.red,.8)), stack:'a'},
@@ -781,6 +767,11 @@ reg('liquidity', ({Rf})=>{ const Rc = Rf.filter(r=>r.date>=LP0 && pools.some(p=>
   document.getElementById('h_cpty').innerHTML = t7 ? `organic <em>${cpShares(s7).Org}%</em> 7d` : '';
   return mk(c_cpty, Rc.map(r=>dm(r.date)), [bar('Organic users', Rc.map(r=>ck(r,'Org')), C.celadon), bar('Cross-venue arbitrage', Rc.map(r=>ck(r,'Arb')), C.rose), bar('Other bots', Rc.map(r=>ck(r,'Bot')), C.sapphire), bar('Fee-exempt contract', Rc.map(r=>ck(r,'Fx')), C.grey)],
     {stacked:true, y:usd0, tf:usd1}); });
+reg('liquidity', ({Rf})=>{ const W = Rf.filter(r=>r.date>=LP0); document.querySelector('#p_cptymix .pt').textContent = `Counterparty mix, ${N===0?'since 14 Oct':winName()}`;
+  const cpRow = (ps)=>{const q=cpShares(W, ps); return CPK.map(k=>`<td>${q?q[k]+'%':'–'}</td>`).join('');};
+  document.getElementById('t_cpty').innerHTML = '<tr><th>Pool</th><th>Organic</th><th>Arbitrage</th><th>Bots</th><th>Fee-exempt</th></tr>' +
+    pools.map(p=>`<tr><td>${shortP(p)}</td>${cpRow([p])}</tr>`).join('') + `<tr class="tot"><td>All pools</td>${cpRow(pools)}</tr>`;
+  return null; });
 reg('liquidity', ({Rf})=>{ const Rq = Rf.filter(r=>r.date>=LP0), pnl = (r,p)=>r['lpVal_'+p]!=null ? r['lpVal_'+p]+r['lpFees_'+p]-r['holdVal_'+p] : null;
   const tot = r=>{const v=pools.map(p=>pnl(r,p)); return v.some(x=>x!=null)?sum(v):null;};
   document.getElementById('h_pnl').innerHTML = Y.date ? `<em>${fmt.sgn(tot(Y))}${fmt.usd(tot(Y),1)}</em> against holding, ${yd}` : '';
@@ -939,30 +930,10 @@ function renderFloat(){
 }
 document.getElementById('fmore').addEventListener('click',()=>{floatOpen=!floatOpen; renderFloat();});
 
-// ---------- reconciliation and open data ----------
-const RC = DATA.recon || []; let QA = null;
-const rcUnit = (r, v, sg)=>{ if (v==null || !isFinite(v)) return '–'; const s = sg && v>0 ? '+' : '';
-  if (r.unit==='USD') return s+fmt.usd(v); if (r.unit==='STANDARD') return s+fmt.n(v,2); if (r.unit==='s') return s+Math.round(v/60)+' min';
-  if (r.unit) return s+(Math.abs(v)<1e-4 ? '0' : fmt.n(v,4))+' '+r.unit; if (/^price/.test(r.id)) return '$'+v.toFixed(4); if (r.id==='mcap_dexscreener') return fmt.usd(v); return fmt.int(v); };
-const rcResidual = r=>(r.abs && r.ref===0) || /^reserve_(lp|today)$|_fresh$/.test(r.id);
-function renderRecon(){
-  const okN = RC.filter(r=>r.ok).length;
-  document.getElementById('h_recon').innerHTML = `<em>${okN} of ${RC.length}</em> within tolerance` + (QA ? ` · ${fmt.int(QA.passed)} of ${fmt.int(QA.checked)} checks passed ${QA.checkedAt.slice(5)} UTC` : '');
-  document.getElementById('t_recon').innerHTML = '<tr><th class="l">Figure</th><th>Monitor</th><th>Independent</th><th class="l">Independent source</th><th>Gap</th><th>Tolerance</th><th>Status</th></tr>' +
-    RC.map(r=>{ const res = rcResidual(r), fr = /_fresh$/.test(r.id);
-      const gap = r.ours==null||r.ref==null ? '–' : fr ? (r.ok?'none':'missing') : r.abs ? rcUnit(r, r.diff, true) : (r.ours/r.ref-1>=0?'+':'−')+(Math.abs(r.ours/r.ref-1)*100).toFixed(Math.abs(r.ours/r.ref-1)<0.001?3:2)+'%';
-      const tol = fr ? '–' : r.abs ? '±'+rcUnit(r, r.tol) : '±'+(r.tol*100).toFixed(r.tol<0.001?2:1)+'%';
-      const st = r.ok ? '<span class="chip exp">within</span>' : r.gate ? '<span class="chip con">outside</span>' : '<span class="chip">outside, watched</span>';
-      return `<tr><td class="l">${r.label}</td><td>${res?'–':rcUnit(r, r.ours)}</td><td>${res?'–':rcUnit(r, r.ref)}</td><td class="l mut">${r.source}</td><td>${gap}</td><td class="mut">${tol}</td><td>${st}</td></tr>`; }).join('');
-}
-const FILES = [['api/daily.csv','Every daily observation on this page'], ['api/daily.json','The same, with field definitions'], ['api/summary.json','Every tile and panel headline, by tab'],
-  ['api/recon.json','The reconciliation above'], ['api/qa.json','The last publication check, result by check']];
-function renderFiles(){ document.getElementById('files').innerHTML = FILES.map(f=>`<div><a href="${f[0]}" target="_blank" rel="noopener">${f[0].slice(4)}</a></div><div>${f[1]}</div>`).join('');
-  document.getElementById('h_files').innerHTML = 'every compile'; }
 // the open data files are written from these functions, so every figure in them is the page's own
 const API_FIELDS = [
   ['date', 'UTC day; the last row is the current, partial day', r=>r.date],
-  ['price', 'STANDARD price in USD: GeckoTerminal daily close, the current day DexScreener live', r=>r.price],
+  ['price', 'STANDARD price in USD: the protocol pool’s own price after its last trade of the UTC day, at Coinbase’s ETH close; the current day live from DexScreener', r=>r.price],
   ['marketCap', 'Price times circulating supply, USD (as the protocol’s site and DexScreener show it)', r=>r.mcTotal],
   ['marketCapInWallets', 'Price times the STANDARD in wallets, USD', r=>r.mcFloat],
   ['circulatingSupply', 'Circulating supply, every STANDARD minted (ERC-20 total supply), the protocol’s own definition', r=>r.supply],
@@ -999,8 +970,8 @@ const API_FIELDS = [
 const r6 = v=>typeof v==='number' ? (isFinite(v) ? +v.toPrecision(10) : null) : v ?? null;
 window.SRM_EXPORT = ()=>({compiled:COMPILED+' UTC', source:'https://standardrsvmonitor.github.io/', fields:Object.fromEntries(API_FIELDS.map(f=>[f[0], f[1]])),
   rows:Sh.map(r=>Object.fromEntries(API_FIELDS.map(f=>[f[0], r6(f[2](r))]))), epochs:E});
-function renderAll(){ renderKpis(); renderStatic(); renderBridge(); renderLeaders(); renderLog(); renderFloat(); renderRecon(); renderFiles(); }
-fetch('api/qa.json', {cache:'no-store'}).then(r=>r.ok?r.json():null).then(q=>{ if (q && q.checked) { QA = q; renderRecon(); } }).catch(()=>{});
+function renderAll(){ renderKpis(); renderStatic(); renderBridge(); renderLeaders(); renderLog(); renderFloat(); }
+
 renderAll();
 document.querySelectorAll('#tabs button[data-t]').forEach(b=>b.addEventListener('click',()=>{ history.replaceState(null,'','#'+b.dataset.t); show(b.dataset.t); window.scrollTo({top:0}); }));
 document.querySelectorAll('#range button').forEach(b=>b.addEventListener('click',()=>{N=+b.dataset.n; document.querySelectorAll('#range button').forEach(x=>x.classList.toggle('on',x===b)); redrawAll();}));

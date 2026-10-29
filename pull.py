@@ -613,6 +613,19 @@ def main():
         for s_, v_ in f_.items(): row["spFee_" + s_] = round(v_[2], 6)
         row["spFee"] = round(sum(v_[2] for v_ in f_.values()), 6); row["spFeeLpad"] = round(sum(v_[3] for v_ in f_.values()), 6)
     closes = extra.pool_closes(x, {**{pid_: SEED_BLOCK for pid_ in pools}, STD_POOL: G})
+    # STANDARD's daily close: the protocol pool's own price after the day's last trade, at Coinbase's ETH close, the same basis as the live
+    # price (DexScreener reads that pool's price). GeckoTerminal's close is the last trade's execution price with the 1% pool fee in it, so it
+    # sat about 1% above or below this depending on whether that trade bought or sold (10 of 10 days checked on 29 Oct 2026); it is a cross-check
+    std_cl = closes.get(STD_POOL, {}); prev_ = None
+    for row in series:
+        d_ = row["date"]
+        if d_ < today:
+            c_ = extra.close_on(std_cl, d_); e_ = eth_day.get(d_)
+            if c_ and e_:
+                p_ = e_ / (c_ / 2 ** 96) ** 2; row["price"] = p_; row["mcTotal"] = p_ * row["supply"]; row["mcFloat"] = p_ * row["float"]
+        if prev_ and row.get("price") and prev_.get("price"):
+            row["dPrice"] = (row["price"] - prev_["price"]) * prev_["float"]; row["dSupply"] = (row["float"] - prev_["float"]) * row["price"]
+        prev_ = row
     today_parts = {"total": reserve["totalUsd"], "eth": (reserve["safeEth"] + reserve["contractionEth"] + reserve["expansionEth"]) * ethusd, "usdg": reserve["safeUsdg"],
                    "stocks": reserve["safeStockUsd"], "lp": {s_: v_["valueUSD"] for s_, v_ in lp.items()}}
     res_hist, res_chk = extra.reserve_history(x, lp_pools, closes, eth_day, epochs, dl, today_parts)
@@ -644,10 +657,11 @@ def main():
         if d_ not in gt_days or not c_ or not e_: continue
         g_ = abs(price_day[d_] / (e_ / (c_ / 2 ** 96) ** 2) - 1)
         if worst_ is None or g_ > worst_[0]: worst_ = (g_, d_, price_day[d_], e_ / (c_ / 2 ** 96) ** 2)
-    if worst_: reconcile("price_closes", f"STANDARD daily close, GeckoTerminal, widest of 14 days ({worst_[1]})", worst_[2], worst_[3], "last pool trade of the day on chain × Coinbase ETH close", 0.025)
+    if worst_: reconcile("price_closes", f"STANDARD daily close against GeckoTerminal, widest of 14 days ({worst_[1]})", worst_[3], worst_[2],
+                         "GeckoTerminal close, the last trade’s price with the 1% pool fee", 0.025, gate=False)
     yrow_ = next((r_ for r_ in ohl if day(r_[0]) == (dt.date.fromisoformat(today) - dt.timedelta(1)).isoformat()), None)
     reconcile("price_gt_fresh", "GeckoTerminal close for yesterday, read after the day ended", 1.0 if yrow_ and len(yrow_) > 6 and yrow_[6] >= yrow_[0] + 86400 else 0.0, 1.0,
-              "GeckoTerminal daily candles", 0)
+              "GeckoTerminal daily candles (cross-check only)", 0, gate=False)
     reconcile("eth_fresh", "Coinbase has yesterday’s ETH close", 1.0 if (dt.date.fromisoformat(today) - dt.timedelta(1)).isoformat() in eth_day else 0.0, 1.0, "Coinbase daily candles", 0)
     reconcile("mcap_dexscreener", "Market cap, circulating supply", px * total_supply, dstd.get("marketCap") or dstd.get("fdv"), "DexScreener market cap", 0.02, gate=False)
     ix_lag = block_ts(tip) - int(snap.get("blockTimestamp") or 0)

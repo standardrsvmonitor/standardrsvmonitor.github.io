@@ -65,6 +65,6 @@ Out of scope, by the owner's decision: Token Terminal-style financial statements
    change, or when the task turns out to need a decision from the owner.
 7. Record what a run learned that the next run needs in `ROADMAP.md` (findings), not in chat.
 
-The workflow picks the model before the run: Opus when the gate is failing, a reconciliation is outside tolerance, the protocol's site names
-new contracts, the next roadmap item is under Correctness, or it is marked "needs Opus"; Sonnet otherwise. A Sonnet run that meets a task
-needing deep investigation writes up what it found and marks the item "needs Opus" instead of guessing.
+The workflow picks the model before the run: Opus for anything that adds, changes, calculates or verifies a figure, which is nearly every
+run; Sonnet only for roadmap items marked "(Sonnet)" that add no new figures (links, downloads of existing data, wording), and only when
+nothing is failing. A Sonnet run that finds its item needs a new figure stops and removes the mark instead of guessing.

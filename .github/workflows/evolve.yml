@@ -15,7 +15,7 @@ on:
         description: "Optional task for this run (otherwise the agent picks from the gate, the watcher and ROADMAP.md)"
         required: false
       model:
-        description: "Model: auto picks Opus for hard runs and Sonnet for routine ones"
+        description: "Model: auto uses Opus, and Sonnet only for roadmap items marked (Sonnet)"
         type: choice
         options: [auto, sonnet, opus]
         default: auto
@@ -72,7 +72,7 @@ jobs:
           printf '#!/bin/sh\nwhile read l lsha r rsha; do case "$r" in refs/heads/main) echo "push to main refused" >&2; exit 1;; esac; done\n' > .git/hooks/pre-push
           chmod +x .git/hooks/pre-push
           git config user.name "sr-monitor-agent"; git config user.email "actions@users.noreply.github.com"
-      - name: Pick the model (Opus for hard runs, Sonnet for routine ones)
+      - name: Pick the model (Opus, except roadmap items marked (Sonnet) that add no new figures)
         id: pick
         if: steps.auth.outputs.ok == '1'
         env:
@@ -93,11 +93,11 @@ jobs:
           for line in open("ROADMAP.md"):
               if line.startswith("## "): sec = line[3:].strip()
               if line.lstrip().startswith("- [ ]"): item = line; break
-          if sec == "Correctness": why.append("the next roadmap item is a correctness fix")
-          if item and "needs Opus" in item: why.append("the next roadmap item is marked needs Opus")
-          model = force if force in ("opus", "sonnet") else ("opus" if why else "sonnet")
+          light = bool(item and "(Sonnet)" in item) and not why   # Sonnet only for items marked as producing no new numbers
+          if not light: why.append("new or changed figures need Opus" if item else "default")
+          model = force if force in ("opus", "sonnet") else ("sonnet" if light else "opus")
           print("model=" + model)
-          print("why=" + ("chosen by hand" if force in ("opus", "sonnet") else "; ".join(why) or "routine depth work"))
+          print("why=" + ("chosen by hand" if force in ("opus", "sonnet") else "; ".join(why) if model == "opus" else "the next item is marked Sonnet: no new figures"))
           PY
           cat "$GITHUB_OUTPUT" | tail -2
       - uses: anthropics/claude-code-action@v1
@@ -117,9 +117,9 @@ jobs:
 
             Task given for this run, if any: ${{ github.event.inputs.task }}
 
-            This run uses ${{ steps.pick.outputs.model }} (${{ steps.pick.outputs.why }}). On Sonnet, take routine depth work. If the task turns
-            out to need a deep investigation (a reconciliation gap, an unexplained number, a protocol change), do not guess: write up what you
-            found in a pull request that only edits ROADMAP.md, and add "needs Opus" to that item so the next run takes it on Opus.
+            This run uses ${{ steps.pick.outputs.model }} (${{ steps.pick.outputs.why }}). On Sonnet, do only the item marked (Sonnet) and add or
+            change no figure; if it turns out to need one, stop, remove "(Sonnet)" from the item in a pull request that only edits ROADMAP.md,
+            and leave the work to an Opus run.
 
             Choose one task in the order CLAUDE.md sets, do it on a new branch auto/<yyyy-mm-dd>-<slug>, run the full pipeline
             (python -I pull.py; python -I build.py; python -I qa/render.py index.html qa/out/render.json --api site/api;

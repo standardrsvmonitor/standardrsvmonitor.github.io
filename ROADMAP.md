@@ -50,8 +50,8 @@ Owners may reorder, add or strike items at any time.
 
 ## Depth: access
 
-- [ ] Per-chart CSV download from the ⓘ note, using the chart's own data.
-- [ ] Permalinks to panels (`#p_<id>`) shown in the method note.
+- [ ] Per-chart CSV download from the ⓘ note, using the chart's own data. (Sonnet)
+- [ ] Permalinks to panels (`#p_<id>`) shown in the method note. (Sonnet)
 - [ ] Open data files for every new entity table, each with field definitions.
 
 ## Findings (facts later runs rely on)

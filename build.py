@@ -598,6 +598,7 @@ function renderGM(){
     ['Token', [
       level('STANDARD price', L.price, r=>r.price, fmt.px, 1),
       level('Market cap, outstanding', mcFloat, r=>r.mcFloat, fmt.usd, 1),
+      level('Market cap, minted', mcTotal, r=>r.mcTotal, fmt.usd, 1),
       flow('Net market sales, STANDARD', r=>r.mktNet||0, v=>fmt.sx(v/1e6,2)+'M', -1, {abs:true, f:v=>fmt.n(v,2)}),
       flow('STANDARD burned', burnAll, v=>fmt.n(v,2), 1)]],
     ['Balance sheet', [

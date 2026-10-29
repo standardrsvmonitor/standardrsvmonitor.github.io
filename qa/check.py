@@ -56,7 +56,8 @@ try:
     alloc = [x for x in T["revenue"]["blocks"].get("alloc", []) if x]
     eq("price", kv("overview", "STANDARD price"), kv("token", "STANDARD price"), gm("STANDARD price")[1], em("token", "Price and market capitalization, daily", 0))
     eq("market cap, outstanding", kv("overview", "Market cap, outstanding"), kv("token", "Market cap, outstanding"), gm("Market cap, outstanding")[1], em("token", "Price and market capitalization, daily", 1))
-    eq("market cap, minted", kv("token", "Market cap, minted"), em("token", "Price and market capitalization, daily", 2), rx(r"minted (\S+)", (kpi("overview", "Market cap, outstanding") or [""] * 3)[2]))
+    eq("market cap, minted", kv("token", "Market cap, minted"), em("token", "Price and market capitalization, daily", 2), rx(r"minted (\S+)", (kpi("overview", "Market cap, outstanding") or [""] * 3)[2]),
+       gm("Market cap, minted")[1])
     eq("reserve assets", kv("overview", "Reserve assets"), kv("reserve", "Reserve assets"), gm("Reserve assets")[1], em("overview", "Reserve assets by component, daily"),
        em("reserve", "Reserve assets by component, daily"), row("reserve", "t_resd", "Total")[1])
     eq("price to backing", kv("reserve", "Price to backing"), gm("Price to backing")[1], em("overview", "Price and backing per token, daily"), em("reserve", "Price to backing, daily"),

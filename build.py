@@ -73,9 +73,10 @@ SECTIONS = {
     panel(5, "Counterparty mix, trailing seven days", "Share of the volume the reserve’s liquidity served in each pool over the last seven complete days. Rows sum to 100%.",
           table("t_cpty")) +
     panel(7, "Pool profit and loss against holding, cumulative", "Fees earned plus divergence, the position’s value less the value of holding the deposited tokens, since "
-          "each pool was seeded.", chart("c_pnl"), "h_pnl") +
+          "each pool was seeded. Position, holding and the fee tokens earned to date are all valued at the same day’s closing pool price.", chart("c_pnl"), "h_pnl") +
     panel(5, "Pool profit and loss since seeding", "Net against holding is fees plus divergence. Net in USD compares value plus fees with the USD cost of the deposits, so it also "
-          "carries the move in the assets’ prices. Hover a row for cost, value and holding.", table("t_pnl")) + '</div>',
+          "carries the move in the assets’ prices. Fees are the tokens earned to date at the last close, including those settled to the Safe. "
+          "Hover a row for cost, value and holding.", table("t_pnl")) + '</div>',
 
 "launchpad": kpis("launchpad") + '<div class="grid">' +
     panel(7, "Launchpad fees by recipient, daily", "Every launchpad-token trade, on the bonding curve or in the graduated pool, pays a 1% base fee on its stock or WETH side: "

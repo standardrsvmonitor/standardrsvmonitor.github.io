@@ -552,10 +552,11 @@ def chain_shares(x, reg, keys, sw, lq, cu, lp_pools, closes, eth_day, dates, res
     return out
 
 
-def lp_pnl(x, lp_pools, closes, dates, res_hist, fees_by_day):
+def lp_pnl(x, lp_pools, closes, dates, res_hist, fee_tokens_by_day):
     """The reserve's positions against holding what was deposited. Deposits and withdrawals are each liquidity change of the Safe's
-    positions valued at the pool price just before it; holding value marks those token amounts at each day's close. Returns per pool and
-    day: position value, holding value, cost in USD, cumulative fees earned."""
+    positions valued at the pool price just before it; holding value marks those token amounts at each day's close, and so do the fees:
+    the tokens earned to date (raw units of the pool's two currencies, from pool_fees) at the day's closing pool price, so position, holding
+    and fees are all marked at one price. Returns per pool and day: position value, holding value, cost in USD, fees earned to date."""
     import time
     lm = x.jl("lp_mods.json", {"rows": []}); cache = x.jl("lp_cost.json", {})
     ids = {"0x" + format(i, "064x") for i in x.pos_ids}
@@ -584,15 +585,15 @@ def lp_pnl(x, lp_pools, closes, dates, res_hist, fees_by_day):
             P = sp * sp
             if p["usdg0"]: return a0 / 1e6 + a1 / 1e18 * (1e12 / P if P else 0)
             return a0 / 1e18 * (P * 1e18 / 1e6) + a1 / 1e6
-        h0 = h1 = cost = fees = 0.0
+        h0 = h1 = cost = f0 = f1 = 0.0
         for d in dates:
             for dd, s2, a0, a1, sp in ev:
                 if dd == d and s2 == s: h0 += a0; h1 += a1; cost += usd(a0, a1, sp)
-            fees += fees_by_day.get(d, {}).get(s, 0.0)
+            ft = fee_tokens_by_day.get(d, {}).get(s); f0 += ft[0] if ft else 0.0; f1 += ft[1] if ft else 0.0
             c = close_on(closes.get(p["pool"], {}), d, first=True)
             pos = ((res_hist.get(d) or {}).get("lp") or {}).get(s)
             if c is None or pos is None or (h0 == 0 and h1 == 0): continue
-            out[d][s] = {"lp": pos, "hold": usd(h0, h1, c / 2 ** 96), "cost": cost, "fees": fees}
+            out[d][s] = {"lp": pos, "hold": usd(h0, h1, c / 2 ** 96), "cost": cost, "fees": usd(f0, f1, c / 2 ** 96)}
     return out
 
 

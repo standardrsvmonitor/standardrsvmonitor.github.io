@@ -17,6 +17,9 @@ Owners may reorder, add or strike items at any time.
   total. Value each receipt at the pool price of its own block. Done: within 0.3% of the API.
 - [ ] **Counterparty sampling error.** 150 receipts per pool and day leave about eight points of error on a daily organic share. Read
   every swap's transaction sender for the pools' top executors (exact), sample the rest. Done: stated error under two points a day.
+- [ ] **Venue discovery on chain.** The "share of chain volume" and "share of chain liquidity" panels start from DexScreener's pair list.
+  Discover every pool holding SPCX, SKHY, BABA or ETH against USDG or WETH from PoolManager Initialize events and pool-factory events
+  instead, and keep DexScreener only as a cross-check. Done: no aggregator in the venue scan.
 - [ ] **Outage behaviour.** When the indexer, an API or the RPC fails mid-pull, the pull must fail loudly (and the gate keep the last good
   page) rather than publish partial data. Add a test that simulates each source failing.
 

@@ -667,13 +667,18 @@ def main():
     # every venue for each reserve asset; the reserve's position against holding; who executes swaps in the reserve's pools
     reg, keys, vsw, vlq, vcu = extra.venue_scan(x, stock_ds, {p_["pool"] for p_ in lp_pools.values()})
     shares = extra.chain_shares(x, reg, keys, vsw, vlq, vcu, lp_pools, closes, eth_day, dl, res_hist)
-    fees_day = collections.defaultdict(dict)
-    for row in series:
-        for s_ in lp_pools: fees_day[row["date"]][s_] = row.get("spFee_" + s_, 0.0)
-    pnl = extra.lp_pnl(x, lp_pools, closes, dl, res_hist, fees_day)
+    fee_tok = collections.defaultdict(dict)   # fees earned per day in token units, so the P&L marks them at each day's close
+    for s_ in lp_pools:
+        for d_, v_ in pfees[s_]["days"].items(): fee_tok[d_][s_] = (v_[0], v_[1])
+    pnl = extra.lp_pnl(x, lp_pools, closes, dl, res_hist, fee_tok)
     for s_, p_ in lp_pools.items():   # the replay's fees not yet collected, at today's pool price, against the same fees read from the positions
         u0_, u1_ = pfees[s_]["uncollected"]; px_ = (lp.get(s_) or {}).get("price"); owed_ = ((lp.get(s_) or {}).get("feesOwed") or {}).get("usd")
         ours_ = (u0_ / 1e6 + u1_ / 1e18 * px_ if p_["usdg0"] else u0_ / 1e18 * px_ + u1_ / 1e6) if px_ else None
+        last_ = max((d_ for d_ in pnl if s_ in pnl[d_]), default=None); c0_, c1_ = pfees[s_]["collected"]
+        coll_ = (c0_ / 1e6 + c1_ / 1e18 * px_ if p_["usdg0"] else c0_ / 1e18 * px_ + c1_ / 1e6) if px_ else None
+        reconcile("pnlfees_" + s_, f"{s_ if s_ != 'ETH' else 'ETH/USDG'} pool P&L, fees to date at the last close", pnl[last_][s_]["fees"] if last_ else None,
+                  owed_ + coll_ if owed_ is not None and coll_ is not None else None, "uncollected fees read from the positions, plus fees settled to the Safe, at today’s pool price",
+                  0.01, unit="USD")
         reconcile("poolfees_" + s_, f"{s_ if s_ != 'ETH' else 'ETH/USDG'} pool fees not yet collected, replayed from swaps, at today’s pool price", ours_, owed_,
            "uncollected fees read from the reserve’s positions", 0.02, unit="USD", note=f"{pfees[s_]['mismatch']} swaps whose reported liquidity differed from the replay")
     yday = (dt.datetime.fromtimestamp(x.tip_ts, dt.timezone.utc).date() - dt.timedelta(1)).isoformat()   # complete days only

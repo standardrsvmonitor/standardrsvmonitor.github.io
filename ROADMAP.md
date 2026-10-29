@@ -7,7 +7,8 @@ Owners may reorder, add or strike items at any time.
 
 - [ ] **Readability pass, every chart and table.** The owner found two charts that read backwards on 29 Oct (bank deposits looked automatic;
   net sales plotted upward looked like buying). Go through every panel against the readability rule in `CLAUDE.md`: what a holder would
-  conclude from the chart alone, without the ⓘ note, must be true. Fix signs, labels, colours and headline wording; no restyling. Done: one
+  conclude from the chart alone, without the ⓘ note, must be true, and nothing visible may be redundant (the concision rule in
+  `CLAUDE.md`; the owner trimmed tooltips, tile lines and headlines on 29 Oct). Fix signs, labels, colours and wording; no restyling. Done: one
   pull request listing each panel checked, what a reader would have concluded before, and what changed.
 - [x] **Pool fee income against the positions' uncollected fees.** On 29 Oct the swap-based totals since seeding ran SPCX +2.1%,
   SKHY −3.6%, BABA +5.3%, ETH/USDG +4.1% against the fees read from the reserve's positions (reconciliation `poolfees_*`, watch, 5%).

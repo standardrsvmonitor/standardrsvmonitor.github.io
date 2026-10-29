@@ -70,6 +70,10 @@ Out of scope, by the owner's decision: Token Terminal-style financial statements
   less (selling, outflows); name what happened in plain words a holder would use ("deposited by bankers", "withdrawn by closing branches",
   "net buying"), never a signed quantity the reader has to decode; headlines say "net buying" or "net selling" rather than a sign; when bars
   explain a line, they sum to its change exactly and the note says so; no two series in one chart share a near-identical colour.
+- Just the right amount of text. A tooltip lists the series (bar rows that are zero are left out) and at most one total; it never repeats
+  what another chart or the headline shows. A tile's second line is the seven-day change plus at most one short qualifier that adds a fact;
+  definitions go in the ⓘ note. A panel headline is one figure with a short qualifier. A series with no activity at all is not drawn.
+  Nothing may be clipped at 1728, 1512, 1440, 1280 or 390 pixels (the gate checks).
 
 ## How the scheduled agent works
 

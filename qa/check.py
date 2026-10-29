@@ -56,7 +56,7 @@ try:
     alloc = [x for x in T["revenue"]["blocks"].get("alloc", []) if x]
     eq("price", kv("overview", "STANDARD price"), kv("token", "STANDARD price"), gm("STANDARD price")[1], em("token", "Price and market capitalization, daily", 0))
     eq("market cap", kv("overview", "Market cap"), kv("token", "Market cap"), gm("Market cap")[1], em("token", "Price and market capitalization, daily", 1))
-    eq("market cap, in wallets", kv("token", "Market cap, in wallets"), em("token", "Price and market capitalization, daily", 2), rx(r"in wallets (\S+)", (kpi("overview", "Market cap") or [""] * 3)[2]),
+    eq("market cap, in wallets", kv("token", "Market cap, in wallets"), rx(r"in wallets (\S+)", (kpi("overview", "Market cap") or [""] * 3)[2]),
        gm("Market cap, in wallets")[1])
     eq("reserve assets", kv("overview", "Reserve assets"), kv("reserve", "Reserve assets"), gm("Reserve assets")[1], em("overview", "Reserve assets by component, daily"),
        em("reserve", "Reserve assets by component, daily"), row("reserve", "t_resd", "Total")[1])
@@ -69,9 +69,9 @@ try:
        row("liquidity", "t_pools", "Total")[5], alloc[1] if len(alloc) > 1 else None)
     eq("launchpad revenue, 7d", kv("revenue", "Launchpad revenue, 7d"), kv("launchpad", "Launchpad revenue, 7d"), gm("Launchpad revenue")[1],
        alloc[alloc.index("Launchpad fee Safe") + 1] if "Launchpad fee Safe" in alloc else None)
-    eq("charter sales, 7d", kv("revenue", "Charter sales, 7d"), gm("Charter sales")[1], rx(r"charter sales (\S+)", head("revenue", "Revenue by stream, daily")))
+    eq("charter sales, 7d", kv("revenue", "Charter sales, 7d"), gm("Charter sales")[1])
     eq("volume served, 7d", kv("liquidity", "Volume served, 7d"), gm("Volume served by the reserve")[1], em("liquidity", "Volume served by the reserve, by pool, daily"),
-       row("liquidity", "t_pools", "Total")[4], rx(r"of (\S+) ·", head("liquidity", "Pool volume by counterparty, daily")))
+       row("liquidity", "t_pools", "Total")[4])
     eq("organic share", kv("liquidity", "Organic share of volume"), em("liquidity", "Pool volume by counterparty, daily"), row("liquidity", "t_cpty", "All pools")[1])
     eq("launchpad volume, 7d", kv("launchpad", "Launchpad volume, 7d"), gm("Launchpad trading volume")[1])
     eq("launchpad revenue, to date", kv("launchpad", "Launchpad revenue, to date"), rx(r"protocol (\S+)", head("launchpad", "Launchpad fees by recipient, daily")))
@@ -86,7 +86,7 @@ try:
     eq("in banks", kv("banks", "In banks"), gm("In banks, ledger balance")[1], em("banks", "STANDARD in banks, inflows and outflows, daily"))
     eq("S-Bills locked", kv("banks", "S-Bills locked"), gm("S-Bills locked")[1], em("banks", "S-Bill principal and term rate, daily"))
     eq("issuance multiplier", kv("banks", "Issuance multiplier"), gm("Issuance multiplier")[1], em("banks", "Issuance multiplier and resolution fee, daily"))
-    eq("resolution fee", kv("banks", "Resolution fee"), rx(r"resolution fee (\S+)", head("banks", "STANDARD in banks, inflows and outflows, daily")))
+    eq("resolution fee", kv("banks", "Resolution fee"), rx(r"resolution fee (\S+)", head("banks", "Issuance multiplier and resolution fee, daily")))
     eq("burned", kv("token", "Burned"), em("token", "STANDARD burned by source, daily"))
     br = T["token"]["blocks"].get("bridge", [])
     eq("STANDARD in wallets", kv("token", "In wallets"), em("token", "STANDARD supply composition, daily"), br[br.index("= In wallets") + 1] if "= In wallets" in br else None)

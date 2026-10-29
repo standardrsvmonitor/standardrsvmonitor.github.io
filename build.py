@@ -104,7 +104,7 @@ SECTIONS = {
     panel(5, "Supply reconciliation", "From the genesis mint to circulating supply, the STANDARD in wallets and free float, at one block.", '<div class="bridge" id="bridge"></div>') +
     panel(7, "Net buying of STANDARD by holder group, daily", "STANDARD bought from the protocol’s STANDARD/ETH pool less STANDARD sold into it, by the group of the "
           "wallet behind each trade. Above zero a group bought more than it sold; below zero it sold more. Groups apply in order: team "
-          "wallet, bankers, S-Bill holders, wallets with 300 or more pool trades, launch-week buyers, others. A wallet’s group is its standing at the compile, so a "
+          "wallet, bankers, S-Bill holders, frequent traders (wallets with 300 or more pool trades), launch-week buyers, others; a group with no trades is not drawn. A wallet’s group is its standing at the compile, so a "
           "wallet that later becomes a banker moves into Bankers for its whole history; each day’s total does not change.", chart("c_sell"), "h_sell") +
     panel(5, "Largest net sellers, trailing seven days", "Net STANDARD sold into the pool by wallet over the last seven complete days; trades through routers are assigned to the "
           "wallet behind the router.", table("t_sellers")) +
@@ -283,7 +283,6 @@ a{color:inherit}
 .ch.s{height:200px} .ch.l{height:310px}
 /* KPI cards, after the leader cards */
 .kpis{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:1rem;margin-bottom:1rem}
-@media (min-width:1640px){.kpis{grid-template-columns:repeat(6,minmax(0,1fr))}}
 .kpi{position:relative;display:flex;flex-direction:column;min-width:0;padding:.875rem 1rem 0;border:1px solid rgb(255 255 255 / 12%);border-radius:.5rem;background:linear-gradient(180deg,rgb(255 255 255 / 5%),rgb(255 255 255 / 1.6%)),#141413}
 .kl{display:flex;align-items:center;gap:.4rem;color:rgb(255 255 255 / 50%);font-size:.625rem;letter-spacing:.12em;text-transform:uppercase;white-space:nowrap;min-width:0}
 .kl span.t{overflow:hidden;text-overflow:ellipsis} .kl .i{margin-left:auto}
@@ -404,6 +403,7 @@ if (window.Chart) {
   Object.assign(D.plugins.legend.labels, {boxWidth:6, boxHeight:6, padding:MOBILE?10:16, color:C.sand}); D.plugins.legend.labels.font = {size:11.5};
   D.layout.padding = {top:4, bottom:0};
   D.interaction = {mode:'index', intersect:false}; D.plugins.tooltip.mode = 'index'; D.plugins.tooltip.intersect = false;
+  D.plugins.tooltip.filter = (it)=>(it.dataset.type||it.chart.config.type)!=='bar' || (it.parsed.y!=null && Math.abs(it.parsed.y)>=0.005);   // bar rows that are zero are left out
   D.plugins.tooltip.backgroundColor = '#292925'; D.plugins.tooltip.borderColor = 'rgba(255,255,255,.15)'; D.plugins.tooltip.borderWidth = 1; D.plugins.tooltip.padding = 12; D.plugins.tooltip.cornerRadius = 8;
   D.plugins.tooltip.titleColor = '#ffffff'; D.plugins.tooltip.bodyColor = '#e8e3d9'; D.plugins.tooltip.footerColor = '#aaa79c'; D.plugins.tooltip.boxWidth = 6; D.plugins.tooltip.boxHeight = 6; D.plugins.tooltip.bodySpacing = 5;
   D.plugins.tooltip.titleFont = {weight:'500', size:12}; D.plugins.tooltip.bodyFont = {size:12}; D.plugins.tooltip.footerFont = {weight:'400', size:11.5};
@@ -424,7 +424,7 @@ const burnLedger = (r)=>(r.licBurn||0)+(r.exitFeeBurn||0)+(r.revokeFeeBurn||0), 
 const pbOf = (r)=>r&&r.reserveUsd&&r.mcFloat ? r.mcFloat/r.reserveUsd : null;
 const bkOf = (r)=>r&&r.reserveUsd&&r.float ? r.reserveUsd/r.float : null;
 const served = (r)=>r.spVolMine!=null?r.spVolMine:(r.spVol||0);
-const GROUPS = [['team','Team wallet',C.rose],['bankers','Bankers',C.gold],['sbills','S-Bill holders',C.celadon],['active','High-frequency wallets and bots',C.sapphire],['launch','Launch-week buyers',C.silver],['other','Other wallets',C.grey]];
+const GROUPS = [['team','Team wallet',C.rose],['bankers','Bankers',C.gold],['sbills','S-Bill holders',C.celadon],['active','Frequent traders',C.sapphire],['launch','Launch-week buyers',C.silver],['other','Other wallets',C.grey]];
 const Sh = S.filter(r=>r.date<=L.date);
 const ep2 = E.length>1 ? fmt.dt(E[1].start) : '';
 const Sp = Sh.filter(r=>r.date<L.date);
@@ -489,39 +489,39 @@ function renderKpis(){ derive();
       {l:'STANDARD price', v:fmt.px(L.price), c:chg(L.price, W0&&W0.price, {pol:1}), s:'7d', sp:lvl(r=>r.price), tip:'Live price from DexScreener for the STANDARD/ETH pool; history uses GeckoTerminal daily closes.'},
       {l:'Market cap', v:fmt.usd(mcTotal), c:chg(mcTotal, W0&&W0.mcTotal, {pol:1}), s:`in wallets ${fmt.usd(mcFloat)}`, sp:lvl(r=>r.mcTotal), tip:'Price times circulating supply, every STANDARD minted, the figure the protocol’s site and DexScreener show. In wallets leaves out the protocol’s own liquidity and the Incentives vault.'},
       {l:'Reserve assets', v:fmt.usd(L.reserve.totalUsd), c:chg(L.reserve.totalUsd, W0&&W0.reserveUsd, {pol:1}), s:`${fmt.x(pbNow)} P/B`, sp:lvl(r=>r.reserveUsd), col:C.blue, tip:'ETH and USDG in the reserve Safe, ETH in the policy vaults, equities held outside pools and the Safe’s Uniswap v4 positions, read at the compile block.'},
-      {l:'Revenue, 7d', v:fmt.usd(rev7), c:chg(rev7, revP, {pol:1}), s:'vs prior 7d', sp:roll7(inc), col:C.gold, tip:`What the protocol kept over the seven complete days to ${yd}: STANDARD trading fees, LP fees, the launchpad’s 50% and charter sales.`},
+      {l:'Revenue, 7d', v:fmt.usd(rev7), c:chg(rev7, revP, {pol:1}), sp:roll7(inc), col:C.gold, tip:`What the protocol kept over the seven complete days to ${yd}: STANDARD trading fees, LP fees, the launchpad’s 50% and charter sales.`},
       {l:'Branches', v:fmt.int(L.branches), c:chg(L.branches, W0&&W0.branches, {pol:1}), s:`${fmt.int(L.activeCharters)} charters`, sp:lvl(r=>r.branches), col:C.violet, tip:'Branches open now, from the indexer census.'},
       {l:`Epoch ${L.epoch} net flow`, v:fmt.sx(L.epochNetFlow,1)+' ETH', c:{t:`${L.epochNetFlow>=0?'expansion':'contraction'}`, c:L.epochNetFlow>=0?'up':'dn'}, s:`${Math.floor(epLeft/86400)}d ${Math.floor(epLeft%86400/3600)}h left`,
         sp:E.slice(-12).map(e=>e.netFlow), col:L.epochNetFlow>=0?C.green:C.red, tip:`ETH bought less ETH sold through the STANDARD/ETH pool this epoch; its sign at settlement sets the regime. Multiplier ${fmt.x(L.multiplier)}. The line shows settled epochs.`},
     ],
     revenue:[
-      {l:'Revenue, 7d', v:fmt.usd(rev7), c:chg(rev7, revP, {pol:1}), s:'vs prior 7d', sp:roll7(inc), col:C.teal},
+      {l:'Revenue, 7d', v:fmt.usd(rev7), c:chg(rev7, revP, {pol:1}), sp:roll7(inc), col:C.teal},
       {l:'STANDARD trading fees, 7d', v:fmt.usd(sum(s7.map(tr))), c:chg(sum(s7.map(tr)), P7.length?sum(P7.map(tr)):null, {pol:1}), sp:roll7(tr), col:STREAM.tr},
       {l:'LP fees, 7d', v:fmt.usd(pf7), c:chg(pf7, pfP, {pol:1}), sp:roll7(r=>r.spFee||0), col:STREAM.pool},
-      {l:'Launchpad revenue, 7d', v:fmt.usd(sum(s7.map(lpp))), c:chg(sum(s7.map(lpp)), P7.length?sum(P7.map(lpp)):null, {pol:1}), s:'protocol 50%', sp:roll7(lpp), col:STREAM.lpad, tip:'The protocol’s 50% of the 1% launchpad base fee, held in the launchpad fee Safe.'},
+      {l:'Launchpad revenue, 7d', v:fmt.usd(sum(s7.map(lpp))), c:chg(sum(s7.map(lpp)), P7.length?sum(P7.map(lpp)):null, {pol:1}), sp:roll7(lpp), col:STREAM.lpad, tip:'The protocol’s 50% of the 1% launchpad base fee, held in the launchpad fee Safe.'},
       {l:'Charter sales, 7d', v:fmt.usd(sum(s7.map(chs))), c:chg(sum(s7.map(chs)), P7.length?sum(P7.map(chs)):null, {pol:1}), sp:roll7(chs), col:STREAM.ch},
       {l:'Price to revenue', v:fmt.x(prrOf(Y),1), c:chg(prrOf(Y), Sp.length>7?prrOf(Sp[Sp.length-8]):null, {pol:-1, abs:true, f:v=>v.toFixed(1)+'×'}), s:yd, sp:last(Sp,30).map(prrOf), col:C.fg2},
     ],
     liquidity:[
       {l:'Capital in pools', v:fmt.usd(poolLiq), c:{t:fmt.pct(poolLiq/L.reserve.totalUsd,0)+' of reserve', c:'nt'}, sp:lvl(r=>{const q=(r.reserveParts||{}).lp; return q?sum(Object.values(q)):null;}), col:C.blue},
       {l:'LP fees, 7d', v:fmt.usd(pf7), c:chg(pf7, pfP, {pol:1}), sp:roll7(r=>r.spFee||0), col:C.blue},
-      {l:'LP fee APR', v:fmt.pct(poolLiq?pf7*365/7/poolLiq:null,0), c:{t:'on capital in pools', c:'nt'}, sp:roll7(r=>r.spFee||0), col:C.blue},
+      {l:'LP fee APR', v:fmt.pct(poolLiq?pf7*365/7/poolLiq:null,0), sp:roll7(r=>r.spFee||0), col:C.blue, tip:'Trailing seven-day LP fees, annualized, over the capital in the reserve’s pools.'},
       {l:'Volume served, 7d', v:fmt.usd(sum(s7.map(served))), c:chg(sum(s7.map(served)), P7.length?sum(P7.map(served)):null, {pol:1}), sp:roll7(served), col:C.blue},
       {l:'Share of chain equity volume', v:fmt.pct(eqShare(s7),0), c:chg(eqShare(s7), P7.length?eqShare(P7):null, {pp:true, pol:1}), s:'7d', sp:rollRatio(r=>sum(stockPools.map(p=>r['spVolMine_'+p]??r['spVol_'+p]??0)), r=>sum(stockPools.map(p=>r['chainVol_'+p]||0))), col:C.teal},
-      {l:'Organic share of volume', v:(cpShares(s7)||{}).Org!=null?cpShares(s7).Org+'%':'–', c:chg(orgS(s7), P7.length?orgS(P7):null, {pp:true, pol:1}), s:`fee-paying ${fmt.pct(zf(s7),0)}`, sp:rollRatio(r=>ck(r,'Org'), r=>sum(CPK.map(k=>ck(r,k)))), col:C.green},
+      {l:'Organic share of volume', v:(cpShares(s7)||{}).Org!=null?cpShares(s7).Org+'%':'–', c:chg(orgS(s7), P7.length?orgS(P7):null, {pp:true, pol:1}), sp:rollRatio(r=>ck(r,'Org'), r=>sum(CPK.map(k=>ck(r,k)))), col:C.green},
     ],
     launchpad:[
-      {l:'Launchpad volume, 7d', v:fmt.usd(lv7), c:chg(lv7, lvP, {pol:1}), s:'implied by fees', sp:roll7(lvol), col:C.teal, tip:'Trading volume implied by the 0.7% of every launchpad trade that reaches the fee Safe.'},
-      {l:'Launchpad fees, 7d', v:fmt.usd(lf7), c:chg(lf7, lfP, {pol:1}), s:'all recipients', sp:roll7(r=>(r.lpadSafe||0)+(r.lpadEsc||0)), col:C.teal},
-      {l:'Launchpad revenue, 7d', v:fmt.usd(sum(s7.map(lpp))), c:chg(sum(s7.map(lpp)), P7.length?sum(P7.map(lpp)):null, {pol:1}), s:'50% of base fee', sp:roll7(lpp), col:C.teal},
+      {l:'Launchpad volume, 7d', v:fmt.usd(lv7), c:chg(lv7, lvP, {pol:1}), sp:roll7(lvol), col:C.teal, tip:'Trading volume implied by the 0.7% of every launchpad trade that reaches the fee Safe.'},
+      {l:'Launchpad fees, 7d', v:fmt.usd(lf7), c:chg(lf7, lfP, {pol:1}), sp:roll7(r=>(r.lpadSafe||0)+(r.lpadEsc||0)), col:C.teal},
+      {l:'Launchpad revenue, 7d', v:fmt.usd(sum(s7.map(lpp))), c:chg(sum(s7.map(lpp)), P7.length?sum(P7.map(lpp)):null, {pol:1}), sp:roll7(lpp), col:C.teal},
       {l:'Launchpad revenue, to date', v:fmt.usd(sum(Sh.map(lpp))), c:{t:`of ${fmt.usd(sum(Sh.map(r=>(r.lpadSafe||0)+(r.lpadEsc||0))))} fees`, c:'nt'}, sp:(()=>{let c=0; return last(Sh.map(r=>c+=lpp(r)),30);})(), col:C.teal},
-      {l:'Reward pool', v:fmt.usd((LPD.seedUsd||0)+sum(Sh.map(lpot))), c:{t:`${fmt.usd(sum(Sh.map(lpot)))} from fees`, c:'nt'}, s:`seed ${fmt.usd(LPD.seedUsd||0,1)}`, sp:(()=>{let c=LPD.seedUsd||0; return last(Sh.map(r=>c+=lpot(r)),30);})(), col:C.gold,
+      {l:'Reward pool', v:fmt.usd((LPD.seedUsd||0)+sum(Sh.map(lpot))), c:{t:`${fmt.usd(sum(Sh.map(lpot)))} from fees`, c:'nt'}, sp:(()=>{let c=LPD.seedUsd||0; return last(Sh.map(r=>c+=lpot(r)),30);})(), col:C.gold,
         tip:'The $1.1M opening pot the protocol’s site attributes to the Standard Reserve, plus 20% of every base fee. The fee Safe holds only the fee part.'},
       {l:'Season 1 closes', v:LPD.season?dm(fmt.dt(LPD.season.endsAt)):'–', c:{t:LPD.season?`${Math.max(0,Math.floor((LPD.season.endsAt-NOWTS)/86400))}d ${Math.max(0,Math.floor((LPD.season.endsAt-NOWTS)%86400/3600))}h left`:'', c:'nt'}, s:LPD.season?fmt.hm(LPD.season.endsAt)+' UTC':'', sp:[], col:C.gold},
     ],
     reserve:[
       {l:'Reserve assets', v:fmt.usd(L.reserve.totalUsd), c:chg(L.reserve.totalUsd, W0&&W0.reserveUsd, {pol:1}), s:'7d', sp:lvl(r=>r.reserveUsd), col:C.blue},
-      {l:'Backing per token', v:'$'+backing.toFixed(4), c:chg(backing, bkOf(W0), {pol:1}), s:'per STANDARD in wallets', sp:lvl(bkOf), col:C.blue},
+      {l:'Backing per token', v:'$'+backing.toFixed(4), c:chg(backing, bkOf(W0), {pol:1}), s:'in wallets', sp:lvl(bkOf), col:C.blue},
       {l:'Price to backing', v:fmt.x(pbNow), c:chg(pbNow, pbOf(W0), {abs:true, f:v=>v.toFixed(2)+'×'}), s:'7d', sp:lvl(pbOf), col:C.fg2},
       {l:'In pools', v:fmt.usd(L.reserve.lpUsd), c:{t:fmt.pct(L.reserve.lpUsd/L.reserve.totalUsd,0)+' of reserve', c:'nt'}, sp:lvl(r=>{const q=(r.reserveParts||{}).lp; return q?sum(Object.values(q)):null;}), col:C.blue},
       {l:'USDG', v:fmt.usd(L.reserve.safeUsdg), c:{t:fmt.pct(L.reserve.safeUsdg/L.reserve.totalUsd,0)+' of reserve', c:'nt'}, sp:lvl(r=>(r.reserveParts||{}).usdg), col:C.teal},
@@ -539,8 +539,8 @@ function renderKpis(){ derive();
     banks:[
       {l:'Branches', v:fmt.int(L.branches), c:chg(L.branches, W0&&W0.branches, {pol:1}), s:'7d', sp:lvl(r=>r.branches), col:C.violet},
       {l:'Active charters', v:fmt.int(L.activeCharters), c:chg(L.activeCharters, W0&&W0.activeCharters, {pol:1}), s:'7d', sp:lvl(r=>r.activeCharters), col:C.violet},
-      {l:'Issuance multiplier', v:fmt.x(L.multiplier), c:{t:`${fmt.n(L.baseIssuance*L.multiplier,0)} a day`, c:'nt'}, s:`${perBranch.toFixed(1)} per branch`, sp:lvl(r=>r.multiplier), col:C.gold},
-      {l:'In banks', v:fmt.n(L.pending,2), c:chg(L.pending, W0&&W0.pending, {}), s:'ledger balance, unminted', sp:lvl(r=>r.pending), col:C.fg2},
+      {l:'Issuance multiplier', v:fmt.x(L.multiplier), c:{t:`${fmt.n(L.baseIssuance*L.multiplier,0)} a day`, c:'nt'}, sp:lvl(r=>r.multiplier), col:C.gold},
+      {l:'In banks', v:fmt.n(L.pending,2), c:chg(L.pending, W0&&W0.pending, {}), s:'unminted', sp:lvl(r=>r.pending), col:C.fg2},
       {l:'Resolution fee', v:fmt.pct(L.exitFeeNow,1), c:{t:`stayers’ cut ${fmt.pct(L.exitFeeNow/2,1)}`, c:'nt'}, s:`${Math.round((L.exitPressure7d||0)/0.10*100)}% of threshold`, sp:lvl(r=>r.exitFee), col:C.orange,
         tip:'The exit fee on withdrawals, 2% at rest rising to 60% as seven-day withdrawals approach the 10% threshold. Half is burned and half goes to the bankers who stay, the protocol’s “stayers’ cut”.'},
       {l:'S-Bills locked', v:fmt.n(L.sbills.locked,2), c:chg(L.sbills.locked, W0&&(W0.sbLocked??W0.sbills), {pol:1}), s:`${(L.sbills.rate*100).toFixed(2)}% per term`, sp:lvl(r=>r.sbLocked??r.sbills), col:C.teal},
@@ -752,7 +752,7 @@ reg('overview', ({Rl, ll, dl})=>{ document.getElementById('h_brco').innerHTML = 
 
 // revenue
 reg('revenue', ({Rf, lf, df})=>{ const r7 = sum(s7.map(inc)), c7 = sum(s7.map(chs));
-  document.getElementById('h_rev').innerHTML = `revenue <em>${fmt.usd(r7)}</em> · charter sales ${fmt.usd(c7)} · 7d`;
+  document.getElementById('h_rev').innerHTML = `<em>${fmt.usd(r7)}</em> 7d`;
   return mk(c_rev, lf, [bar('STANDARD trading fees', Rf.map(tr), STREAM.tr), bar('LP fees', Rf.map(r=>r.spFee||0), STREAM.pool), bar('Launchpad revenue', Rf.map(lpp), STREAM.lpad), bar('Charter sales', Rf.map(chs), STREAM.ch)],
     {stacked:true, y:usd0, tf:usd1, bands:df, footer:i=>{const r=Rf[i[0].dataIndex]; return `revenue ${fmt.usd(inc(r),1)}`;}}); });
 reg('revenue', ()=>{ const E2 = E.filter(e=>e.epoch>1 && inRange(e.settledAt)); document.getElementById('h_epochs').innerHTML = `${E.filter(isExp).length} of ${E.length} settled epochs in expansion`;
@@ -768,21 +768,19 @@ reg('revenue', ({Rf, lf, df})=>{ const v = prrOf(Y); document.getElementById('h_
 // liquidity
 reg('liquidity', ({Rf})=>{ document.getElementById('h_vol').innerHTML = `<em>${fmt.usd(sum(s7.map(served)))}</em> 7d`; Rf = Rf.filter(r=>r.date>=LP0);
   return mk(c_vol, Rf.map(r=>dm(r.date)), pools.map(p=>bar(shortP(p), Rf.map(r=>pvm(r,p)), PCOL[p])), {stacked:true, y:usd0, tf:usd1,
-    after:i=>{const r=Rf[i[0].dataIndex]; return (r.spVol_ETH||0)>0?[`ETH/USDG pool total ${fmt.usd(r.spVol_ETH,1)}, served by the reserve ${fmt.pct(pvm(r,'ETH')/r.spVol_ETH,0)}`]:[];},
-    footer:i=>`total ${fmt.usd(served(Rf[i[0].dataIndex]),1)} · fee-exempt ${fmt.usd(Rf[i[0].dataIndex].spVolZeroFee||0,1)}`}); });
+    footer:i=>`total ${fmt.usd(served(Rf[i[0].dataIndex]),1)}`}); });
 reg('liquidity', ({Rf})=>{ document.getElementById('h_pfee').innerHTML = `<em>${fmt.usd(sum(s7.map(r=>r.spFee||0)))}</em> 7d`; Rf = Rf.filter(r=>r.date>=LP0);
   return mk(c_pfee, Rf.map(r=>dm(r.date)), pools.map(p=>bar(shortP(p), Rf.map(r=>r['spFee_'+p]||0), PCOL[p])), {stacked:true, y:usd0, tf:usd1, footer:i=>`total ${fmt.usd(Rf[i[0].dataIndex].spFee||0,1)}`}); });
 const LP0 = '2026-10-14';
 const shareChart = (el, key, num, den, what)=>({Rf})=>{ const Rq = Rf.filter(r=>r.date>=LP0);
-  return mk(el, Rq.map(r=>dm(r.date)), pools.map(p=>line(shortP(p), Rq.map(r=>r[key+p]??null), PCOL[p], {gaps:true})), {y:pct0, tf:v=>fmt.pct(v,1), ymin:0, ymax:1,
-    after:i=>{const r=Rq[i[0].dataIndex]; return pools.filter(p=>r[den+p]).map(p=>`${shortP(p)}: ${what} ${fmt.usd(num(r,p)||0,1)} of ${fmt.usd(r[den+p],1)}`);}}); };
+  return mk(el, Rq.map(r=>dm(r.date)), pools.map(p=>line(shortP(p), Rq.map(r=>r[key+p]??null), PCOL[p], {gaps:true})), {y:pct0, tf:v=>fmt.pct(v,1), ymin:0, ymax:1}); };
 reg('liquidity', (x)=>{ document.getElementById('h_vshare').innerHTML = pools.map(p=>`${shortP(p)} <em>${fmt.pct(Y['volShare_'+p],0)}</em>`).join(' · '); return shareChart(c_vshare, 'volShare_', (r,p)=>r['spVolMine_'+p]??r['poolVolChain_'+p], 'chainVol_', 'served')(x); });
 reg('liquidity', (x)=>{ document.getElementById('h_lshare').innerHTML = pools.map(p=>`${shortP(p)} <em>${fmt.pct(Y['liqShare_'+p],0)}</em>`).join(' · '); return shareChart(c_lshare, 'liqShare_', (r,p)=>((r.reserveParts||{}).lp||{})[p], 'chainTvl_', 'position')(x); });
 reg('liquidity', ({Rf})=>{ const Rc = Rf.filter(r=>r.date>=LP0 && pools.some(p=>r['cpN_'+p]!=null));
   const c7 = Object.fromEntries(CPK.map(k=>[k, sum(s7.map(r=>ck(r,k)))])), t7 = sum(CPK.map(k=>c7[k]));
-  document.getElementById('h_cpty').innerHTML = t7 ? `organic <em>${cpShares(s7).Org}%</em> of ${fmt.usd(t7)} · 7d` : '';
+  document.getElementById('h_cpty').innerHTML = t7 ? `organic <em>${cpShares(s7).Org}%</em> 7d` : '';
   return mk(c_cpty, Rc.map(r=>dm(r.date)), [bar('Organic users', Rc.map(r=>ck(r,'Org')), C.celadon), bar('Cross-venue arbitrage', Rc.map(r=>ck(r,'Arb')), C.rose), bar('Other bots', Rc.map(r=>ck(r,'Bot')), C.sapphire), bar('Fee-exempt contract', Rc.map(r=>ck(r,'Fx')), C.grey)],
-    {stacked:true, y:usd0, tf:usd1, footer:i=>{const r=Rc[i[0].dataIndex], t=sum(CPK.map(k=>ck(r,k))); return t?`organic share ${fmt.pct(ck(r,'Org')/t,0)}`:'';}}); });
+    {stacked:true, y:usd0, tf:usd1}); });
 reg('liquidity', ({Rf})=>{ const Rq = Rf.filter(r=>r.date>=LP0), pnl = (r,p)=>r['lpVal_'+p]!=null ? r['lpVal_'+p]+r['lpFees_'+p]-r['holdVal_'+p] : null;
   const tot = r=>{const v=pools.map(p=>pnl(r,p)); return v.some(x=>x!=null)?sum(v):null;};
   document.getElementById('h_pnl').innerHTML = Y.date ? `<em>${fmt.sgn(tot(Y))}${fmt.usd(tot(Y),1)}</em> against holding, ${yd}` : '';
@@ -792,31 +790,30 @@ reg('liquidity', ({Rf})=>{ const Rq = Rf.filter(r=>r.date>=LP0), pnl = (r,p)=>r[
 reg('launchpad', ({Rf})=>{ const Rq = Rf.filter(r=>r.date>=LP0);
   document.getElementById('h_lfee').innerHTML = `<em>${fmt.usd(sum(Sh.map(r=>(r.lpadSafe||0)+(r.lpadEsc||0))))}</em> since 14 Oct · protocol ${fmt.usd(sum(Sh.map(lpp)))}`;
   return mk(c_lfee, Rq.map(r=>dm(r.date)), [bar('Protocol, 50%', Rq.map(lpp), C.sapphire), bar('Reward pool, 20%', Rq.map(lpot), C.gold), bar('Creators, 30% and module fees', Rq.map(lcr), C.silver)],
-    {stacked:true, y:usd0, tf:usd1, footer:i=>{const r=Rq[i[0].dataIndex]; return `implied launchpad volume ${fmt.usd(lvol(r),2)}`;}}); });
+    {stacked:true, y:usd0, tf:usd1}); });
 reg('launchpad', ({Rf})=>{ const Rc = Rf.filter(r=>r.date>=LP0), lf_ = r=>r.spFeeLpad||0, all_ = r=>r.spFee||0;
   const a = sum(s7.map(lf_)), b = sum(s7.map(all_));
   document.getElementById('h_lroute').innerHTML = b ? `<em>${fmt.usd(a)}</em>, ${fmt.pct(a/b,1)} of LP fees · 7d` : '';
   return mk(c_lroute, Rc.map(r=>dm(r.date)), [bar('Launchpad-routed trades', Rc.map(lf_), C.sapphire), bar('All other trades', Rc.map(r=>Math.max(0, all_(r)-lf_(r))), alpha(C.sand,.45))],
-    {stacked:true, y:usd0, tf:usd1, footer:i=>{const r=Rc[i[0].dataIndex]; return all_(r)?`launchpad-routed share ${fmt.pct(lf_(r)/all_(r),1)} · ${fmt.usd(r.spVolLpad||0)} of volume`:'';}}); });
+    {stacked:true, y:usd0, tf:usd1}); });
 
 // reserve
 reg('reserve', (x)=>{ document.getElementById('h_res').innerHTML = `<em>${fmt.usd(L.reserve.totalUsd)}</em>`; return resStack(c_res, x, true); });
 reg('reserve', ({Rl, ll, dl})=>{ document.getElementById('h_pb').innerHTML = `<em>${fmt.x(pbNow)}</em> · backing $${backing.toFixed(4)}`;
-  return mk(c_pb, ll, [line('Price to backing', Rl.map(pbOf), C.gold, {fill:true})], {legend:false, y:v=>v.toFixed(1)+'×', tf:v=>fmt.x(v),
-    after:i=>{const r=Rl[i[0].dataIndex]; return r.reserveUsd&&r.float?[`price ${fmt.px(r.price)} · backing $${(r.reserveUsd/r.float).toFixed(4)}`]:[];}}); });
+  return mk(c_pb, ll, [line('Price to backing', Rl.map(pbOf), C.gold, {fill:true})], {legend:false, y:v=>v.toFixed(1)+'×', tf:v=>fmt.x(v)}); });
 
 // token
-reg('token', ({Rl, ll, dl})=>{ document.getElementById('h_price').innerHTML = `<em>${fmt.px(L.price)}</em> · ${fmt.usd(mcTotal)} market cap · ${fmt.usd(mcFloat)} in wallets`;
+reg('token', ({Rl, ll, dl})=>{ document.getElementById('h_price').innerHTML = `<em>${fmt.px(L.price)}</em> · ${fmt.usd(mcTotal)} market cap`;
   return mk(c_price, ll, [line('Price', Rl.map(r=>r.price), C.gold, {fill:true}), line('Market cap', Rl.map(r=>r.mcTotal), C.blue, {ax:'y1'})],
-    {y:v=>'$'+v.toFixed(2), tf:fmt.px, y1:usd0, tfy1:usd1, bands:dl, footer:i=>{const r=Rl[i[0].dataIndex]; return r.mcFloat?`market cap, in wallets ${fmt.usd(r.mcFloat)}`:'';}}); });
+    {y:v=>'$'+v.toFixed(2), tf:fmt.px, y1:usd0, tfy1:usd1, bands:dl}); });
 reg('token', ({Rf, lf, df})=>{ const nb7 = -sum(s7.map(r=>r.mktNet||0));   // net buying: STANDARD bought from the pool less STANDARD sold into it
   document.getElementById('h_sell').innerHTML = `net ${nb7>=0?'buying':'selling'} <em>${fmt.n(Math.abs(nb7),2)}</em> STANDARD, 7d`;
-  return mk(c_sell, lf, [...GROUPS.map(([k,n,c])=>bar(n, Rf.map(r=>-(r['sell_'+k]||0)), c)), line('Net buying, all groups', Rf.map(r=>-(r.mktNet||0)), C.fg2, {pts:2})],
-    {stacked:true, zero:false, y:n0, tf:v=>fmt.sgn(v)+fmt.n(v,2), footer:i=>{const r=Rf[i[0].dataIndex], v=-(r.mktNet||0); return r.price?`net ${v>=0?'buying':'selling'} ${fmt.usd(Math.abs(v)*r.price)} at the close`:'';}}); });
+  return mk(c_sell, lf, [...GROUPS.filter(([k])=>Sh.some(r=>Math.abs(r['sell_'+k]||0)>=0.5)).map(([k,n,c])=>bar(n, Rf.map(r=>-(r['sell_'+k]||0)), c)), line('Net buying, all groups', Rf.map(r=>-(r.mktNet||0)), C.fg2, {pts:2})],
+    {stacked:true, zero:false, y:n0, tf:v=>fmt.sgn(v)+fmt.n(v,2)}); });
 reg('token', ({Rl, ll, dl})=>{ document.getElementById('h_mc').innerHTML = `<em>${fmt.n(L.float,2)}</em> in wallets · ${fmt.n(L.pending,2)} in banks`;
   const sets = [line('In wallets', Rl.map(r=>r.float), C.gold), line('Protocol liquidity and Incentives vault', Rl.map(r=>(r.pool||0)+(r.incentives||0)), C.blue), line('In banks', Rl.map(r=>r.pending), C.violet)];
   sets.forEach((s,i)=>{s.fill=i===0?'origin':'-1'; s.backgroundColor=alpha(s.borderColor,.4); s.borderWidth=1; s.stack='sup';});
-  return mk(c_mc, ll, sets, {stacked:true, y:n0, tf:v=>fmt.n(v,2), footer:i=>{const r=Rl[i[0].dataIndex]; return `total ${fmt.n((r.supply||0)+(r.pending||0),2)}, of which ${fmt.n(r.supply||0,2)} circulating`;}}); });
+  return mk(c_mc, ll, sets, {stacked:true, y:n0, tf:v=>fmt.n(v,2), footer:i=>{const r=Rl[i[0].dataIndex]; return `total ${fmt.n((r.supply||0)+(r.pending||0),2)}`;}}); });
 reg('token', ({Rf, lf, df})=>{ const ofl = (r)=>{const i=Sh.indexOf(r), p=i>0?Sh[i-1]:null; if(!p) return null;
     const dF=r.float-p.float, W=(r.mint||0), Dist=(r.fromIncentives||0), Fees=(r.feesToTeam||0), Mk=-(r.mktNet||0), Dep=-(r.depositBurn||0), Ob=-((r.burn||0)-(r.depositBurn||0)-(r.burn_contraction||0)-(r.burnOther||0));
     return {dF, W, Dist, Fees, Mk, Dep, Ob, Oth:dF-(W+Dist+Fees+Mk+Dep+Ob)};};
@@ -832,10 +829,10 @@ reg('token', ({Rf, lf, df})=>{ document.getElementById('h_burn').innerHTML = `<e
   const cum = []; {let c=0; Sp.forEach(r=>{c+=burnAll(r); cum.push(c);});} const cw = last(cum, N);
   return mk(c_burn, lf, [bar('Expansion licenses', Rf.map(r=>r.licBurn||0), C.gold), bar('Resolution and revocation fees, burned half', Rf.map(r=>(r.exitFeeBurn||0)+(r.revokeFeeBurn||0)), C.orange),
     bar('Buybacks and other token burns', Rf.map(burnTokens), C.red), line('Cumulative, share of the 1B cap', cw.map(v=>v/1e9), C.fg2, {ax:'y1'})],
-    {stacked:true, y:n0, tf:v=>fmt.n(v,2), y1:v=>fmt.pct(v,1), after:i=>[`cumulative ${fmt.n(cw[i[0].dataIndex],2)} STANDARD`]}); });
+    {stacked:true, y:n0, tf:v=>fmt.n(v,2), y1:v=>fmt.pct(v,1)}); });
 
 // banks
-reg('banks', ({Rf, lf, df})=>{ document.getElementById('h_bank').innerHTML = `in banks <em>${fmt.n(L.pending,2)}</em> · resolution fee ${fmt.pct(L.exitFeeNow,1)}`;
+reg('banks', ({Rf, lf, df})=>{ document.getElementById('h_bank').innerHTML = `<em>${fmt.n(L.pending,2)}</em> in banks`;
   return mk(c_bank, lf, [bar('Issued to banks', Rf.map(r=>r.issuance||0), C.gold), bar('Deposited by bankers', Rf.map(r=>r.deposits||0), C.celadon),
     bar('Stayers’ cut', Rf.map(r=>(r.exitFeeRedis||0)+(r.revokeFeeBurn||0)), C.violet), bar('Spent on licenses, burned', Rf.map(r=>-(r.licBurn||0)), C.grey),
     bar('Withdrawn by closing branches', Rf.map(r=>-(r.wdGross||0)), C.orange), bar('Revoked charters', Rf.map(r=>-(r.revokeGross||0)), C.red),
@@ -854,7 +851,7 @@ reg('banks', ()=>{ const open = (L.charterRemaining||0)>0, CH = CHall.filter(c=>
 reg('banks', ()=>{ const open = (L.licenseRemaining||0)>0, LP = LPall.filter(p=>inRange(p.start));
   document.getElementById('h_license').innerHTML = `last <em>${fmt.int(L.licenseLastSale)}</em> · ${open?'quote '+fmt.int(L.licensePriceNow)+', '+L.licenseRemaining+' left':'next '+fmt.hm(L.licenseNextOpen)+' UTC at '+fmt.int(L.licenseNextStart)}`;
   return mk(c_license, LP.map(p=>dm(fmt.dt(p.start))+(new Date(p.start*1000).getUTCHours()<12?' am':' pm')), [bar('Licenses sold', LP.map(p=>p.sold), alpha(C.violet,.45), {ax:'y1'}), line('Period close price, STANDARD', LP.map(p=>p.close), C.gold)],
-    {y:v=>fmt.n(v,1), y1:n0, tf:v=>fmt.int(v), after:i=>{const p=LP[i[0].dataIndex]; return [`burned ${fmt.n(p.burned,1)} STANDARD`];}}); });
+    {y:v=>fmt.n(v,1), y1:n0, tf:v=>fmt.int(v)}); });
 reg('banks', ({Rl, ll, dl})=>{ document.getElementById('h_sb').innerHTML = `<em>${fmt.n(L.sbills.locked,2)}</em> · ${(L.sbills.rate*100).toFixed(2)}% per term`;
   return mk(c_sb, ll, [line('S-Bill principal', Rl.map(r=>r.sbLocked??r.sbills??null), C.teal, {fill:true, gaps:true}), line('Term rate', Rl.map(r=>r.sbRate??null), C.gold, {ax:'y1', gaps:true})], {y:n0, tf:v=>fmt.n(v,2), y1:v=>fmt.pct(v,1), ymin:0}); });
 reg('banks', ({Rl, ll, dl})=>{ document.getElementById('h_mult').innerHTML = `<em>${fmt.x(L.multiplier)}</em> · resolution fee ${fmt.pct(L.exitFeeNow,1)}`;

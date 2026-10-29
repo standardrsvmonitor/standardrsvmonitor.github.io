@@ -8,7 +8,7 @@ Without 'live' the in-browser live overlay is switched off, so every figure is t
 Standard library only; Chrome is found from $CHROME, the PATH (google-chrome, chromium) or the macOS application bundle."""
 import sys, os, re, json, html, shutil, subprocess, tempfile, threading, functools, http.server
 
-LAYOUTS = (1280, 390)          # widths checked for layout faults in addition to the 1440px desktop render
+LAYOUTS = (1728, 1512, 1280, 390)   # widths checked for layout faults besides the 1440px desktop render (tiles go six to a row from 1640px)
 CAP = ("<script>window.__err=[];window.addEventListener('error',e=>window.__err.push(String(e.message)+' @'+e.lineno));"
        "const __cw=console.warn;console.warn=(...a)=>{window.__err.push('warn: '+a.map(String).join(' '));__cw(...a);};</script>")
 QA = r"""<script>

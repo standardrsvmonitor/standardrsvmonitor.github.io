@@ -40,7 +40,7 @@ SECTIONS = {
 
 "revenue": kpis("revenue") + '<div class="grid">' +
     panel(7, "Revenue by stream, daily", "Token trading fees are known per three-day epoch and spread evenly over its days; the live epoch is estimated from ETH held in the tax hook "
-          "and fee splitter. Pool fee income is each swap’s fee weighted by the reserve’s share of in-range liquidity. The launchpad line is the protocol’s 50% of the 1% base fee, "
+          "and fee splitter. Pool fee income replays every swap in the reserve’s pools tick by tick and values each swap’s fee at the pool price of that swap. The launchpad line is the protocol’s 50% of the 1% base fee, "
           "held in the launchpad fee Safe. Charter sales are recorded on the sale date.", chart("c_rev", "l"), "h_rev") +
     panel(5, "Income allocation, trailing seven days", "Where the last seven complete days of income went. Token trading fees and charter sales are routed at settlement: 70% to the "
           "reserve in expansion or to buybacks in contraction, 15% to POL buybacks and 15% to the team. Pool fees accrue inside the reserve’s positions. The launchpad’s "
@@ -57,8 +57,12 @@ SECTIONS = {
           "at least $100 of liquidity.", table("t_pools")) +
     panel(6, "Volume served by the reserve, by pool, daily", "Each swap’s USDG amount times the reserve’s share of in-range liquidity. The reserve is the only provider in the equity "
           "pools; it shares the ETH/USDG pool with others.", chart("c_vol"), "h_vol") +
-    panel(6, "Pool fee income by pool, daily", "Fees earned by the reserve’s positions, weighted by its share of in-range liquidity. The ETH/USDG figure excludes Uniswap’s "
-          "0.0125% protocol fee. No fee has been withdrawn from the positions.", chart("c_pfee"), "h_pfee") +
+    panel(6, "Pool fee income by pool, daily", "Fees earned by the reserve’s positions. Every swap is replayed from the pool’s price before it to the price after it, one "
+          "initialized tick at a time, against the liquidity of every provider rebuilt from the pool’s events; the fee on each step is charged on the input token and split "
+          "among the providers in range, as the pool contract does. Each swap’s fee is valued at the pool price of that swap. The ETH/USDG figure excludes Uniswap’s "
+          "0.0125% protocol fee. A change to a position settles its accrued fees to the Safe; the only one so far, the 14 Oct 2026 addition to the ETH/USDG "
+          "position, settled 0.0097 ETH and 26.00 USDG, counted on the days they accrued. Each compile reconciles the fees not yet collected, at today’s pool price, with the "
+          "same fees read from the positions; the difference from the sum of daily figures is the move in the pool price since each fee was earned.", chart("c_pfee"), "h_pfee") +
     panel(6, "Share of chain volume by pool, daily", "Volume served by the reserve’s liquidity as a share of all on-chain volume in the same asset, across every pool DexScreener "
           "lists against USDG or ETH.", chart("c_vshare"), "h_vshare", "p_vshare") +
     panel(6, "Share of chain liquidity by pool, daily", "The reserve’s position value as a share of all on-chain liquidity in pools pairing the same asset with USDG or ETH.",

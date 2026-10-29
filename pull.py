@@ -224,7 +224,7 @@ def main():
         tl = s24((info >> 8) & 0xFFFFFF); tu = s24((info >> 32) & 0xFFFFFF)
         if pid not in pools:
             usdg0 = c0.lower() == USDG.lower(); stock = c1 if usdg0 else c0
-            pools[pid] = {"id": pid, "stock": symbol(stock), "stockAddr": stock, "usdg0": usdg0, "fee": int(w[2], 16), "liq": 0, "positions": 0}
+            pools[pid] = {"id": pid, "stock": symbol(stock), "stockAddr": stock, "usdg0": usdg0, "fee": int(w[2], 16), "spacing": int(w[3], 16), "liq": 0, "positions": 0}
         pools[pid]["positions"] += 1; pools[pid].setdefault("ranges", []).append([tl, tu, liq])
         pos.append({"id": i, "pool": pid, "liq": liq, "tl": tl, "tu": tu})
     jsave(os.path.join(C, "symbols.json"), symcache)
@@ -605,7 +605,13 @@ def main():
                   PM=PM, SW=SW, ML=ML, TR=TR, pad=pad, STD=STD, USDG=USDG, POSM=POSM, SEED_BLOCK=SEED_BLOCK, bal=bal,
                   pos_ids=[q["id"] for q in pos], lp_liq_now=sum(q["liq"] for q in pos), log=log, rpc=rpc, sel=sel, B=ts_block, SV=SV,
                   INIT="0x" + keccak(b"Initialize(bytes32,address,address,uint24,int24,address,uint160,int24)").hex())
-    lp_pools = {p_["stock"]: {"pool": pid_, "isEth": p_["stockAddr"].lower() == ZERO, "stockAddr": p_["stockAddr"], "usdg0": p_["usdg0"], "tier": p_["fee"]} for pid_, p_ in pools.items()}
+    lp_pools = {p_["stock"]: {"pool": pid_, "isEth": p_["stockAddr"].lower() == ZERO, "stockAddr": p_["stockAddr"], "usdg0": p_["usdg0"], "tier": p_["fee"], "spacing": p_["spacing"]} for pid_, p_ in pools.items()}
+    pfees = extra.pool_fees(x, lp_pools, extra.LPAD["routers"])   # the reserve's pool fees, replayed swap by swap; replaces the estimate from the swap cache
+    for row in series:
+        if "spFee" not in row and not any(row["date"] in pfees[s_]["days"] for s_ in lp_pools): continue
+        f_ = {s_: (pfees[s_]["days"].get(row["date"]) or [0.0] * 4) for s_ in lp_pools}
+        for s_, v_ in f_.items(): row["spFee_" + s_] = round(v_[2], 6)
+        row["spFee"] = round(sum(v_[2] for v_ in f_.values()), 6); row["spFeeLpad"] = round(sum(v_[3] for v_ in f_.values()), 6)
     closes = extra.pool_closes(x, {**{pid_: SEED_BLOCK for pid_ in pools}, STD_POOL: G})
     today_parts = {"total": reserve["totalUsd"], "eth": (reserve["safeEth"] + reserve["contractionEth"] + reserve["expansionEth"]) * ethusd, "usdg": reserve["safeUsdg"],
                    "stocks": reserve["safeStockUsd"], "lp": {s_: v_["valueUSD"] for s_, v_ in lp.items()}}
@@ -665,14 +671,11 @@ def main():
     for row in series:
         for s_ in lp_pools: fees_day[row["date"]][s_] = row.get("spFee_" + s_, 0.0)
     pnl = extra.lp_pnl(x, lp_pools, closes, dl, res_hist, fees_day)
-    for s_ in lp_pools:   # scale the swap-based fee estimate so its cumulative total equals the fees read from the positions today
-        last_ = max((d_ for d_ in pnl if s_ in pnl[d_]), default=None); owed_ = ((lp.get(s_) or {}).get("feesOwed") or {}).get("usd")
-        k_ = owed_ / pnl[last_][s_]["fees"] if last_ and owed_ is not None and pnl[last_][s_]["fees"] else 1.0
-        for d_ in pnl:
-            if s_ in pnl[d_]: pnl[d_][s_]["fees"] *= k_
-        log("pool fees, swap estimate vs positions", s_, round(pnl[last_][s_]["fees"] / k_) if last_ else None, round(owed_ or 0))
-        reconcile("poolfees_" + s_, f"{s_ if s_ != 'ETH' else 'ETH/USDG'} pool fee income since seeding, from swaps", pnl[last_][s_]["fees"] / k_ if last_ else None, owed_,
-           "uncollected fees read from the reserve’s positions", 0.05, gate=False, unit="USD")
+    for s_, p_ in lp_pools.items():   # the replay's fees not yet collected, at today's pool price, against the same fees read from the positions
+        u0_, u1_ = pfees[s_]["uncollected"]; px_ = (lp.get(s_) or {}).get("price"); owed_ = ((lp.get(s_) or {}).get("feesOwed") or {}).get("usd")
+        ours_ = (u0_ / 1e6 + u1_ / 1e18 * px_ if p_["usdg0"] else u0_ / 1e18 * px_ + u1_ / 1e6) if px_ else None
+        reconcile("poolfees_" + s_, f"{s_ if s_ != 'ETH' else 'ETH/USDG'} pool fees not yet collected, replayed from swaps, at today’s pool price", ours_, owed_,
+           "uncollected fees read from the reserve’s positions", 0.02, unit="USD", note=f"{pfees[s_]['mismatch']} swaps whose reported liquidity differed from the replay")
     yday = (dt.datetime.fromtimestamp(x.tip_ts, dt.timezone.utc).date() - dt.timedelta(1)).isoformat()   # complete days only
     cp = extra.counterparties(x, reg, lp_pools, "2026-10-14", yday)
     cls = extra.cpty_classes(cp, {s_: p_["tier"] for s_, p_ in lp_pools.items()}, routers=set(extra.LPAD["routers"]))

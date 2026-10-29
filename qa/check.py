@@ -38,7 +38,7 @@ def kv(tab, label): k = kpi(tab, label); return k[1] if k else None
 def head(tab, title): return T[tab]["heads"].get(title) or ""
 def gm(label):
     for r in T["overview"]["tables"]["t_gm"]:
-        if r and len(r) > 1 and r[0].replace("7d", "").strip() == label: return r   # group header rows have one cell
+        if r and len(r) > 1 and re.sub(r"(7d|30d|all)$", "", r[0]).strip() == label: return r   # group header rows have one cell; units trail the label
     return [None, None]
 def em(tab, title, i=0):
     m = re.findall(r"(−?\+?\$?[\d,.]+[KMB%×]?)", head(tab, title)); return m[i] if len(m) > i else None
@@ -63,16 +63,13 @@ try:
     eq("price to backing", kv("reserve", "Price to backing"), gm("Price to backing")[1], em("overview", "Price and backing per token, daily"), em("reserve", "Price to backing, daily"),
        rx(r"([\d.]+×) P/B", (kpi("overview", "Reserve assets") or [""] * 3)[2]))
     eq("backing per token", kv("reserve", "Backing per token"), gm("Backing per STANDARD in wallets")[1], rx(r"backing (\$[\d.]+)", head("reserve", "Price to backing, daily")))
-    eq("revenue, 7d", kv("overview", "Revenue, 7d"), kv("revenue", "Revenue, 7d"), gm("Revenue")[1], em("revenue", "Revenue by stream, daily"))
-    eq("STANDARD trading fees, 7d", kv("revenue", "STANDARD trading fees, 7d"), gm("STANDARD trading fees")[1])
-    eq("LP fees, 7d", kv("revenue", "LP fees, 7d"), kv("liquidity", "LP fees, 7d"), gm("LP fees")[1], em("liquidity", "LP fees by pool, daily"),
+    eq("revenue, 7d", kv("overview", "Revenue, 7d"), kv("revenue", "Revenue, 7d"), em("revenue", "Revenue by stream, daily"))
+    eq("LP fees, 7d", kv("revenue", "LP fees, 7d"), kv("liquidity", "LP fees, 7d"), em("liquidity", "LP fees by pool, daily"),
        row("liquidity", "t_pools", "Total")[5])
-    eq("launchpad revenue, 7d", kv("revenue", "Launchpad revenue, 7d"), kv("launchpad", "Launchpad revenue, 7d"), gm("Launchpad revenue")[1])
-    eq("charter sales, 7d", kv("revenue", "Charter sales, 7d"), gm("Charter sales")[1])
-    eq("volume served, 7d", kv("liquidity", "Volume served, 7d"), gm("Volume served by the reserve")[1], em("liquidity", "Volume served by the reserve, by pool, daily"),
+    eq("launchpad revenue, 7d", kv("revenue", "Launchpad revenue, 7d"), kv("launchpad", "Launchpad revenue, 7d"))
+    eq("volume served, 7d", kv("liquidity", "Volume served, 7d"), em("liquidity", "Volume served by the reserve, by pool, daily"),
        row("liquidity", "t_pools", "Total")[4])
     eq("organic share", kv("liquidity", "Organic share of volume"), em("liquidity", "Pool volume by counterparty, daily"))
-    eq("launchpad volume, 7d", kv("launchpad", "Launchpad volume, 7d"), gm("Launchpad trading volume")[1])
     eq("launchpad revenue, to date", kv("launchpad", "Launchpad revenue, to date"), rx(r"protocol (\S+)", head("launchpad", "Launchpad fees by recipient, daily")))
     eq("launchpad fees, to date", rx(r"of (\S+) fees", (kpi("launchpad", "Launchpad revenue, to date") or [""] * 3)[2]), em("launchpad", "Launchpad fees by recipient, daily"))
     kp = T["launchpad"]["blocks"].get("kotm_pool", [])
@@ -109,6 +106,7 @@ try:
     for nm, a, b in (("revenue, 7d", usd(tr + pf + lp + ch), kv("revenue", "Revenue, 7d")), ("STANDARD trading fees, 7d", usd(tr), kv("revenue", "STANDARD trading fees, 7d")),
                      ("LP fees, 7d", usd(pf), kv("revenue", "LP fees, 7d")), ("launchpad revenue, 7d", usd(lp), kv("revenue", "Launchpad revenue, 7d")),
                      ("charter sales, 7d", usd(ch), kv("revenue", "Charter sales, 7d")),
+                     ("launchpad volume, 7d", usd(sum((r.get("lpadSafe") or 0) / 0.007 for r in s7)), kv("launchpad", "Launchpad volume, 7d")),
                      ("revenue by destination, trailing 30 days (the page opens on 30D)", usd(sum((r.get("tradingFeeEth") or 0) * eth(r) + (r.get("spFee") or 0) + (r.get("lpadSafe") or 0) * 5 / 7
                       + (r.get("charterEth") or 0) * eth(r) for r in S[-30:])), em("revenue", "Revenue by destination, trailing 30 days")),
                      ("launchpad revenue, to date", usd(sum((r.get("lpadSafe") or 0) * 5 / 7 for r in D["series"])), kv("launchpad", "Launchpad revenue, to date")),
@@ -116,6 +114,14 @@ try:
                      ("market cap, in wallets", usd(L["price"] * L["float"]), kv("token", "Market cap, in wallets")),
                      ("market cap", usd(L["price"] * L["totalSupply"]), kv("token", "Market cap"))):
         add("recompute", nm, a == b, f"recomputed {a}, page {b}")
+    # the growth monitor follows the range; the page opens on 30D, so its flow rows are the last 30 complete days
+    s30 = S[-30:]; served = lambda r: r["spVolMine"] if r.get("spVolMine") is not None else (r.get("spVol") or 0)
+    for label, f in (("Revenue", lambda r: (r.get("tradingFeeEth") or 0) * eth(r) + (r.get("spFee") or 0) + (r.get("lpadSafe") or 0) * 5 / 7 + (r.get("charterEth") or 0) * eth(r)),
+                     ("STANDARD trading fees", lambda r: (r.get("tradingFeeEth") or 0) * eth(r)), ("LP fees", lambda r: r.get("spFee") or 0),
+                     ("Launchpad revenue", lambda r: (r.get("lpadSafe") or 0) * 5 / 7), ("Charter sales", lambda r: (r.get("charterEth") or 0) * eth(r)),
+                     ("Volume served by the reserve", served), ("Launchpad trading volume", lambda r: (r.get("lpadSafe") or 0) / 0.007)):
+        a_, b_ = usd(sum(f(r) for r in s30)), gm(label)[1]
+        add("recompute", f"growth monitor, {label}, 30 days", a_ == b_, f"recomputed {a_}, page {b_}")
 except Exception as e:
     add("recompute", "recomputation ran", False, f"{type(e).__name__}: {e}")
 

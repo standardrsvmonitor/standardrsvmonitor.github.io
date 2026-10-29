@@ -60,6 +60,10 @@ Owners may reorder, add or strike items at any time.
 
 ## Depth: access
 
+- [ ] **90D and 180D range settings.** Add 90D once 90 complete days of history exist (13 Dec 2026) and 180D at 180 days (13 Mar 2027).
+  Every chart, the growth monitor (a 90- or 180-day window against the one before, compared only when that earlier window is complete
+  and after the launch epoch), Revenue by destination and Counterparty mix already take the window from the range. Done: the buttons
+  appear on those dates, the range sweep in `qa/render.py` covers them, and the gate passes. (Sonnet)
 - [ ] Per-chart CSV download from the ⓘ note, using the chart's own data. (Sonnet)
 - [ ] Permalinks to panels (`#p_<id>`) shown in the method note. (Sonnet)
 - [ ] Open data files for every new entity table, each with field definitions.

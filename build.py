@@ -22,10 +22,11 @@ TABS = [("overview", "Overview"), ("revenue", "Revenue"), ("liquidity", "Liquidi
 
 SECTIONS = {
 "overview": kpis("overview") + '<div class="grid">' +
-    panel(7, "Growth monitor, trailing seven days",
-          "Flows compare the last seven complete UTC days with the seven before. Levels compare the latest reading with the close seven days earlier. "
+    panel(7, "Growth monitor, trailing 30 days",
+          "Follows the range. Flows compare the window’s complete UTC days with the same span before it, shown only once that earlier span is complete "
+          "and after the launch epoch; All shows totals since launch. Levels compare the latest reading with the close one window earlier, or with the first day. "
           "Shares change in percentage points. Green marks a move that favours the protocol, red one that works against it, grey a neutral measure. "
-          "Trends cover 30 days: rolling seven-day sums for flows, daily closes for levels.", table("t_gm", "gm")) +
+          "Trends cover 30 days: rolling sums over the window for flows, daily closes for levels.", table("t_gm", "gm"), None, "p_gm") +
     '<div class="col w5">' +
     panel(12, "Revenue by stream, daily", "Revenue each complete UTC day over the selected range: STANDARD trading fees, LP fees earned by the reserve’s "
           "pool positions, the protocol’s 50% of the launchpad base fee, and charter sales.", chart("c_wrev", "s"), "h_wrev", "p_wrev") +
@@ -576,9 +577,16 @@ let LIVEHM = '', LIVEB = 0;
 
 // ---------- growth monitor ----------
 function renderGM(){
-  const flow = (label, f, fm, pol, o={})=>({label, u:'7d', cur:sum(s7.map(f)), prev:P7.length?sum(P7.map(f)):null, fm, pol, sp:roll7(f), ...o});
-  const ratio = (label, nf, df, pol)=>{const r=(rows)=>{const d=sum(rows.map(df)); return d?sum(rows.map(nf))/d:null;}; return {label, u:'7d', cur:r(s7), prev:P7.length?r(P7):null, fm:v=>fmt.pct(v,1), pol, pp:true, sp:rollRatio(nf,df)};};
-  const level = (label, cur, f, fm, pol, o={})=>({label, u:'', cur, prev:W0?f(W0):null, fm, pol, sp:lvl(f), ...o});
+  // the window follows the range: the last 7 or 30 complete UTC days against the same span before it, compared only when that earlier span
+  // is complete and after the launch epoch; All is the total since launch, levels against the first day
+  const W = N, cur = W ? last(Sp, W) : Sp, prv = W && Sp.length >= 2*W && Sp[Sp.length-2*W].date >= ep2 ? Sp.slice(-2*W, -W) : null;
+  const L0 = W ? (Sh.length > W ? Sh[Sh.length-1-W] : null) : Sh[0], u = W ? W+'d' : 'all';
+  const rollW = (f)=>{ if (!W) { let c=0; return last(Sp.map(r=>c+=f(r)), 30); } const R=last(Sp, 30+W-1); return R.map((r,i)=>i>=W-1 ? sum(R.slice(i-W+1,i+1).map(f)) : null).slice(-30); };
+  const rollR = (nf, df)=>{ const k=W||7, R=last(Sp, 30+k-1); return R.map((r,i)=>{ if(i<k-1) return null; const w=R.slice(i-k+1,i+1), d=sum(w.map(df)); return d?sum(w.map(nf))/d:null; }).slice(-30); };
+  const flow = (label, f, fm, pol, o={})=>({label, u, cur:sum(cur.map(f)), prev:prv?sum(prv.map(f)):null, fm, pol, sp:rollW(f), ...o});
+  const ratio = (label, nf, df, pol)=>{const r=(rows)=>{const d=sum(rows.map(df)); return d?sum(rows.map(nf))/d:null;}; return {label, u, cur:r(cur), prev:prv?r(prv):null, fm:v=>fmt.pct(v,1), pol, pp:true, sp:rollR(nf,df)};};
+  const level = (label, cv, f, fm, pol, o={})=>({label, u:'', cur:cv, prev:L0?f(L0):null, fm, pol, sp:W?lvl(f):Sh.map(f), ...o});
+  document.querySelector('#p_gm .pt').textContent = `Growth monitor, ${W ? 'trailing '+W+' days' : 'since launch'}`;
   const eqN = r=>sum(stockPools.map(p=>r['spVolMine_'+p]??r['spVol_'+p]??0)), eqD = r=>sum(stockPools.map(p=>r['chainVol_'+p]||0));
   const G = [
     ['Revenue', [
@@ -610,7 +618,7 @@ function renderGM(){
       level('S-Bills locked', L.sbills.locked, r=>r.sbLocked??r.sbills, v=>fmt.n(v,2), 1),
       level('Issuance multiplier', L.multiplier, r=>r.multiplier, v=>fmt.x(v), 1, {abs:true, f:v=>v.toFixed(2)})]],
   ];
-  const head = `<tr><th>Metric</th><th>Current</th><th>Week earlier</th><th>Change</th><th>Trend</th></tr>`;
+  const head = `<tr><th>Metric</th><th>Current</th><th>${W===7?'Week earlier':W===30?'Month earlier':'At launch'}</th><th>Change</th><th>Trend</th></tr>`;
   document.getElementById('t_gm').innerHTML = head + G.map(([g,rows])=>`<tr class="grp"><td colspan="5">${g}</td></tr>`+rows.map(m=>{
     const c = chg(m.cur, m.prev, m); const col = c.c==='up'?C.green:c.c==='dn'?C.red:C.muted;
     return `<tr><td>${m.label}${m.u?`<span class="u">${m.u}</span>`:''}</td><td>${m.fm(m.cur)}</td><td class="mut">${m.prev==null?'–':m.fm(m.prev)}</td><td class="c ${c.c}">${c.t}</td><td>${spark(m.sp, col, false)}</td></tr>`;}).join('')).join('');
@@ -974,7 +982,7 @@ function renderAll(){ renderKpis(); renderStatic(); renderBridge(); renderLeader
 
 renderAll();
 document.querySelectorAll('#tabs button[data-t]').forEach(b=>b.addEventListener('click',()=>{ history.replaceState(null,'','#'+b.dataset.t); show(b.dataset.t); window.scrollTo({top:0}); }));
-document.querySelectorAll('#range button').forEach(b=>b.addEventListener('click',()=>{N=+b.dataset.n; document.querySelectorAll('#range button').forEach(x=>x.classList.toggle('on',x===b)); redrawAll();}));
+document.querySelectorAll('#range button').forEach(b=>b.addEventListener('click',()=>{N=+b.dataset.n; document.querySelectorAll('#range button').forEach(x=>x.classList.toggle('on',x===b)); renderGM(); redrawAll();}));
 window.addEventListener('hashchange', ()=>show(location.hash.slice(1)));
 // links from table headers or elsewhere to a panel id switch to its tab first
 document.addEventListener('click', e=>{const a=e.target.closest('a[href^="#p_"]'); if(!a) return; const el=document.querySelector(a.getAttribute('href')); if(!el) return; e.preventDefault(); show(el.closest('.tab').id.slice(2)); el.scrollIntoView({behavior:'smooth'});});

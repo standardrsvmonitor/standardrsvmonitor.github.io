@@ -1,9 +1,8 @@
 #!/usr/bin/env python3
 """Render data/dash.json into index.html: a single-file, tabbed protocol monitor (Chart.js from jsDelivr, fonts from Google Fonts)."""
-import json, os, base64, datetime as dt
+import json, os, datetime as dt
 D = os.path.join(os.path.dirname(os.path.abspath(__file__)), "data")
-hero_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "assets", "reserve-dam.webp")
-HERO_IMG = "data:image/webp;base64," + base64.b64encode(open(hero_path, "rb").read()).decode()
+HERO_IMG = "assets/reserve-dam.webp"   # served beside the page (cached by browsers) rather than embedded as base64 in every load
 data = json.load(open(os.path.join(D, "dash.json")))
 built = dt.datetime.fromtimestamp(data["pulledAt"], dt.timezone.utc)
 
@@ -168,6 +167,7 @@ TEMPLATE = r"""<!doctype html>
 <title>Standard Reserve Monitor</title>
 <meta name="description" content="Independent on-chain monitor of the Standard Reserve protocol on Robinhood Chain.">
 <meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="preload" as="image" href="assets/reserve-dam.webp" type="image/webp">
 <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Figtree:wght@400;450;500;600&display=swap">
 <style>

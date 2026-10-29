@@ -1,0 +1,37 @@
+name: Scheduler
+
+# GitHub's own cron drops most runs of a frequent schedule (4 of about 48 fired on 28-29 Oct 2026), so the page went hours without a
+# compile whenever no computer was awake to dispatch it. This job dispatches the refresh every 30 minutes for five and a half hours, then
+# dispatches itself again before the six-hour job limit, so the chain never stops. The cron entries only restart it if it ever does.
+# Public repository: Actions minutes are free. Stop it by disabling this workflow.
+
+on:
+  schedule:
+    - cron: "11 */3 * * *"
+  workflow_dispatch:
+
+permissions:
+  actions: write
+  contents: read
+
+concurrency:
+  group: scheduler
+  cancel-in-progress: false
+
+jobs:
+  tick:
+    runs-on: ubuntu-latest
+    timeout-minutes: 345
+    env:
+      GH_TOKEN: ${{ github.token }}
+      R: ${{ github.repository }}
+    steps:
+      - name: Dispatch the refresh every 30 minutes
+        run: |
+          for i in $(seq 1 11); do
+            gh workflow run refresh.yml -R "$R" -f tick=1 || echo "dispatch failed at $(date -u +%H:%M) UTC"
+            sleep 1800
+          done
+      - name: Hand over to the next scheduler run
+        if: always()
+        run: gh workflow run scheduler.yml -R "$R"

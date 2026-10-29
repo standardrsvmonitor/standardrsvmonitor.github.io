@@ -112,6 +112,7 @@ def main():
     open(os.path.join(tmp, "page.html"), "w").write(s)
     for w in LAYOUTS: open(os.path.join(tmp, f"wrap{w}.html"), "w").write(WRAP.replace("__W__", str(w)).replace("__M__", "1"))
     if api and os.path.isdir(api): shutil.copytree(api, os.path.join(tmp, "api"))   # the page reads its own published qa.json when present
+    if os.path.isdir(os.path.join(os.path.dirname(os.path.abspath(src)), "assets")): shutil.copytree(os.path.join(os.path.dirname(os.path.abspath(src)), "assets"), os.path.join(tmp, "assets"))
     srv = http.server.ThreadingHTTPServer(("127.0.0.1", 0), functools.partial(type("Q", (http.server.SimpleHTTPRequestHandler,), {"log_message": lambda *a: None}), directory=tmp))
     threading.Thread(target=srv.serve_forever, daemon=True).start(); base = f"http://127.0.0.1:{srv.server_address[1]}/"
     try:

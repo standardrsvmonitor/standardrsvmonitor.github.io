@@ -45,7 +45,8 @@ SECTIONS = {
     panel(5, "Income allocation, trailing seven days", "Where the last seven complete days of income went. Token trading fees and charter sales are routed at settlement: 70% to the "
           "reserve in expansion or to buybacks in contraction, 15% to POL buybacks and 15% to the team. Pool fees accrue inside the reserve’s positions. The launchpad’s "
           "protocol share sits in the fee Safe and has not been routed.", '<div class="alloc" id="alloc"></div>', "h_alloc") +
-    panel(7, "Income routing by epoch", "Trading fees and charter proceeds routed by the fee engine at each settlement, in ETH. Green bars are expansion epochs, red contraction.",
+    panel(7, "Income routing by epoch", "Trading fees and charter proceeds routed by the fee engine at each settlement, in ETH, for the epochs settled inside the selected range. "
+          "Green bars are expansion epochs, red contraction.",
           chart("c_epochs"), "h_epochs") +
     panel(5, "Price to recurring revenue, daily", "Market capitalization on outstanding supply over trailing seven-day recurring revenue, annualized. Windows that include the "
           "launch epoch are omitted.", chart("c_prr"), "h_prr") + '</div>',
@@ -97,7 +98,8 @@ SECTIONS = {
           "Outstanding supply excludes STANDARD in the protocol’s own pool and the Incentives Vault. Shaded days are contraction epochs.", chart("c_price", "l"), "h_price") +
     panel(5, "Supply reconciliation", "From the genesis mint to minted supply, outstanding supply and free float, at one block.", '<div class="bridge" id="bridge"></div>') +
     panel(7, "Net sales into the pool by holder group, daily", "STANDARD sold into the protocol’s STANDARD/ETH pool less STANDARD bought from it. Groups apply in order: team "
-          "wallet, bankers, S-Bill holders, wallets with 300 or more pool trades, launch-week buyers, others.", chart("c_sell"), "h_sell") +
+          "wallet, bankers, S-Bill holders, wallets with 300 or more pool trades, launch-week buyers, others. A wallet’s group is its standing at the compile, so a "
+          "wallet that later becomes a banker moves into Bankers for its whole history; each day’s total does not change.", chart("c_sell"), "h_sell") +
     panel(5, "Largest net sellers, trailing seven days", "Net STANDARD sold into the pool by wallet over the last seven complete days; trades through routers are assigned to the "
           "wallet behind the router.", table("t_sellers")) +
     panel(6, "STANDARD supply composition, daily", "Outstanding supply, protocol holdings in the pool and Incentives Vault, and the ledger balance owed to bankers but not yet "
@@ -127,6 +129,12 @@ SECTIONS = {
           "the previous epoch.", table("t_lead") + '<button class="btn" id="lead_more"></button>', "h_lead") + '</div>',
 
 "data": '<div class="grid">' +
+    panel(12, "Reconciliation with independent sources", "Each figure the monitor rebuilds from on-chain events, set against an independent reading of the same quantity: "
+          "balances read directly at the compile block, the protocol’s own indexer, GeckoTerminal, DexScreener and Coinbase. Gate items stop publication when they fall outside "
+          "tolerance, and the previous page stays up. Watched items are published with their gap. Every compile is also checked for figures that disagree across panels, "
+          "recomputed totals, freshness, and any figure for a day three or more days old that has moved since the last published page.", table("t_recon"), "h_recon") +
+    panel(12, "Open data", "Files published with every compile at the same address, written from the rendered page after it passes the checks, so every figure in them is "
+          "the page’s own. Field definitions travel with the JSON.", '<div class="kv2 files" id="files"></div>', "h_files") +
     panel(12, "Daily data log", "One observation per UTC day since genesis, every field reconstructed from protocol events and transfer logs. The current day is partial.",
           table("t_log") + '<div class="btns"><button class="btn" id="more"></button><button class="btn" id="csv">Export CSV</button></div>', "h_log") +
     panel(12, "Epoch settlement ledger", "Net flow is ETH bought less ETH sold through the pool during the epoch; its sign sets the regime. Routed comprises trading fees and charter "
@@ -137,7 +145,7 @@ SECTIONS = {
 
 SUB = {"revenue": "Income from the token economy, the reserve’s pools and the launchpad.", "liquidity": "The reserve as market maker for stock tokens and ETH.",
        "launchpad": "Fees from tokens launched against reserve markets, and King of the Markets.", "reserve": "The assets behind STANDARD, rebuilt daily from on-chain events.",
-       "token": "Price, supply, burns and who is selling.", "banks": "Bank charters and branches, issuance, the Auction House and S-Bills.", "data": "Every daily observation since genesis."}
+       "token": "Price, supply, burns and who is selling.", "banks": "Bank charters and branches, issuance, the Auction House and S-Bills.", "data": "Every daily observation since genesis, its reconciliation and the open data files."}
 def hero(k, n):
     if k == "overview": return '<div class="hero big"><div class="hero-in" id="ov_hero"></div></div>'
     return f'<div class="hero mini"><div class="hero-in"><h1>{n}</h1><p>{SUB[k]}</p></div></div>'
@@ -189,7 +197,7 @@ a{color:inherit}
 .nav button.on i{opacity:1;background:var(--white)}
 .nav a::after{content:"↗";margin-left:auto;font-size:.75rem;color:var(--dis)}
 .side-foot{padding:1rem 1.25rem 1.25rem;border-top:1px solid var(--bsub);color:var(--dis);font-size:.75rem;line-height:1.5}
-.main{flex:1;min-width:0;display:flex;flex-direction:column;position:relative}
+.main{flex:1;min-width:0;display:flex;flex-direction:column;position:relative;overflow-x:clip}
 .top{position:sticky;top:0;z-index:20;display:flex;align-items:center;gap:.75rem;height:4.25rem;padding:0 1.5rem;border-bottom:1px solid var(--bsub);background:rgb(18 18 17 / 92%);backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px)}
 .crumb{color:var(--sec);font-size:.8125rem;white-space:nowrap}
 .crumb strong{color:var(--fg);font-weight:500}
@@ -242,7 +250,8 @@ a{color:inherit}
 .how li{color:rgb(255 255 255 / 62%);font-size:.875rem;line-height:1.45}
 .how b{display:block;margin-bottom:.25rem;color:var(--fg);font-weight:500}
 .how span{white-space:nowrap}
-#t_pools th{white-space:normal;vertical-align:bottom;line-height:1.25;max-width:7rem}
+#t_pools th,#t_lead th{white-space:normal;vertical-align:bottom;line-height:1.25;max-width:7rem}
+#t_recon td.l{white-space:normal;line-height:1.35;min-width:9rem}
 .how strong{display:block;font-size:1.5rem;font-weight:450;letter-spacing:-.02em;color:var(--white);margin:.15rem 0}
 /* grid and panels */
 .grid{display:grid;grid-template-columns:repeat(12,minmax(0,1fr));gap:1rem}
@@ -292,7 +301,7 @@ table.gm td:first-child{color:var(--fg)}
 table.gm tr.grp td{padding:1rem .625rem .375rem;border-bottom:1px dashed var(--dash);background:none;color:rgb(255 255 255 / 50%);font-size:.625rem;letter-spacing:.12em;text-transform:uppercase}
 table.gm tr.grp:first-child td{padding-top:.25rem}
 table.gm td .u{margin-left:.4rem;color:var(--dis);font-size:.75rem}
-table.gm td svg{display:block;width:84px;height:20px;margin-left:auto}
+table.gm td svg{display:block;width:72px;height:20px;margin-left:auto}
 table.gm td.c{min-width:80px}
 .btn{display:inline-flex;align-items:center;height:2.125rem;margin-top:.875rem;padding:0 .8125rem;border:0;border-radius:.5rem;background:rgb(255 255 255 / 8%);box-shadow:inset 0 0 12px rgb(255 255 255 / 10%);color:var(--white);font:inherit;font-size:.75rem;cursor:pointer}
 .btn:hover{background:rgb(255 255 255 / 14%)}
@@ -305,12 +314,13 @@ table.gm td.c{min-width:80px}
 .bridge .tot{color:var(--white);font-weight:500;border-top:1px dashed var(--dash);padding-top:.4rem}
 .kv2{display:grid;grid-template-columns:auto 1fr;gap:.35rem 1rem;margin-top:.875rem;font-size:.8125rem}
 .kv2 div:nth-child(odd){color:var(--sec)} .kv2 div:nth-child(even){text-align:right;color:var(--fg)}
+.kv2.files div:nth-child(even){text-align:left;color:var(--sec)} .kv2.files a{color:var(--fg);text-decoration:none;font-family:var(--mono);font-size:.75rem} .kv2.files a:hover{color:var(--white)}
 .alloc .abar{display:flex;gap:3px;height:6px;margin-top:1.25rem} .alloc .abar>div{height:100%;border-radius:2px}
 .alloc .lg{display:grid;grid-template-columns:auto 1fr auto auto;gap:.6rem .75rem;margin-top:1.25rem;font-size:.8125rem;align-items:center}
 .alloc .lg i{width:6px;height:6px;display:inline-block}
 .alloc .lg .v{text-align:right;color:var(--white)} .alloc .lg .p{text-align:right;color:var(--sec);min-width:2.5rem}
 .foot{margin-top:2.5rem;padding-top:1rem;border-top:1px dashed var(--dash);color:var(--dis);font-size:.75rem;line-height:1.6}
-@media (max-width:1200px){.w8,.w7,.w5,.w4{grid-column:span 12}}
+@media (max-width:1360px){.w8,.w7,.w5,.w4{grid-column:span 12}}
 @media (max-width:980px){
   .shell{flex-direction:column} .side{position:sticky;top:0;height:auto;width:100%;flex:none;border-right:0;border-bottom:1px solid var(--bsub)}
   .brand{height:3.25rem;border-bottom:0} .nlabel,.side-foot,.nav a{display:none}
@@ -589,7 +599,7 @@ function renderGM(){
       level('Reserve assets', L.reserve.totalUsd, r=>r.reserveUsd, fmt.usd, 1),
       level('Backing per outstanding token', backing, bkOf, v=>v==null?'–':'$'+v.toFixed(4), 1),
       level('Price to backing', pbNow, pbOf, v=>fmt.x(v), 0, {abs:true, f:v=>v.toFixed(2)+'×'})]],
-    ['Banking system', [
+    ['Banks', [
       level('Branches', L.branches, r=>r.branches, fmt.int, 1),
       level('Active charters', L.activeCharters, r=>r.activeCharters, fmt.int, 1),
       flow('Deposits less withdrawals, STANDARD', r=>(r.deposits||0)-(r.wdGross||0), v=>fmt.sx(v/1e6,2)+'M', 1, {abs:true, f:v=>fmt.n(v,2)}),
@@ -734,7 +744,7 @@ reg('revenue', ({Rf, lf, df})=>{ const r7 = sum(s7.map(rec)), c7 = sum(s7.map(ch
   document.getElementById('h_rev').innerHTML = `recurring <em>${fmt.usd(r7)}</em> · charter sales ${fmt.usd(c7)} · 7d`;
   return mk(c_rev, lf, [bar('Token trading fees', Rf.map(tr), STREAM.tr), bar('Pool fees', Rf.map(r=>r.spFee||0), STREAM.pool), bar('Launchpad, protocol share', Rf.map(lpp), STREAM.lpad), bar('Charter sales', Rf.map(chs), STREAM.ch)],
     {stacked:true, y:usd0, tf:usd1, bands:df, footer:i=>{const r=Rf[i[0].dataIndex]; return `recurring ${fmt.usd(rec(r),1)} · total ${fmt.usd(inc(r),1)}`;}}); });
-reg('revenue', ()=>{ const E2 = E.filter(e=>e.epoch>1); document.getElementById('h_epochs').innerHTML = `${E.filter(isExp).length} of ${E.length} settled epochs in expansion`;
+reg('revenue', ()=>{ const E2 = E.filter(e=>e.epoch>1 && inRange(e.settledAt)); document.getElementById('h_epochs').innerHTML = `${E.filter(isExp).length} of ${E.length} settled epochs in expansion`;
   return new Chart(c_epochs, {type:'bar', data:{labels:E2.map(e=>'E'+e.epoch), datasets:[
     {label:'Trading fees', data:E2.map(e=>e.routed-e.charterEth), backgroundColor:E2.map(e=>isExp(e)?C.celadon:alpha(C.red,.8)), stack:'a'},
     {label:'Charter proceeds', data:E2.map(e=>e.charterEth), backgroundColor:STREAM.ch, stack:'a'}]},
@@ -818,13 +828,14 @@ reg('banks', ({Rf, lf, df})=>{ document.getElementById('h_bank').innerHTML = `le
     {stacked:true, zero:false, y:n0, y1:v=>fmt.n(v,1), tf:v=>fmt.n(v,2)}); });
 reg('banks', ({Rl, ll, dl})=>{ document.getElementById('h_policy').innerHTML = `<em>${fmt.int(L.branches)}</em> branches · ${fmt.int(L.activeCharters)} charters`;
   return mk(c_policy, ll, [line('Branches', Rl.map(r=>r.branches), C.violet, {fill:true}), line('Active charters', Rl.map(r=>r.activeCharters), C.teal)], {y:n0, tf:fmt.int}); });
-const CH = DATA.charters, LP = DATA.licensePeriods;
-reg('banks', ()=>{ const open = (L.charterRemaining||0)>0;
+const CH = DATA.charters, LP = DATA.licensePeriods, CHall = CH, LPall = LP;
+const inRange = (ts)=>!N || ts >= NOWTS - N*86400;   // event charts (epochs, auctions) show the events inside the selected range
+reg('banks', ()=>{ const open = (L.charterRemaining||0)>0, CH = CHall.filter(c=>inRange(c.ts));
   document.getElementById('h_charter').innerHTML = `last <em>${L.charterLastSale.toFixed(2)} ETH</em> · ${open?'quote '+L.charterPriceNow.toFixed(2)+' ETH':'next '+fmt.hm(L.charterNextOpen)+' UTC at '+L.charterNextStart.toFixed(2)+' ETH'}`;
   return mk(c_charter, CH.map(c=>dm(fmt.dt(c.ts))), [line('Clearing price', CH.map(c=>c.eth), C.violet, {fill:true, pts:CH.map(c=>c.viaContract?3.5:1.8), ps:CH.map(c=>c.viaContract?'triangle':'circle')}),
     ...(open?[{type:'line', label:'Current quote', data:CH.map((c,i)=>i===CH.length-1?L.charterPriceNow:null), borderColor:C.gold, backgroundColor:C.gold, pointRadius:4, pointStyle:'rectRot', showLine:false}]:[])],
     {y:v=>v+' ETH', tf:v=>v.toFixed(2)+' ETH', title:i=>{const c=CH[i[0].dataIndex]; return 'charter #'+c.id+' · '+fmt.dt(c.ts)+(c.viaContract?' · via contract':'');}}); });
-reg('banks', ()=>{ const open = (L.licenseRemaining||0)>0;
+reg('banks', ()=>{ const open = (L.licenseRemaining||0)>0, LP = LPall.filter(p=>inRange(p.start));
   document.getElementById('h_license').innerHTML = `last <em>${fmt.int(L.licenseLastSale)}</em> · ${open?'quote '+fmt.int(L.licensePriceNow)+', '+L.licenseRemaining+' left':'next '+fmt.hm(L.licenseNextOpen)+' UTC at '+fmt.int(L.licenseNextStart)}`;
   return mk(c_license, LP.map(p=>dm(fmt.dt(p.start))+(new Date(p.start*1000).getUTCHours()<12?' am':' pm')), [bar('Licenses sold', LP.map(p=>p.sold), alpha(C.violet,.45), {ax:'y1'}), line('Period close price, STANDARD', LP.map(p=>p.close), C.gold)],
     {y:v=>fmt.n(v,1), y1:n0, tf:v=>fmt.int(v), after:i=>{const p=LP[i[0].dataIndex]; return [`burned ${fmt.n(p.burned,1)} STANDARD`];}}); });
@@ -915,7 +926,66 @@ function renderFloat(){
 }
 document.getElementById('fmore').addEventListener('click',()=>{floatOpen=!floatOpen; renderFloat();});
 
-function renderAll(){ renderKpis(); renderStatic(); renderBridge(); renderLeaders(); renderLog(); renderFloat(); }
+// ---------- reconciliation and open data ----------
+const RC = DATA.recon || []; let QA = null;
+const rcUnit = (r, v, sg)=>{ if (v==null || !isFinite(v)) return '–'; const s = sg && v>0 ? '+' : '';
+  if (r.unit==='USD') return s+fmt.usd(v); if (r.unit==='STANDARD') return s+fmt.n(v,2); if (r.unit==='s') return s+Math.round(v/60)+' min';
+  if (r.unit) return s+(Math.abs(v)<1e-4 ? '0' : fmt.n(v,4))+' '+r.unit; if (/^price/.test(r.id)) return '$'+v.toFixed(4); if (r.id==='mcap_dexscreener') return fmt.usd(v); return fmt.int(v); };
+const rcResidual = r=>(r.abs && r.ref===0) || /^reserve_(lp|today)$|_fresh$/.test(r.id);
+function renderRecon(){
+  const okN = RC.filter(r=>r.ok).length;
+  document.getElementById('h_recon').innerHTML = `<em>${okN} of ${RC.length}</em> within tolerance` + (QA ? ` · ${fmt.int(QA.passed)} of ${fmt.int(QA.checked)} checks passed ${QA.checkedAt.slice(5)} UTC` : '');
+  document.getElementById('t_recon').innerHTML = '<tr><th class="l">Figure</th><th>Monitor</th><th>Independent</th><th class="l">Independent source</th><th>Gap</th><th>Tolerance</th><th>Status</th></tr>' +
+    RC.map(r=>{ const res = rcResidual(r), fr = /_fresh$/.test(r.id);
+      const gap = r.ours==null||r.ref==null ? '–' : fr ? (r.ok?'none':'missing') : r.abs ? rcUnit(r, r.diff, true) : (r.ours/r.ref-1>=0?'+':'−')+(Math.abs(r.ours/r.ref-1)*100).toFixed(Math.abs(r.ours/r.ref-1)<0.001?3:2)+'%';
+      const tol = fr ? '–' : r.abs ? '±'+rcUnit(r, r.tol) : '±'+(r.tol*100).toFixed(r.tol<0.001?2:1)+'%';
+      const st = r.ok ? '<span class="chip exp">within</span>' : r.gate ? '<span class="chip con">outside</span>' : '<span class="chip">outside, watched</span>';
+      return `<tr><td class="l">${r.label}</td><td>${res?'–':rcUnit(r, r.ours)}</td><td>${res?'–':rcUnit(r, r.ref)}</td><td class="l mut">${r.source}</td><td>${gap}</td><td class="mut">${tol}</td><td>${st}</td></tr>`; }).join('');
+}
+const FILES = [['api/daily.csv','Every daily observation on this page'], ['api/daily.json','The same, with field definitions'], ['api/summary.json','Every tile and panel headline, by tab'],
+  ['api/recon.json','The reconciliation above'], ['api/qa.json','The last publication check, result by check']];
+function renderFiles(){ document.getElementById('files').innerHTML = FILES.map(f=>`<div><a href="${f[0]}" target="_blank" rel="noopener">${f[0].slice(4)}</a></div><div>${f[1]}</div>`).join('');
+  document.getElementById('h_files').innerHTML = 'every compile'; }
+// the open data files are written from these functions, so every figure in them is the page's own
+const API_FIELDS = [
+  ['date', 'UTC day; the last row is the current, partial day', r=>r.date],
+  ['price', 'STANDARD price in USD: GeckoTerminal daily close, the current day DexScreener live', r=>r.price],
+  ['marketCapOutstanding', 'Price times outstanding supply, USD', r=>r.mcFloat],
+  ['marketCapMinted', 'Price times minted supply, USD (the DexScreener basis)', r=>r.mcTotal],
+  ['mintedSupply', 'ERC-20 total supply, STANDARD', r=>r.supply],
+  ['outstandingSupply', 'Minted supply less the protocol STANDARD/ETH pool and the Incentives Vault, STANDARD', r=>r.float],
+  ['reserveUsd', 'Reserve assets at the day’s close, USD', r=>r.reserveUsd],
+  ['backingPerToken', 'Reserve assets per outstanding token, USD', bkOf],
+  ['priceToBacking', 'Outstanding market cap over reserve assets', pbOf],
+  ['recurringRevenueUsd', 'Token trading fees plus pool fee income plus the launchpad’s protocol share, USD', rec],
+  ['tokenTradingFeesUsd', 'Trading fees on STANDARD, routed at settlement and spread over the epoch’s days, USD', tr],
+  ['poolFeeIncomeUsd', 'Fees earned by the reserve’s pool positions, USD', r=>r.spFee||0],
+  ['launchpadProtocolUsd', 'The protocol’s 50% of the 1% launchpad base fee, USD', lpp],
+  ['launchpadRewardPoolUsd', 'The King of the Markets reward pool’s 20%, USD', lpot],
+  ['launchpadCreatorsUsd', 'Creators’ 30% plus hook-module fees, USD', lcr],
+  ['launchpadVolumeUsd', 'Launchpad trading volume implied by the fee Safe’s 0.7%, USD', lvol],
+  ['charterSalesUsd', 'Charter auction proceeds, USD', chs],
+  ['volumeServedUsd', 'Volume served by the reserve’s own liquidity, USD', served],
+  ['poolVolumeUsd', 'All volume in the reserve’s pools, USD', r=>r.spVol||0],
+  ['launchpadRoutedPoolFeesUsd', 'Pool fee income from swaps executed by the launchpad routers, USD (a floor)', r=>r.spFeeLpad||0],
+  ['branches', 'Branches outstanding at the day’s end', r=>r.branches],
+  ['activeCharters', 'Active charters at the day’s end', r=>r.activeCharters],
+  ['multiplier', 'Issuance multiplier in force', r=>r.multiplier],
+  ['issued', 'STANDARD issued to bankers’ ledgers', r=>r.issuance||0],
+  ['burned', 'STANDARD burned: licenses, the burned half of resolution and revocation fees, buybacks and other burns', burnAll],
+  ['ledgerBalance', 'STANDARD owed to bankers, not yet minted, at the day’s end', r=>r.pending],
+  ['resolutionFee', 'Exit fee on withdrawals at the day’s close', r=>r.exitFee],
+  ['sbillsLocked', 'STANDARD locked in S-Bills at the day’s close', r=>r.sbLocked??r.sbills],
+  ['sbillRate', 'S-Bill term rate at the day’s close', r=>r.sbRate],
+  ['netMarketSales', 'STANDARD sold into the protocol pool less STANDARD bought from it; positive is net selling', r=>r.mktNet],
+  ['bidDepth2pctUsd', 'ETH, in USD, that sellers receive taking the price down 2% at the close', r=>r.bid2],
+  ['regime', 'Epoch regime: expansion or contraction', r=>regime[r.date]===undefined?null:regime[r.date]?'expansion':'contraction'],
+];
+const r6 = v=>typeof v==='number' ? (isFinite(v) ? +v.toPrecision(10) : null) : v ?? null;
+window.SRM_EXPORT = ()=>({compiled:COMPILED+' UTC', source:'https://standardrsvmonitor.github.io/', fields:Object.fromEntries(API_FIELDS.map(f=>[f[0], f[1]])),
+  rows:Sh.map(r=>Object.fromEntries(API_FIELDS.map(f=>[f[0], r6(f[2](r))]))), epochs:E});
+function renderAll(){ renderKpis(); renderStatic(); renderBridge(); renderLeaders(); renderLog(); renderFloat(); renderRecon(); renderFiles(); }
+fetch('api/qa.json', {cache:'no-store'}).then(r=>r.ok?r.json():null).then(q=>{ if (q && q.checked) { QA = q; renderRecon(); } }).catch(()=>{});
 renderAll();
 document.querySelectorAll('#tabs button[data-t]').forEach(b=>b.addEventListener('click',()=>{ history.replaceState(null,'','#'+b.dataset.t); show(b.dataset.t); window.scrollTo({top:0}); }));
 document.querySelectorAll('#range button').forEach(b=>b.addEventListener('click',()=>{N=+b.dataset.n; document.querySelectorAll('#range button').forEach(x=>x.classList.toggle('on',x===b)); redrawAll();}));

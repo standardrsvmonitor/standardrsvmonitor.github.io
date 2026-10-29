@@ -1,0 +1,4 @@
+[
+ {"fields": ["price", "mcTotal", "mcFloat", "dPrice", "dSupply"], "from": "2026-10-19", "to": "2026-10-28", "until": "2026-11-01",
+  "why": "GeckoTerminal closes had been cached mid-day; corrected to the day's close on 29 Oct 2026"}
+]

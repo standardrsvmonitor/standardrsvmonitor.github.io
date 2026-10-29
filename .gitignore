@@ -4,3 +4,5 @@ data/*.log
 data/cache/*.bak*
 __pycache__/
 .DS_Store
+site/
+qa/out/

@@ -1,0 +1,136 @@
+{
+ "note": "Contracts the Standard Reserve site names, as last reviewed. qa/watch_sr.py reports any name or address not listed here.",
+ "named": {
+  "address": [
+   "0x4a0e65a3eccec6dbe60ae065f2e7bb85fae35eea",
+   "0x5fc5360d0400a0fd4f2af552add042d716f1d168",
+   "0x84cab63bc87912e71ad199ff14a0ba45de68fef8",
+   "0xad25ac6c84d497db898fa1e8387bf6af3532a1c4"
+  ],
+  "asset": [
+   "0x036cbd53842c5426634e7929541ec2318f3dcf7e",
+   "0x833589fcd6edb6e08f4c7c32d4f71b54bda02913"
+  ],
+  "branchClaim": [
+   "0x6ffc470fb99e3626289b5dc08dda20b6e146cfe3"
+  ],
+  "branchTopUp": [
+   "0x4a97f28a285ef48c4bb6bd1940d5aa39170a3a0a"
+  ],
+  "centralBank": [
+   "0x5977b25419f9c0ddcb2f89fe204955622f4f57ea"
+  ],
+  "charterAuction": [
+   "0x1e369e5977e1d90d9a1ec52ac72a124346e622e4",
+   "0x65b4f85b4a64424f6ba0ffe0c535100bc6888892"
+  ],
+  "charterNFT": [
+   "0x69101f92427376fa80476a997d024cf9dc3eae39"
+  ],
+  "contract_address": [
+   "0x2791bca1f2de4661ed88a30c99a7a9449aa84174",
+   "0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48"
+  ],
+  "contractionVault": [
+   "0x796e80e8abcedc30c700a9587f7933d3342b8946"
+  ],
+  "eip155": [
+   "0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"
+  ],
+  "ensUniversalResolver": [
+   "0xeeeeeeee14d718c2b47d9923deab1335e144eeee"
+  ],
+  "expansionVault": [
+   "0x6f457765035958725367a1d4c1f6064b047dadb3"
+  ],
+  "factory": [
+   "0x3d69104da2518f4833d71444d6611310f2d685f2",
+   "0x3d6ea4e97b8ab9e1a1b4943febffe22d8c920091"
+  ],
+  "feeSplitter": [
+   "0xaa12deda4ac19233a315777b17ff6ff5029d01b2"
+  ],
+  "genesisMinter": [
+   "0xf54b589eadc2aae98b96dad58d89bcbf27503e46"
+  ],
+  "hook": [
+   "0x048f2dc8a71a0321b5e119cd577c56d0190920cc",
+   "0x963fe3e549308734048e42dbe751150ef1c425cc"
+  ],
+  "hooks": [
+   "0xc15b155a3094934171a15625d1a80aba267b6080"
+  ],
+  "incentivesVault": [
+   "0x9481404d30c296e57c93f05a49934a901719bba9"
+  ],
+  "licenseAuction": [
+   "0x44731eff9da8fdd30003aa7c0b324368b3dffe5e",
+   "0x7cd3c6ec047b1a21ea65af64d7c850e6f6049015",
+   "0xa45ce49303eed5846f841bfd4bac6ae8c805ec05"
+  ],
+  "multicall3": [
+   "0xca11bde05977b3631167028862be2a173976ca11"
+  ],
+  "permit2": [
+   "0x000000000022d473030f116ddee9f6b43ac78ba3"
+  ],
+  "polBuyback": [
+   "0x50e4c444f71df2db8593c6c8ba4d493de618e147"
+  ],
+  "polManager": [
+   "0x242f3e67bef43470c2434d95e7d618e19f87c8f8"
+  ],
+  "poolManager": [
+   "0x8366a39cc670b4001a1121b8f6a443a643e40951"
+  ],
+  "refundClaim": [
+   "0xa079d42cdb033836c7f8a9564426c82bb359abae"
+  ],
+  "registry": [
+   "0x855c294dd019e9e0d84c058cff7404f5f2ddca4b"
+  ],
+  "rewardPool": [
+   "0x047829087f9ac81fdb05f7b750458afe3d72415f"
+  ],
+  "router": [
+   "0x190b452d16e12e3beedd76a030ea991fe3856c33",
+   "0x3c7476e8be0efd5b9667421448a99e217b806e80"
+  ],
+  "sbills": [
+   "0x163b36fd07622486cb889feef97bfbe2c1d7c05b"
+  ],
+  "standard": [
+   "0x88ad8ddf1e3898412146a534538d418c6f8a9062"
+  ],
+  "stateView": [
+   "0xf3334192d15450cdd385c8b70e03f9a6bd9e673b"
+  ],
+  "taxHook": [
+   "0xf1ee073811b14359d850825e48d200483200edcd"
+  ],
+  "token": [
+   "0x0bd7d308f8e1639fab988df18a8011f41eacad73",
+   "0x4a0e65a3eccec6dbe60ae065f2e7bb85fae35eea",
+   "0x84cab63bc87912e71ad199ff14a0ba45de68fef8",
+   "0xad25ac6c84d497db898fa1e8387bf6af3532a1c4"
+  ],
+  "universalRouter": [
+   "0x8876789976decbfcbbbe364623c63652db8c0904"
+  ],
+  "usdg": [
+   "0x5fc5360d0400a0fd4f2af552add042d716f1d168"
+  ]
+ },
+ "maps": {
+  "mountApp.js": 108
+ },
+ "hosts": [
+  "img.standardreserve.xyz",
+  "indexer.standardreserve.xyz",
+  "markets.standardreserve.xyz",
+  "robinhoodchain.blockscout.com",
+  "rpc.mainnet.chain.robinhood.com",
+  "thestandardreserve.xyz",
+  "www.standardreserve.xyz"
+ ]
+}

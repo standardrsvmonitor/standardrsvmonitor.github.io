@@ -121,6 +121,15 @@ def main():
     t_start = time.time()
     tip = int(rpc("eth_blockNumber", [])["result"], 16); now = int(time.time()); today = day(now)
     out = {"pulledAt": now, "tip": tip}
+    # reconciliations: each figure the page rebuilds, against an independent reading of the same thing. Gate items stop the deploy
+    # when they fall outside tolerance (qa/check.py); watch items are published with their gap and reported but do not block.
+    recon = []; out["recon"] = recon
+    def reconcile(id_, label, ours, ref, source, tol, gate=True, absolute=False, unit="", note=""):
+        if ours is None or ref is None:
+            recon.append({"id": id_, "label": label, "ours": ours, "ref": ref, "source": source, "tol": tol, "abs": absolute, "gate": gate, "ok": False, "unit": unit, "note": note or "missing"}); return
+        diff = ours - ref; rel = abs(diff) / abs(ref) if ref else (0.0 if diff == 0 else 1.0)
+        recon.append({"id": id_, "label": label, "ours": ours, "ref": ref, "source": source, "diff": diff, "rel": rel, "tol": tol, "abs": absolute, "gate": gate,
+                      "ok": (abs(diff) <= tol) if absolute else (rel <= tol), "unit": unit, "note": note})
     H["teamWallet"] = "0x" + ecall(H["feeSplitter"], sel("teamWallet()"))[-40:]
     log("tip", tip, "team wallet", H["teamWallet"])
 
@@ -297,10 +306,9 @@ def main():
     if ohl is None: ohl = jload(os.path.join(os.path.dirname(D), "..", "industry", "std_ohlcv_daily.json"), [])
     g = get(f"https://api.geckoterminal.com/api/v2/networks/robinhood/pools/{STD_POOL}/ohlcv/day?limit=100&currency=usd", tries=3, backoff=15)
     try:
-        rows = g["data"]["attributes"]["ohlcv_list"]; have = {r[0] for r in ohl}
-        for r in rows:
-            if r[0] not in have: ohl.append(r)
-        ohl.sort(key=lambda r: r[0])
+        rows = g["data"]["attributes"]["ohlcv_list"]   # fresh candles replace cached ones: a day first cached while in progress holds an early price, not its close
+        byts = {r[0]: r for r in ohl}; byts.update({r[0]: list(r[:6]) + [now] for r in rows})   # the 7th field records when the candle was read
+        ohl = sorted(byts.values(), key=lambda r: r[0])
     except Exception: log("geckoterminal unavailable, using cache", str(g)[:80])
     jsave(os.path.join(C, "ohlcv.json"), ohl)
     ed = jload(os.path.join(C, "eth_daily.json"), {})
@@ -361,9 +369,9 @@ def main():
     for ts_, _, k, cid, n in evs:
         if k == "c": brc[cid] += n; c_act += 1
         elif k == "o": brc[cid] += n
-        else:
-            brc[cid] -= n
-            if brc[cid] <= 0: c_act -= 1; c_burn += 1
+        else:   # a withdrawal destroys the branches it names; a revocation destroys the whole charter (charters 641 and 492, 28 and 29 Oct 2026)
+            was = brc[cid]; brc[cid] = 0 if k == "r" else was - n
+            if was > 0 and brc[cid] <= 0: c_act -= 1; c_burn += 1
         census[day(ts_)] = (c_act, c_burn, sum(brc.values()))
     for e in act["deposited"]:
         d = day(int(e["timestamp"])); days[d]["deposits"] += int(e["values"]["amount"]) / 1e18
@@ -440,6 +448,12 @@ def main():
         x = days[d]
         Tn -= x["mint"] + x["genesisMint"] - x["burn"]; pn -= x["poolIn"] + x["genesisPool"] - x["poolOut"]
         inn -= x["toIncentives"] - x["fromIncentives"]; sbn -= x["sbillIn"] - x["sbillOut"]; tmn -= x["teamIn"] - x["teamOut"]
+    # walked back to genesis, every balance must land on zero: the transfer log then accounts for every token in it
+    # (the 100M genesis liquidity mint precedes the genesis block the scan starts from; its arrival in the pool is inside the scan)
+    reconcile("supply_zero", "Minted supply, rebuilt from the genesis mint and transfer logs", 100_000_000 + total_supply - Tn, total_supply, "ERC-20 totalSupply at the compile block", 1,
+              absolute=True, unit="STANDARD")
+    reconcile("pool_zero", "Protocol pool STANDARD, rebuilt from transfer logs", pool_now - pn, pool_now, "balance at the compile block", 1, absolute=True, unit="STANDARD")
+    reconcile("incentives_zero", "Incentives Vault STANDARD, rebuilt from transfer logs", inc_now - inn, inc_now, "balance at the compile block", 1, absolute=True, unit="STANDARD")
     # forward ledger: pending = issuance + deposits + recycled exit fees - licenses - gross withdrawals - gross revocations
     sb_pts = sorted([(int(p["t"]), int(p.get("after", 0)) / 1e18, int(p.get("locked", 0)) / 1e18) for p in (sb.get("points") or []) if p.get("t")])
     wd_ev = [(int(e["timestamp"]), int(e["values"]["gross"]) / 1e18) for e in act["withdrawn"]]
@@ -459,6 +473,11 @@ def main():
         cen_hist[d] = cen_last
     log("ledger check: pending reconstructed", round(pend), "live", round(int(snap["bank"]["totalPendingLive"]) / 1e18),
         "| issued", round(sum(days[d]["issuance"] for d in dl)), "live", round(int(snap["bank"]["cumulativeIssued"]) / 1e18))
+    reconcile("ledger", "Ledger balance, rebuilt from events", pend, int(snap["bank"]["totalPendingLive"]) / 1e18, "Standard Reserve indexer, totalPendingLive", 0.005, unit="STANDARD")
+    reconcile("issued", "STANDARD issued to bankers, rebuilt by epoch", sum(days[d]["issuance"] for d in dl), int(snap["bank"]["cumulativeIssued"]) / 1e18,
+       "Standard Reserve indexer, cumulativeIssued", 0.001, unit="STANDARD")
+    reconcile("branches", "Branches, replayed from events", census[max(census)][2], int(snap["bank"]["totalBranches"]), "Standard Reserve indexer, totalBranches", 0.002)
+    reconcile("charters", "Active charters, replayed from events", census[max(census)][0], int(snap["census"]["active"]), "Standard Reserve indexer, census", 0.002)
     series = []
     prev = None
     for d in dl:
@@ -572,6 +591,14 @@ def main():
                         "lifetimeEmissions": int(r.get("lifetimeEmissions", 0)) / 1e18, "topBank": r.get("topBank"), "prevRank": (r.get("previousRank") or {}).get("epoch")})
     jsave(os.path.join(C, "ens.json"), ensc)
     out["leaders"] = {"rows": leaders, "bankers": len(bankers), "banks": sum(int(r.get("banks", 0)) for r in bankers), "branches": tot_br}
+    # branches replayed per charter, summed by the wallet that created it, against the leaderboard's per-banker counts
+    owner_ = {e["charterId"]: (e.get("actor") or "").lower() for e in act["charter-created"]}; rep_ = collections.Counter()
+    for cid_, n_ in brc.items():
+        if n_ > 0: rep_[owner_.get(cid_, "")] += n_
+    lbo_ = {r["owner"].lower(): int(r.get("branches", 0)) for r in bankers}
+    off_ = sorted(o_ for o_ in set(rep_) | set(lbo_) if rep_.get(o_, 0) != lbo_.get(o_, 0))
+    reconcile("branches_by_banker", "Bankers whose replayed branches differ from the leaderboard", float(len(off_)), 0.0, "Standard Reserve indexer, leaderboard", 0, gate=False,
+              absolute=True, note=", ".join(o_[:10] for o_ in off_[:8]))
     log("leaderboard", len(bankers), "bankers; ENS names in top 25:", sum(1 for l in leaders if l["ens"]))
     # ---------- reserve history, pool flows by holder group, STANDARD/ETH depth (extra.py) ----------
     x = extra.Ctx(cache=C, H={k: v for k, v in H.items()}, G=G, tip=tip, tip_ts=block_ts(tip), genesis_ts=genesis_ts, getlogs=getlogs, rpcb=rpcb, T=T,
@@ -584,6 +611,13 @@ def main():
                    "stocks": reserve["safeStockUsd"], "lp": {s_: v_["valueUSD"] for s_, v_ in lp.items()}}
     res_hist, res_chk = extra.reserve_history(x, lp_pools, closes, eth_day, epochs, dl, today_parts)
     log("reserve history", len(res_hist), "days; forward-from-zero checks (0 = ties):", res_chk)
+    for k_, v_ in res_chk.items():
+        if k_.startswith(("eth_", "tok_")):
+            a_, s_ = k_.split("_", 1); unit_ = "ETH" if a_ == "eth" else s_
+            reconcile("reserve_" + k_, f"Reserve {unit_}{'' if a_ == 'tok' else ' in the ' + ('Safe' if s_ == 'safe' else s_ + ' vault')}, summed from zero", v_, 0.0, "balance at the compile block",
+               1e-4, absolute=True, unit=unit_)
+    reconcile("reserve_lp", "Reserve position liquidity, summed from events", 1 + res_chk.get("lp_liquidity", 0), 1.0, "positions read at the compile block", 1e-6)
+    reconcile("reserve_today", "Reserve assets today, rebuilt from events", 1 + res_chk.get("today_rebuilt_vs_read", 0), 1.0, "balances and positions read at the compile block", 0.005)
     for k_ in sorted(hist_prev := jload(os.path.join(D, "history.json"), {})):
         if hist_prev[k_].get("reserveUsd") and k_ in res_hist: log("  reserve", k_, "snapshot", round(hist_prev[k_]["reserveUsd"]), "rebuilt close", round(res_hist[k_]["total"]))
     pf = extra.pool_flows(x)
@@ -596,6 +630,22 @@ def main():
     fee_lp = 0.01; s0 = ecall(SV, sel("getSlot0(bytes32)") + STD_POOL[2:], BT); sp_now = int(s0[2:66], 16) / 2 ** 96
     depth = extra.std_depth(x, STD_POOL, sp_now, ethusd, closes, eth_day, dl, fee_lp, int(snap["tax"]["buyTaxNowBps"]) / 1e4, int(snap["tax"]["sellTaxNowBps"]) / 1e4, H["polManager"].lower())
     log("depth", {k_: (round(v_) if isinstance(v_, float) else v_) for k_, v_ in depth.items() if k_ in ("bid2", "ask2", "bid5", "ask5", "protocolShare", "positions")})
+    # STANDARD price: DexScreener and GeckoTerminal against the pool's own price on chain, valued at Coinbase's ETH price
+    reconcile("price_live", "STANDARD price, DexScreener", px, ethusd / (sp_now * sp_now), "STANDARD/ETH pool price at the compile block × Coinbase ETH", 0.02)
+    std_c = closes.get(STD_POOL, {}); gt_days = {day(r_[0]) for r_ in ohl}; worst_ = None
+    for d_ in [d_ for d_ in dl if d_ < today][-14:]:
+        c_ = std_c.get(d_); e_ = eth_day.get(d_)
+        if d_ not in gt_days or not c_ or not e_: continue
+        g_ = abs(price_day[d_] / (e_ / (c_ / 2 ** 96) ** 2) - 1)
+        if worst_ is None or g_ > worst_[0]: worst_ = (g_, d_, price_day[d_], e_ / (c_ / 2 ** 96) ** 2)
+    if worst_: reconcile("price_closes", f"STANDARD daily close, GeckoTerminal, widest of 14 days ({worst_[1]})", worst_[2], worst_[3], "last pool trade of the day on chain × Coinbase ETH close", 0.025)
+    yrow_ = next((r_ for r_ in ohl if day(r_[0]) == (dt.date.fromisoformat(today) - dt.timedelta(1)).isoformat()), None)
+    reconcile("price_gt_fresh", "GeckoTerminal close for yesterday, read after the day ended", 1.0 if yrow_ and len(yrow_) > 6 and yrow_[6] >= yrow_[0] + 86400 else 0.0, 1.0,
+              "GeckoTerminal daily candles", 0)
+    reconcile("eth_fresh", "Coinbase has yesterday’s ETH close", 1.0 if (dt.date.fromisoformat(today) - dt.timedelta(1)).isoformat() in eth_day else 0.0, 1.0, "Coinbase daily candles", 0)
+    reconcile("mcap_dexscreener", "Market cap, minted supply", px * total_supply, dstd.get("marketCap") or dstd.get("fdv"), "DexScreener market cap", 0.02, gate=False)
+    ix_lag = block_ts(tip) - int(snap.get("blockTimestamp") or 0)
+    reconcile("indexer_lag", "Indexer snapshot age at the compile block, seconds", float(max(0, ix_lag)), 0.0, "Standard Reserve indexer", 1800, absolute=True, unit="s")
     for row in series:
         d_ = row["date"]; g_ = grp.get(d_, {})
         rp_ = res_hist.get(d_); row["reserveUsd"] = rp_["total"] if rp_ else None; row["reserveParts"] = rp_
@@ -621,6 +671,8 @@ def main():
         for d_ in pnl:
             if s_ in pnl[d_]: pnl[d_][s_]["fees"] *= k_
         log("pool fees, swap estimate vs positions", s_, round(pnl[last_][s_]["fees"] / k_) if last_ else None, round(owed_ or 0))
+        reconcile("poolfees_" + s_, f"{s_ if s_ != 'ETH' else 'ETH/USDG'} pool fee income since seeding, from swaps", pnl[last_][s_]["fees"] / k_ if last_ else None, owed_,
+           "uncollected fees read from the reserve’s positions", 0.05, gate=False, unit="USD")
     yday = (dt.datetime.fromtimestamp(x.tip_ts, dt.timezone.utc).date() - dt.timedelta(1)).isoformat()   # complete days only
     cp = extra.counterparties(x, reg, lp_pools, "2026-10-14", yday)
     cls = extra.cpty_classes(cp, {s_: p_["tier"] for s_, p_ in lp_pools.items()}, routers=set(extra.LPAD["routers"]))
@@ -640,7 +692,12 @@ def main():
                         "season": ks_.get("season"), "teams": ks_.get("countries"), "seedUsd": 1_100_000}
     log("launchpad: fee Safe", {k_: round(v_, 3) for k_, v_ in lpad_held.items()}, "| received, all days", round(sum(v_.get("lpadSafe", 0) for v_ in lpad.values())),
         "| indexer", kp_.get("feesUsd"))
+    reconcile("launchpad_fees", "Launchpad fees received by the fee Safe, at daily closes", sum(v_.get("lpadSafe", 0) for v_ in lpad.values()), kp_.get("feesUsd"),
+       "launchpad markets API, fees at trade time", 0.03, gate=False, unit="USD")
     chk_ = [(row["date"], s_, round(row.get("poolVolChain_" + s_) or 0), round(row.get("spVol_" + s_) or 0)) for row in series[-3:-1] for s_ in lp_pools]
+    for row in series[-3:-1]:
+        a_ = sum(row.get("poolVolChain_" + s_) or 0 for s_ in lp_pools); b_ = sum(row.get("spVol_" + s_) or 0 for s_ in lp_pools)
+        reconcile("volume_" + row["date"], f"Reserve pool volume {row['date']}, swap cache", b_, a_, "independent scan of the same pools’ swap logs", 0.001, unit="USD")
     log("venues", len(reg), "| reserve pool volume, chain scan vs swap cache:", chk_, "| counterparty days", len(cp["days"]))
     hist = jload(os.path.join(D, "history.json"), {})
     hist[today] = {k: v for k, v in live.items() if k not in ("poolCtx", "balances", "lp", "sbills", "reserve")}

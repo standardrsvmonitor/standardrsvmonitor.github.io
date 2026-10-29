@@ -9,6 +9,7 @@ permissions:
   contents: write
   pages: write
   id-token: write
+  issues: write
 
 concurrency:
   group: refresh
@@ -55,9 +56,40 @@ jobs:
       - name: Build page
         if: steps.chk.outputs.run == '1'
         run: python -I build.py
+      - name: Check the page before it is published (qa/check.py; a failure keeps the last good page up)
+        id: gate
+        if: steps.chk.outputs.run == '1'
+        run: |
+          mkdir -p site/api qa/out
+          python -I qa/render.py index.html qa/out/render.json --api site/api
+          python -I qa/check.py qa/out/render.json data/dash.json --live https://standardrsvmonitor.github.io/ --accept qa/accept.json --api site/api
+      - name: Keep the gate report and the compiled data for review
+        if: always() && steps.chk.outputs.run == '1'
+        run: cp data/dash.json qa/out/dash.json 2>/dev/null || true
+      - uses: actions/upload-artifact@v4
+        if: always() && steps.chk.outputs.run == '1'
+        with:
+          name: qa-report
+          path: qa/out
+          retention-days: 14
+      - name: Open, update or close the qa-gate issue
+        if: always() && steps.chk.outputs.run == '1' && (steps.gate.outcome == 'failure' || steps.gate.outcome == 'success')
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh label create qa-gate --color B60205 --description "The deploy gate is failing; the page is held at its last good compile" 2>/dev/null || true
+          N=$(gh issue list --label qa-gate --state open --json number --jq '.[0].number // empty')
+          if [ "${{ steps.gate.outcome }}" = "failure" ]; then
+            printf '%s\n\nRun: %s/%s/actions/runs/%s\n' "$(cat qa/out/report.md)" "$GITHUB_SERVER_URL" "$GITHUB_REPOSITORY" "$GITHUB_RUN_ID" > qa/out/issue.md
+            if [ -z "$N" ]; then gh issue create --title "Deploy gate failing, page held at the last good compile" --label qa-gate --body-file qa/out/issue.md
+            else gh issue edit "$N" --body-file qa/out/issue.md; fi
+          elif [ -n "$N" ]; then
+            gh issue close "$N" --comment "Gate passed at $(date -u +'%Y-%m-%d %H:%M') UTC; the page is current again."
+          fi
       - name: Stage site
         if: steps.chk.outputs.run == '1'
-        run: mkdir -p site && cp index.html site/index.html
+        run: cp index.html site/index.html
       - uses: actions/upload-pages-artifact@v3
         if: steps.chk.outputs.run == '1'
         with:

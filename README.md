@@ -25,7 +25,7 @@ A failing check keeps the previous page up and opens an issue labelled `qa-gate`
 ## Open data
 
 Published with every compile: `api/daily.csv` and `api/daily.json` (every daily observation, with field definitions), `api/summary.json`
-(every tile and panel headline), `api/recon.json` and `api/qa.json`. They are written from the rendered page, so every figure matches it.
+(every tile and panel headline), `api/recon.json` and `api/qa.json`. They are written from the rendered page, so every figure matches it. Field names follow the page's vocabulary (circulating supply and market cap as the protocol defines them, revenue as what the protocol keeps).
 
 ## Code
 

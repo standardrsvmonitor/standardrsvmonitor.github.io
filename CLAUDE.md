@@ -46,6 +46,18 @@ Out of scope, by the owner's decision: Token Terminal-style financial statements
    against the chain (the pool's own price). Never use an aggregator for a protocol fact, a balance, a flow or a count. When investigating
    anything on chain, read the contract or the logs, not an explorer page or an API summary of them.
 
+## Vocabulary (the protocol's own words first, then the industry's; owner-approved 29 Oct 2026)
+
+- **Circulating supply**: every STANDARD minted (ERC-20 total supply), the protocol's own definition. **Market cap** is price times circulating
+  supply, the figure the protocol's site and DexScreener show.
+- The protocol splits circulating supply into **protocol liquidity** (STANDARD in its own pool), **in wallets** and the **Incentives vault**;
+  beside it, **in banks** (bankers' ledger balances, minted only on withdrawal), **burned** and **unissued**. **Market cap, in wallets** is price
+  times the STANDARD in wallets. Backing per token and price to backing use the STANDARD in wallets, and say so.
+- **Fees** are what users pay. **Revenue** is what the protocol keeps: **trading fees** (the buy and sell tax on STANDARD), **LP fees** earned by
+  the reserve's pool positions, **launchpad revenue** (the protocol's 50% of the 1% base fee) and **charter sales**. **Launchpad fees** are the full
+  base fee, all recipients. **Price to revenue** is market cap over annualized seven-day revenue.
+- Routed fees: **where fees land**, **fee routing**, **fee engine**. Never "income", "recurring revenue", "outstanding supply" or "minted supply".
+
 ## House style (the gate enforces what it can)
 
 - Ticker is STANDARD, never abbreviated. Use the protocol's own words: bank, charter, branch, banker, expansion license, Auction House,

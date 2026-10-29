@@ -450,10 +450,10 @@ def main():
         inn -= x["toIncentives"] - x["fromIncentives"]; sbn -= x["sbillIn"] - x["sbillOut"]; tmn -= x["teamIn"] - x["teamOut"]
     # walked back to genesis, every balance must land on zero: the transfer log then accounts for every token in it
     # (the 100M genesis liquidity mint precedes the genesis block the scan starts from; its arrival in the pool is inside the scan)
-    reconcile("supply_zero", "Minted supply, rebuilt from the genesis mint and transfer logs", 100_000_000 + total_supply - Tn, total_supply, "ERC-20 totalSupply at the compile block", 1,
+    reconcile("supply_zero", "Circulating supply, rebuilt from the genesis mint and transfer logs", 100_000_000 + total_supply - Tn, total_supply, "ERC-20 totalSupply at the compile block", 1,
               absolute=True, unit="STANDARD")
-    reconcile("pool_zero", "Protocol pool STANDARD, rebuilt from transfer logs", pool_now - pn, pool_now, "balance at the compile block", 1, absolute=True, unit="STANDARD")
-    reconcile("incentives_zero", "Incentives Vault STANDARD, rebuilt from transfer logs", inc_now - inn, inc_now, "balance at the compile block", 1, absolute=True, unit="STANDARD")
+    reconcile("pool_zero", "Protocol liquidity STANDARD, rebuilt from transfer logs", pool_now - pn, pool_now, "balance at the compile block", 1, absolute=True, unit="STANDARD")
+    reconcile("incentives_zero", "Incentives vault STANDARD, rebuilt from transfer logs", inc_now - inn, inc_now, "balance at the compile block", 1, absolute=True, unit="STANDARD")
     # forward ledger: pending = issuance + deposits + recycled exit fees - licenses - gross withdrawals - gross revocations
     sb_pts = sorted([(int(p["t"]), int(p.get("after", 0)) / 1e18, int(p.get("locked", 0)) / 1e18) for p in (sb.get("points") or []) if p.get("t")])
     wd_ev = [(int(e["timestamp"]), int(e["values"]["gross"]) / 1e18) for e in act["withdrawn"]]
@@ -473,7 +473,7 @@ def main():
         cen_hist[d] = cen_last
     log("ledger check: pending reconstructed", round(pend), "live", round(int(snap["bank"]["totalPendingLive"]) / 1e18),
         "| issued", round(sum(days[d]["issuance"] for d in dl)), "live", round(int(snap["bank"]["cumulativeIssued"]) / 1e18))
-    reconcile("ledger", "Ledger balance, rebuilt from events", pend, int(snap["bank"]["totalPendingLive"]) / 1e18, "Standard Reserve indexer, totalPendingLive", 0.005, unit="STANDARD")
+    reconcile("ledger", "In banks (ledger balance), rebuilt from events", pend, int(snap["bank"]["totalPendingLive"]) / 1e18, "Standard Reserve indexer, totalPendingLive", 0.005, unit="STANDARD")
     reconcile("issued", "STANDARD issued to bankers, rebuilt by epoch", sum(days[d]["issuance"] for d in dl), int(snap["bank"]["cumulativeIssued"]) / 1e18,
        "Standard Reserve indexer, cumulativeIssued", 0.001, unit="STANDARD")
     reconcile("branches", "Branches, replayed from events", census[max(census)][2], int(snap["bank"]["totalBranches"]), "Standard Reserve indexer, totalBranches", 0.002)
@@ -649,7 +649,7 @@ def main():
     reconcile("price_gt_fresh", "GeckoTerminal close for yesterday, read after the day ended", 1.0 if yrow_ and len(yrow_) > 6 and yrow_[6] >= yrow_[0] + 86400 else 0.0, 1.0,
               "GeckoTerminal daily candles", 0)
     reconcile("eth_fresh", "Coinbase has yesterday’s ETH close", 1.0 if (dt.date.fromisoformat(today) - dt.timedelta(1)).isoformat() in eth_day else 0.0, 1.0, "Coinbase daily candles", 0)
-    reconcile("mcap_dexscreener", "Market cap, minted supply", px * total_supply, dstd.get("marketCap") or dstd.get("fdv"), "DexScreener market cap", 0.02, gate=False)
+    reconcile("mcap_dexscreener", "Market cap, circulating supply", px * total_supply, dstd.get("marketCap") or dstd.get("fdv"), "DexScreener market cap", 0.02, gate=False)
     ix_lag = block_ts(tip) - int(snap.get("blockTimestamp") or 0)
     reconcile("indexer_lag", "Indexer snapshot age at the compile block, seconds", float(max(0, ix_lag)), 0.0, "Standard Reserve indexer", 1800, absolute=True, unit="s")
     for row in series:

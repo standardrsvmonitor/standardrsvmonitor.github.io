@@ -29,8 +29,8 @@ SECTIONS = {
           "Trends cover 30 days: rolling seven-day sums for flows, daily closes for levels.", table("t_gm", "gm")) +
     '<div class="col w5">' +
     panel(12, "Revenue by stream, weekly", "Seven-day blocks ending on the last complete UTC day, following the range: All shows every complete week since the launch epoch "
-          "(the launch week’s genesis fees are left out), 30D the last four weeks, 7D the last seven days by day. Revenue is what the protocol keeps: trading fees on "
-          "STANDARD, LP fees earned by the reserve’s pool positions, the protocol’s 50% of the launchpad base fee, and charter sales.", chart("c_wrev", "s"), "h_wrev", "p_wrev") +
+          "(the launch week’s genesis fees are left out), 30D the last four weeks, 7D the last seven days by day. Revenue is what the protocol keeps: STANDARD trading "
+          "fees (the buy and sell tax), LP fees earned by the reserve’s pool positions, the protocol’s 50% of the launchpad base fee, and charter sales.", chart("c_wrev", "s"), "h_wrev", "p_wrev") +
     panel(12, "Price and backing per token, daily", "Token price against reserve assets per STANDARD in wallets, the tokens holders own; the protocol’s own liquidity and the Incentives vault are left out. The gap between the lines is the premium to backing.",
           chart("c_pxb", "s"), "h_pxb") + '</div>' +
     panel(6, "Reserve assets by component, daily", "Reserve assets at each day’s close, rebuilt from on-chain events and valued at the day’s closing prices. "
@@ -39,13 +39,13 @@ SECTIONS = {
           chart("c_brco"), "h_brco") + '</div>',
 
 "revenue": kpis("revenue") + '<div class="grid">' +
-    panel(7, "Revenue by stream, daily", "Trading fees on STANDARD, the buy and sell tax, are known per three-day epoch and spread evenly over its days; the live epoch is estimated from ETH held in the tax hook "
+    panel(7, "Revenue by stream, daily", "STANDARD trading fees, the buy and sell tax, are known per three-day epoch and spread evenly over its days; the live epoch is estimated from ETH held in the tax hook "
           "and fee splitter. LP fees replay every swap in the reserve’s pools tick by tick and value each swap’s fee at the pool price of that swap. The launchpad line is the protocol’s 50% of the 1% base fee, "
           "held in the launchpad fee Safe. Charter sales are recorded on the sale date.", chart("c_rev", "l"), "h_rev") +
-    panel(5, "Where fees land, trailing seven days", "Where the last seven complete days of revenue went. Trading fees and charter sales are routed by the fee engine at settlement: 70% to the "
+    panel(5, "Where fees land, trailing seven days", "Where the last seven complete days of revenue went. STANDARD trading fees and charter sales are routed by the fee engine at settlement: 70% to the "
           "reserve in expansion or to buybacks in contraction, 15% to POL buybacks and 15% to the team. LP fees accrue inside the reserve’s positions. The launchpad’s "
           "protocol share sits in the fee Safe and has not been routed.", '<div class="alloc" id="alloc"></div>', "h_alloc") +
-    panel(7, "Fee routing by epoch", "Trading fees and charter proceeds routed by the fee engine at each settlement, in ETH, for the epochs settled inside the selected range. "
+    panel(7, "Fee routing by epoch", "STANDARD trading fees and charter proceeds routed by the fee engine at each settlement, in ETH, for the epochs settled inside the selected range. "
           "Green bars are expansion epochs, red contraction.",
           chart("c_epochs"), "h_epochs") +
     panel(5, "Price to revenue, daily", "Market cap, price times circulating supply, over trailing seven-day revenue, annualized. Windows that include the "
@@ -143,7 +143,7 @@ SECTIONS = {
           "the page’s own. Field definitions travel with the JSON.", '<div class="kv2 files" id="files"></div>', "h_files") +
     panel(12, "Daily data log", "One observation per UTC day since genesis, every field reconstructed from protocol events and transfer logs. The current day is partial.",
           table("t_log") + '<div class="btns"><button class="btn" id="more"></button><button class="btn" id="csv">Export CSV</button></div>', "h_log") +
-    panel(12, "Epoch settlement ledger", "Net flow is ETH bought less ETH sold through the pool during the epoch; its sign sets the regime. Routed comprises trading fees and charter "
+    panel(12, "Epoch settlement ledger", "Net flow is ETH bought less ETH sold through the pool during the epoch; its sign sets the regime. Routed comprises STANDARD trading fees and charter "
           "proceeds.", table("t_epochs")) +
     panel(12, "Supply reconciliation, circulating to in wallets, daily", "STANDARD in wallets equals circulating supply less protocol liquidity less the Incentives vault. Every row ties.",
           table("t_float") + '<div class="btns"><button class="btn" id="fmore"></button></div>') + '</div>',
@@ -485,14 +485,14 @@ function renderKpis(){ derive();
       {l:'STANDARD price', v:fmt.px(L.price), c:chg(L.price, W0&&W0.price, {pol:1}), s:'7d', sp:lvl(r=>r.price), tip:'Live price from DexScreener for the STANDARD/ETH pool; history uses GeckoTerminal daily closes.'},
       {l:'Market cap', v:fmt.usd(mcTotal), c:chg(mcTotal, W0&&W0.mcTotal, {pol:1}), s:`in wallets ${fmt.usd(mcFloat)}`, sp:lvl(r=>r.mcTotal), tip:'Price times circulating supply, every STANDARD minted, the figure the protocol’s site and DexScreener show. In wallets leaves out the protocol’s own liquidity and the Incentives vault.'},
       {l:'Reserve assets', v:fmt.usd(L.reserve.totalUsd), c:chg(L.reserve.totalUsd, W0&&W0.reserveUsd, {pol:1}), s:`${fmt.x(pbNow)} P/B`, sp:lvl(r=>r.reserveUsd), col:C.blue, tip:'ETH and USDG in the reserve Safe, ETH in the policy vaults, equities held outside pools and the Safe’s Uniswap v4 positions, read at the compile block.'},
-      {l:'Revenue, 7d', v:fmt.usd(rev7), c:chg(rev7, revP, {pol:1}), s:'vs prior 7d', sp:roll7(inc), col:C.gold, tip:`What the protocol kept over the seven complete days to ${yd}: trading fees, LP fees, the launchpad’s 50% and charter sales.`},
+      {l:'Revenue, 7d', v:fmt.usd(rev7), c:chg(rev7, revP, {pol:1}), s:'vs prior 7d', sp:roll7(inc), col:C.gold, tip:`What the protocol kept over the seven complete days to ${yd}: STANDARD trading fees, LP fees, the launchpad’s 50% and charter sales.`},
       {l:'Branches', v:fmt.int(L.branches), c:chg(L.branches, W0&&W0.branches, {pol:1}), s:`${fmt.int(L.activeCharters)} charters`, sp:lvl(r=>r.branches), col:C.violet, tip:'Branches open now, from the indexer census.'},
       {l:`Epoch ${L.epoch} net flow`, v:fmt.sx(L.epochNetFlow,1)+' ETH', c:{t:`${L.epochNetFlow>=0?'expansion':'contraction'}`, c:L.epochNetFlow>=0?'up':'dn'}, s:`${Math.floor(epLeft/86400)}d ${Math.floor(epLeft%86400/3600)}h left`,
         sp:E.slice(-12).map(e=>e.netFlow), col:L.epochNetFlow>=0?C.green:C.red, tip:`ETH bought less ETH sold through the STANDARD/ETH pool this epoch; its sign at settlement sets the regime. Multiplier ${fmt.x(L.multiplier)}. The line shows settled epochs.`},
     ],
     revenue:[
       {l:'Revenue, 7d', v:fmt.usd(rev7), c:chg(rev7, revP, {pol:1}), s:'vs prior 7d', sp:roll7(inc), col:C.teal},
-      {l:'Trading fees, 7d', v:fmt.usd(sum(s7.map(tr))), c:chg(sum(s7.map(tr)), P7.length?sum(P7.map(tr)):null, {pol:1}), sp:roll7(tr), col:STREAM.tr},
+      {l:'STANDARD trading fees, 7d', v:fmt.usd(sum(s7.map(tr))), c:chg(sum(s7.map(tr)), P7.length?sum(P7.map(tr)):null, {pol:1}), sp:roll7(tr), col:STREAM.tr},
       {l:'LP fees, 7d', v:fmt.usd(pf7), c:chg(pf7, pfP, {pol:1}), sp:roll7(r=>r.spFee||0), col:STREAM.pool},
       {l:'Launchpad revenue, 7d', v:fmt.usd(sum(s7.map(lpp))), c:chg(sum(s7.map(lpp)), P7.length?sum(P7.map(lpp)):null, {pol:1}), s:'protocol 50%', sp:roll7(lpp), col:STREAM.lpad, tip:'The protocol’s 50% of the 1% launchpad base fee, held in the launchpad fee Safe.'},
       {l:'Charter sales, 7d', v:fmt.usd(sum(s7.map(chs))), c:chg(sum(s7.map(chs)), P7.length?sum(P7.map(chs)):null, {pol:1}), sp:roll7(chs), col:STREAM.ch},
@@ -572,7 +572,7 @@ function renderHero(){
     <div class="totals"><ol>${parts.map(x=>`<li><i style="background:${x[2]}"></i><span>${x[0]}</span> ${fmt.pct(x[1]/tot,0)}</li>`).join('')}</ol>
       <p>${fmt.usd(sum(s7.map(inc)))} <span>revenue, 7d</span> ${fmt.int(L.branches)} <span>branches</span></p></div>
     <ul class="how">
-      <li><b>Token economy</b><strong>${fmt.usd(tok7)}</strong>Trading fees and charter sales over seven days, ${cg(tok7,tokP)} on the week before.</li>
+      <li><b>Token economy</b><strong>${fmt.usd(tok7)}</strong>STANDARD trading fees and charter sales over seven days, ${cg(tok7,tokP)} on the week before.</li>
       <li><b>Liquidity business</b><strong>${fmt.usd(pf7)}</strong>LP fees on ${fmt.usd(sv7)} of volume served, ${fmt.pct(eqd?eqn/eqd:null,0)} of chain equity volume.</li>
       <li><b>Launchpad</b><strong>${fmt.usd(lp7)}</strong>Launchpad revenue on ${fmt.usd(lv7)} of volume, ${cg(lp7, P7.length?sum(P7.map(lpp)):null)} on the week before.</li></ul>`;
 }
@@ -587,7 +587,7 @@ function renderGM(){
   const G = [
     ['Revenue', [
       flow('Revenue', inc, fmt.usd, 1),
-      flow('Trading fees', tr, fmt.usd, 1),
+      flow('STANDARD trading fees', tr, fmt.usd, 1),
       flow('LP fees', r=>r.spFee||0, fmt.usd, 1),
       flow('Launchpad revenue', lpp, fmt.usd, 1),
       flow('Charter sales', chs, fmt.usd, 1)]],
@@ -624,7 +624,7 @@ function renderGM(){
 const R = L.reserve, ctx = L.poolCtx, ydS = yd || '1d';
 const pvm = (r,p)=>r['spVolMine_'+p]!=null ? r['spVolMine_'+p] : (r['spVol_'+p]||0);
 function renderStatic(){
-  document.getElementById('t_epochs').innerHTML = '<tr><th>Epoch</th><th>Settled</th><th>Net flow, ETH</th><th>Regime</th><th>Trading fees, ETH</th><th>Charter proceeds, ETH</th><th>Routed, ETH</th><th>Vault 70%</th><th>POL 15%</th><th>Team 15%</th><th>Multiplier after</th></tr>' +
+  document.getElementById('t_epochs').innerHTML = '<tr><th>Epoch</th><th>Settled</th><th>Net flow, ETH</th><th>Regime</th><th>STANDARD trading fees, ETH</th><th>Charter proceeds, ETH</th><th>Routed, ETH</th><th>Vault 70%</th><th>POL 15%</th><th>Team 15%</th><th>Multiplier after</th></tr>' +
     E.slice().reverse().map(e=>`<tr><td>${e.epoch}</td><td>${fmt.dt(e.settledAt)}</td><td class="${e.netFlow>=0?'pos':'neg'}">${fmt.sx(e.netFlow,1)}</td><td><span class="chip ${isExp(e)?'exp':'con'}">${isExp(e)?'expansion':'contraction'}</span></td><td>${(e.routed-e.charterEth).toFixed(1)}</td><td>${e.charterEth.toFixed(1)}</td><td>${e.routed.toFixed(1)}</td><td>${e.toVault.toFixed(1)}</td><td>${e.toPol.toFixed(1)}</td><td>${e.team.toFixed(1)}</td><td>${e.multiplierAfter.toFixed(2)}×</td></tr>`).join('');
   const prow = pools.map(p=>{const v=L.lp[p], c=ctx[p]||{}; return {p, v, f7:sum(s7.map(r=>r['spFee_'+p]||0)), v1:pvm(Y,p), v7:sum(s7.map(r=>pvm(r,p)))};});
   const pt = {val:sum(prow.map(x=>x.v.valueUSD||0)), f7:sum(prow.map(x=>x.f7)), v1:sum(prow.map(x=>x.v1)), v7:sum(prow.map(x=>x.v7))};
@@ -730,7 +730,7 @@ reg('overview', ()=>{ const B=[], daily = N===7, maxW = N===0 ? 99 : Math.floor(
   else for(let e=Sp.length; e-7>=0 && B.length<maxW; e-=7) { const b=Sp.slice(e-7,e); if (b[0].date<ep2) break; B.unshift(b); }
   document.querySelector('#p_wrev .pt').textContent = daily ? 'Revenue by stream, last seven days' : 'Revenue by stream, weekly';
   const lab = B.map(b=>dm(b[b.length-1].date)), S_ = f=>B.map(b=>sum(b.map(f)));
-  const c = mk(c_wrev, lab, [bar('Trading fees', S_(tr), STREAM.tr), bar('LP fees', S_(r=>r.spFee||0), STREAM.pool), bar('Launchpad revenue', S_(lpp), STREAM.lpad), bar('Charter sales', S_(chs), STREAM.ch)],
+  const c = mk(c_wrev, lab, [bar('STANDARD trading fees', S_(tr), STREAM.tr), bar('LP fees', S_(r=>r.spFee||0), STREAM.pool), bar('Launchpad revenue', S_(lpp), STREAM.lpad), bar('Charter sales', S_(chs), STREAM.ch)],
     {stacked:true, y:usd0, tf:usd1, title:i=>daily ? lab[i[0].dataIndex] : `7 days to ${lab[i[0].dataIndex]}`, footer:i=>{const b=B[i[0].dataIndex]; return `revenue ${fmt.usd(sum(b.map(inc)))}`;}});
   const i7 = sum(s7.map(inc)), p7 = P7.length ? sum(P7.map(inc)) : null; document.getElementById('h_wrev').innerHTML = `<em>${fmt.usd(i7)}</em> last 7d${p7!=null?` · ${chg(i7, p7, {pol:1}).t}`:''}`;
   return c; });
@@ -749,14 +749,14 @@ reg('overview', ({Rl, ll, dl})=>{ document.getElementById('h_brco').innerHTML = 
 // revenue
 reg('revenue', ({Rf, lf, df})=>{ const r7 = sum(s7.map(inc)), c7 = sum(s7.map(chs));
   document.getElementById('h_rev').innerHTML = `revenue <em>${fmt.usd(r7)}</em> · charter sales ${fmt.usd(c7)} · 7d`;
-  return mk(c_rev, lf, [bar('Trading fees', Rf.map(tr), STREAM.tr), bar('LP fees', Rf.map(r=>r.spFee||0), STREAM.pool), bar('Launchpad revenue', Rf.map(lpp), STREAM.lpad), bar('Charter sales', Rf.map(chs), STREAM.ch)],
+  return mk(c_rev, lf, [bar('STANDARD trading fees', Rf.map(tr), STREAM.tr), bar('LP fees', Rf.map(r=>r.spFee||0), STREAM.pool), bar('Launchpad revenue', Rf.map(lpp), STREAM.lpad), bar('Charter sales', Rf.map(chs), STREAM.ch)],
     {stacked:true, y:usd0, tf:usd1, bands:df, footer:i=>{const r=Rf[i[0].dataIndex]; return `revenue ${fmt.usd(inc(r),1)}`;}}); });
 reg('revenue', ()=>{ const E2 = E.filter(e=>e.epoch>1 && inRange(e.settledAt)); document.getElementById('h_epochs').innerHTML = `${E.filter(isExp).length} of ${E.length} settled epochs in expansion`;
   return new Chart(c_epochs, {type:'bar', data:{labels:E2.map(e=>'E'+e.epoch), datasets:[
-    {label:'Trading fees', data:E2.map(e=>e.routed-e.charterEth), backgroundColor:E2.map(e=>isExp(e)?C.celadon:alpha(C.red,.8)), stack:'a'},
+    {label:'STANDARD trading fees', data:E2.map(e=>e.routed-e.charterEth), backgroundColor:E2.map(e=>isExp(e)?C.celadon:alpha(C.red,.8)), stack:'a'},
     {label:'Charter proceeds', data:E2.map(e=>e.charterEth), backgroundColor:STREAM.ch, stack:'a'}]},
     options:{maintainAspectRatio:false, scales:{x:{stacked:true, grid:{display:false}}, y:{stacked:true, grid:{color:'rgba(255,255,255,.06)'}, ticks:{callback:v=>v+' ETH'}}},
-      plugins:{legend:{display:true, onClick:()=>{}, labels:{generateLabels:()=>[{text:'Trading fees, expansion', fillStyle:C.celadon, strokeStyle:'transparent', fontColor:C.sand}, {text:'Trading fees, contraction', fillStyle:alpha(C.red,.8), strokeStyle:'transparent', fontColor:C.sand}, {text:'Charter proceeds', fillStyle:STREAM.ch, strokeStyle:'transparent', fontColor:C.sand}]}},
+      plugins:{legend:{display:true, onClick:()=>{}, labels:{generateLabels:()=>[{text:'STANDARD trading fees, expansion', fillStyle:C.celadon, strokeStyle:'transparent', fontColor:C.sand}, {text:'STANDARD trading fees, contraction', fillStyle:alpha(C.red,.8), strokeStyle:'transparent', fontColor:C.sand}, {text:'Charter proceeds', fillStyle:STREAM.ch, strokeStyle:'transparent', fontColor:C.sand}]}},
         tooltip:{callbacks:{afterTitle:i=>{const e=E2[i[0].dataIndex]; return (isExp(e)?'expansion':'contraction')+' · net flow '+fmt.sx(e.netFlow,1)+' ETH';}, label:c=>c.dataset.label+': '+c.parsed.y.toFixed(1)+' ETH'}}}}}); });
 reg('revenue', ({Rf, lf, df})=>{ const v = prrOf(Y); document.getElementById('h_prr').innerHTML = v!=null?`<em>${fmt.x(v,1)}</em> ${yd}`:'';
   return mk(c_prr, lf, [line('Price to revenue', Rf.map(prrOf), C.gold, {fill:true})], {legend:false, y:v=>v.toFixed(1)+'×', tf:v=>fmt.x(v,1)}); });
@@ -872,7 +872,7 @@ const cols = [
   ['Circulating supply', r=>fmt.n(r.supply,2), r=>r.supply],
   ['In wallets', r=>fmt.n(r.float,2), r=>r.float],
   ['Revenue', r=>fmt.usd(inc(r),1), r=>inc(r)],
-  ['Trading fees', r=>fmt.usd(tr(r),1), r=>tr(r)],
+  ['STANDARD trading fees', r=>fmt.usd(tr(r),1), r=>tr(r)],
   ['LP fees', r=>fmt.usd(r.spFee||0,1), r=>r.spFee||0],
   ['Launchpad revenue', r=>fmt.usd(lpp(r),1), r=>lpp(r)],
   ['Launchpad, reward pool', r=>fmt.usd(lpot(r),1), r=>lpot(r)],
@@ -964,8 +964,8 @@ const API_FIELDS = [
   ['reserveUsd', 'Reserve assets at the day’s close, USD', r=>r.reserveUsd],
   ['backingPerToken', 'Reserve assets per STANDARD in wallets, USD', bkOf],
   ['priceToBacking', 'Market cap in wallets over reserve assets', pbOf],
-  ['revenueUsd', 'What the protocol keeps: trading fees, LP fees, the launchpad’s 50% and charter sales, USD', inc],
-  ['tradingFeesUsd', 'Trading fees on STANDARD, routed at settlement and spread over the epoch’s days, USD', tr],
+  ['revenueUsd', 'What the protocol keeps: STANDARD trading fees, LP fees, the launchpad’s 50% and charter sales, USD', inc],
+  ['standardTradingFeesUsd', 'STANDARD trading fees, the buy and sell tax, routed at settlement and spread over the epoch’s days, USD', tr],
   ['lpFeesUsd', 'LP fees earned by the reserve’s pool positions, USD', r=>r.spFee||0],
   ['launchpadRevenueUsd', 'The protocol’s 50% of the 1% launchpad base fee, USD', lpp],
   ['launchpadRewardPoolUsd', 'The King of the Markets reward pool’s 20%, USD', lpot],

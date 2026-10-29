@@ -53,7 +53,7 @@ Out of scope, by the owner's decision: Token Terminal-style financial statements
 - The protocol splits circulating supply into **protocol liquidity** (STANDARD in its own pool), **in wallets** and the **Incentives vault**;
   beside it, **in banks** (bankers' ledger balances, minted only on withdrawal), **burned** and **unissued**. **Market cap, in wallets** is price
   times the STANDARD in wallets. Backing per token and price to backing use the STANDARD in wallets, and say so.
-- **Fees** are what users pay. **Revenue** is what the protocol keeps: **trading fees** (the buy and sell tax on STANDARD), **LP fees** earned by
+- **Fees** are what users pay. **Revenue** is what the protocol keeps: **STANDARD trading fees** (the buy and sell tax, always named with STANDARD so they are not confused with LP or launchpad fees), **LP fees** earned by
   the reserve's pool positions, **launchpad revenue** (the protocol's 50% of the 1% base fee) and **charter sales**. **Launchpad fees** are the full
   base fee, all recipients. **Price to revenue** is market cap over annualized seven-day revenue.
 - Routed fees: **where fees land**, **fee routing**, **fee engine**. Never "income", "recurring revenue", "outstanding supply" or "minted supply".

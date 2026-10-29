@@ -64,7 +64,7 @@ try:
        rx(r"([\d.]+×) P/B", (kpi("overview", "Reserve assets") or [""] * 3)[2]))
     eq("backing per token", kv("reserve", "Backing per token"), gm("Backing per STANDARD in wallets")[1], rx(r"backing (\$[\d.]+)", head("reserve", "Price to backing, daily")))
     eq("revenue, 7d", kv("overview", "Revenue, 7d"), kv("revenue", "Revenue, 7d"), gm("Revenue")[1], em("revenue", "Revenue by stream, daily"))
-    eq("trading fees, 7d", kv("revenue", "Trading fees, 7d"), gm("Trading fees")[1])
+    eq("STANDARD trading fees, 7d", kv("revenue", "STANDARD trading fees, 7d"), gm("STANDARD trading fees")[1])
     eq("LP fees, 7d", kv("revenue", "LP fees, 7d"), kv("liquidity", "LP fees, 7d"), gm("LP fees")[1], em("liquidity", "LP fees by pool, daily"),
        row("liquidity", "t_pools", "Total")[5], alloc[1] if len(alloc) > 1 else None)
     eq("launchpad revenue, 7d", kv("revenue", "Launchpad revenue, 7d"), kv("launchpad", "Launchpad revenue, 7d"), gm("Launchpad revenue")[1],
@@ -107,7 +107,7 @@ eth = lambda r: r.get("eth") or L["ethusd"]
 try:
     tr = sum((r.get("tradingFeeEth") or 0) * eth(r) for r in s7); pf = sum(r.get("spFee") or 0 for r in s7); lp = sum((r.get("lpadSafe") or 0) * 5 / 7 for r in s7)
     ch = sum((r.get("charterEth") or 0) * eth(r) for r in s7)
-    for nm, a, b in (("revenue, 7d", usd(tr + pf + lp + ch), kv("revenue", "Revenue, 7d")), ("trading fees, 7d", usd(tr), kv("revenue", "Trading fees, 7d")),
+    for nm, a, b in (("revenue, 7d", usd(tr + pf + lp + ch), kv("revenue", "Revenue, 7d")), ("STANDARD trading fees, 7d", usd(tr), kv("revenue", "STANDARD trading fees, 7d")),
                      ("LP fees, 7d", usd(pf), kv("revenue", "LP fees, 7d")), ("launchpad revenue, 7d", usd(lp), kv("revenue", "Launchpad revenue, 7d")),
                      ("charter sales, 7d", usd(ch), kv("revenue", "Charter sales, 7d")),
                      ("launchpad revenue, to date", usd(sum((r.get("lpadSafe") or 0) * 5 / 7 for r in D["series"])), kv("launchpad", "Launchpad revenue, to date")),

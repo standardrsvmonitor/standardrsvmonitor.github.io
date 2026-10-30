@@ -640,8 +640,8 @@ def main():
     for k_ in sorted(hist_prev := jload(os.path.join(D, "history.json"), {})):
         if hist_prev[k_].get("reserveUsd") and k_ in res_hist: log("  reserve", k_, "snapshot", round(hist_prev[k_]["reserveUsd"]), "rebuilt close", round(res_hist[k_]["total"]))
     pf = extra.pool_flows(x)
-    bankers = {(e.get("actor") or "").lower() for k_ in ("charter-created", "deposited", "withdrawn", "licenses-purchased", "branches-opened", "checked-in") for e in act[k_]}
-    bankers |= {r_["owner"].lower() for r_ in lbd.get("bankers", [])}; bankers.discard("")
+    # bankers: owners of at least one branch today, from the protocol's leaderboard (a wallet that has closed every branch is no longer one)
+    bankers = {r_["owner"].lower() for r_ in lbd.get("bankers", []) if int(r_.get("branches", 0)) > 0}
     sbh = {"0x" + l_["topics"][1][-40:] for l_ in getlogs({"address": STD, "topics": [TR, None, pad(H["sbills"])]}, int(sb.get("deploymentBlock") or G), tip, 4_000_000)}
     names = dict(wl); names[PM.lower()] = "pool"; names.update({H["feeSplitter"].lower(): "feeSplitter", H["taxHook"].lower(): "taxHook", H["expansionVault"].lower(): "expansion"})
     grp, sellers, grp_stats = extra.flows_by_group(x, pf, names, bankers, sbh, H["teamWallet"].lower(), genesis_ts, dl)

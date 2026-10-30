@@ -211,7 +211,7 @@ a{color:inherit}
 .badge span{color:var(--dim)}
 .badge i{width:6px;height:6px;border-radius:50%;background:var(--dim);flex:none}
 .badge i.live{background:var(--celadon);box-shadow:0 0 0 0 rgb(168 199 154 / 50%);animation:pulse 2.4s infinite}
-.badge.exp i{background:var(--celadon)} .badge.con i{background:var(--red)}
+.badge.exp i{background:var(--celadon)} .badge.con i{background:var(--red)} .badge.stale{border-color:var(--gold)} .badge.stale i{background:var(--gold)}
 @keyframes pulse{0%{box-shadow:0 0 0 0 rgb(168 199 154 / 45%)}70%{box-shadow:0 0 0 7px rgb(168 199 154 / 0%)}100%{box-shadow:0 0 0 0 rgb(168 199 154 / 0%)}}
 .seg{display:flex;gap:.375rem;flex:none}
 @media (max-width:1300px){.status .hide{display:none}}
@@ -544,7 +544,8 @@ function renderKpis(){ derive();
 }
 function renderStatus(){
   const reg_ = L.epochNetFlow>=0 ? 'exp' : 'con', left = `${Math.floor(epLeft/86400)}d ${Math.floor(epLeft%86400/3600)}h`;
-  document.getElementById('status').innerHTML =
+  const stale = Date.now()/1000 - DATA.pulledAt > 7200;   // shown only when the charts are more than two hours old
+  document.getElementById('status').innerHTML = (stale ? `<span class="badge stale"><i></i>Charts as of <span>${dm(fmt.dt(DATA.pulledAt))} ${fmt.hm(DATA.pulledAt)} UTC</span></span>` : '') +
     `<span class="badge"><i class="${LIVE?'live':''}"></i>${LIVE?'Live':'Compiled'} <span>${LIVE?LIVEHM:'__ASOFHM__'} UTC</span></span>`+
     `<span class="badge ${reg_} hide"><i></i><span>Epoch ${L.epoch}</span> ${reg_==='exp'?'Expansion':'Contraction'} · ${left}</span>`+
     `<span class="badge hide"><span>STANDARD</span> ${fmt.px(L.price)}</span>`;

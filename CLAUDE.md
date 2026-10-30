@@ -28,7 +28,8 @@ Out of scope, by the owner's decision: Token Terminal-style financial statements
 - `qa/check.py qa/out/render.json data/dash.json --live https://standardrsvmonitor.github.io/ --accept qa/accept.json --api site/api`:
   the deploy gate. Exit 1 blocks publication.
 - `qa/watch_sr.py`: crawls standardreserve.xyz bundles for named contracts and API hosts, diffs against `qa/sr_contracts.json`.
-- `.github/workflows/refresh.yml` publishes every 30 minutes, only when the gate passes; a failing gate opens or updates the `qa-gate` issue.
+- `.github/workflows/refresh.yml` publishes every 30 minutes (dispatched by `scheduler.yml`), only when the gate passes. Only checks that catch a
+  wrong or stale number block; style rules warn. A failing gate opens the `qa-gate` issue and starts the agent once per incident.
 
 ## Rules for numbers
 
@@ -78,8 +79,9 @@ Out of scope, by the owner's decision: Token Terminal-style financial statements
 ## How the scheduled agent works
 
 1. Read `qa/out/` (the last refresh's report, open `qa-gate` issues, open pull requests, `sr_watch.json`) and `ROADMAP.md`.
-2. Pick one task, in this order: a failing gate; a watch reconciliation outside tolerance; a protocol change found by the watcher; the
-   first open item in `ROADMAP.md`. Do not start new work while two of its pull requests await review.
+2. Pick one task, in this order: a failing gate; a warning in the last gate report (house-style rules only warn, so the page is never held
+   for them, and they are yours to fix); a watch reconciliation outside tolerance; a protocol change found by the watcher; the first open
+   item in `ROADMAP.md`. Do not start new work while two of its pull requests await review.
 3. Work on a branch `auto/<yyyy-mm-dd>-<slug>`. Never push to `main`, never force-push, never merge, never edit `.github/`, secrets or
    repository settings.
 4. Run the full pipeline (`pull.py`, `build.py`, `qa/render.py`, `qa/check.py` with `--live`) and get the gate green. Compare the new

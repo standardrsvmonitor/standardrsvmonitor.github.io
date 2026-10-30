@@ -256,6 +256,12 @@ for w, src in [("1440", DK)] + list(V.get("layouts", {}).items()):
             ts = [x for x in lay.get("tscroll", []) if x["id"] not in ("t_log", "t_epochs", "t_float")]
             add("rules", f"{w}px {t}: tables fit their panels", not ts, ", ".join(f"{x['id']} {x['sw']}>{x['cw']}" for x in ts))
 
+# ---------------------------------------------------------------- freshness comes before style
+# only a check that catches a wrong or stale number may hold the page; house-style rules (layout, wording, chart ranges) warn, and the
+# scheduled agent fixes warnings, so a clipped label never keeps yesterday's data up
+for r in RES:
+    if r["section"] == "rules": r["severity"] = "warn"
+
 # ---------------------------------------------------------------- report
 fails = [r for r in RES if not r["ok"] and r["severity"] == "fail"]; warns = [r for r in RES if not r["ok"] and r["severity"] == "warn"]
 os.makedirs(A.out, exist_ok=True)

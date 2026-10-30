@@ -26,7 +26,7 @@ SECTIONS = {
           "Follows the range. Flows compare the window’s complete UTC days with the same span before it, shown only once that earlier span is complete "
           "and after the launch epoch; All shows totals since launch. Levels compare the latest reading with the close one window earlier, or with the first day. "
           "Shares change in percentage points. Green marks a move that favours the protocol, red one that works against it, grey a neutral measure. "
-          "Trends cover 30 days: rolling sums over the window for flows, daily closes for levels.", table("t_gm", "gm"), None, "p_gm") +
+          "Trends show each day across the window: daily values for flows, daily closes for levels.", table("t_gm", "gm"), None, "p_gm") +
     '<div class="col w5">' +
     panel(12, "Revenue by stream, daily", "Revenue each complete UTC day over the selected range: STANDARD trading fees, LP fees earned by the reserve’s "
           "pool positions, the protocol’s 50% of the launchpad base fee, and charter sales.", chart("c_wrev", "s"), "h_wrev", "p_wrev") +
@@ -451,7 +451,8 @@ const cpShares = (rows, ps)=>{const v=CPK.map(k=>sum(rows.map(r=>ck(r,k,ps)))), 
   return Object.fromEntries(CPK.map((k,i)=>[k, fl[i]]));};
 
 // ---------- sparklines and change cells ----------
-const spark = (vals, color, fill)=>{const w=300, h=40, p=2, xs=vals.filter(v=>v!=null&&isFinite(v)); if(xs.length<2) return '<svg></svg>';
+const spark = (vals, color, fill)=>{ let k=0; while (k<vals.length && (vals[k]==null || !isFinite(vals[k]) || vals[k]===0)) k++; vals = vals.slice(k);   // start at the first activity
+  const w=300, h=40, p=2, xs=vals.filter(v=>v!=null&&isFinite(v)); if(xs.length<2) return '<svg></svg>';
   let lo=Math.min(...xs), hi=Math.max(...xs); if(hi===lo){hi+=1; lo-=1;}
   const n=vals.length, X=i=>p+(w-2*p)*(n>1?i/(n-1):.5), Yp=y=>h-p-(h-2*p)*(y-lo)/(hi-lo);
   const pts=vals.map((y,i)=>y==null||!isFinite(y)?null:[X(i),Yp(y)]).filter(Boolean);
@@ -477,9 +478,9 @@ function renderKpis(){ derive();
   // tiles follow the range: flows are the window's total against the window before (when that is complete and after the launch epoch),
   // levels against the close one window earlier (All: the first day)
   const {W, sw, pw, wl, B0} = win(), S_ = f=>sum(sw.map(f)), P_ = f=>pw?sum(pw.map(f)):null, W0 = B0;
-  const rollW = (f)=>{ if (!W) { let c=0; return last(Sp.map(r=>c+=f(r)), 30); } const R=last(Sp, 30+W-1); return R.map((r,i)=>i>=W-1 ? sum(R.slice(i-W+1,i+1).map(f)) : null).slice(-30); };
-  const rollR = (nf, df)=>{ const q=W||30, R=last(Sp, 30+q-1); return R.map((r,i)=>{ if(i<q-1) return null; const w=R.slice(i-q+1,i+1), d=sum(w.map(df)); return d?sum(w.map(nf))/d:null; }).slice(-30); };
-  const lvl = (f)=>W ? last(Sh,30).map(f) : Sh.map(f);
+  const rollW = (f)=>sw.map(f);   // the mini line: each day's value across the window
+  const rollR = (nf, df)=>sw.map(r=>{ const d=df(r); return d ? nf(r)/d : null; });
+  const lvl = (f)=>(W ? last(Sh, W+1) : Sh).map(f);
   const rev7 = S_(inc), revP = P_(inc), lv7 = S_(lvol), lvP = P_(lvol), lfee = r=>(r.lpadSafe||0)+(r.lpadEsc||0), lf7 = S_(lfee), lfP = P_(lfee);
   const pf7 = S_(r=>r.spFee||0), pfP = P_(r=>r.spFee||0), lpDays = sw.filter(r=>r.date>=LP0).length || 1;
   const poolLiq = sum(pools.map(p=>L.lp[p].valueUSD));
@@ -502,7 +503,7 @@ function renderKpis(){ derive();
       {l:`LP fees, ${wl}`, v:fmt.usd(pf7), c:chg(pf7, pfP, {pol:1}), sp:rollW(r=>r.spFee||0), col:STREAM.pool},
       {l:`Launchpad revenue, ${wl}`, v:fmt.usd(S_(lpp)), c:chg(S_(lpp), P_(lpp), {pol:1}), sp:rollW(lpp), col:STREAM.lpad, tip:'The protocol’s 50% of the 1% launchpad base fee, held in the launchpad fee Safe.'},
       {l:`Charter sales, ${wl}`, v:fmt.usd(S_(chs)), c:chg(S_(chs), P_(chs), {pol:1}), sp:rollW(chs), col:STREAM.ch},
-      {l:'Price to revenue', v:fmt.x(prrOf(Y),1), c:chg(prrOf(Y), W&&Sp.length>W?prrOf(Sp[Sp.length-1-W]):null, {pol:-1, abs:true, f:v=>v.toFixed(1)+'×'}), s:`${prrK()}d revenue`, sp:last(Sp,30).map(prrOf), col:C.fg2},
+      {l:'Price to revenue', v:fmt.x(prrOf(Y),1), c:chg(prrOf(Y), W&&Sp.length>W?prrOf(Sp[Sp.length-1-W]):null, {pol:-1, abs:true, f:v=>v.toFixed(1)+'×'}), s:`${prrK()}d revenue`, sp:sw.map(prrOf), col:C.fg2},
     ],
     liquidity:[
       {l:'Capital in pools', v:fmt.usd(poolLiq), c:{t:fmt.pct(poolLiq/L.reserve.totalUsd,0)+' of reserve', c:'nt'}, sp:lvl(r=>{const q=(r.reserveParts||{}).lp; return q?sum(Object.values(q)):null;}), col:C.blue},
@@ -593,11 +594,11 @@ function renderGM(){
   // is complete and after the launch epoch; All is the total since launch, levels against the first day
   const W = N, cur = W ? last(Sp, W) : Sp, prv = W && Sp.length >= 2*W && Sp[Sp.length-2*W].date >= ep2 ? Sp.slice(-2*W, -W) : null;
   const L0 = W ? (Sh.length > W ? Sh[Sh.length-1-W] : null) : Sh[0], u = W ? W+'d' : 'all';
-  const rollW = (f)=>{ if (!W) { let c=0; return last(Sp.map(r=>c+=f(r)), 30); } const R=last(Sp, 30+W-1); return R.map((r,i)=>i>=W-1 ? sum(R.slice(i-W+1,i+1).map(f)) : null).slice(-30); };
-  const rollR = (nf, df)=>{ const k=W||7, R=last(Sp, 30+k-1); return R.map((r,i)=>{ if(i<k-1) return null; const w=R.slice(i-k+1,i+1), d=sum(w.map(df)); return d?sum(w.map(nf))/d:null; }).slice(-30); };
+  const rollW = (f)=>cur.map(f);   // trends: each day's value across the window
+  const rollR = (nf, df)=>cur.map(r=>{ const d=df(r); return d ? nf(r)/d : null; });
   const flow = (label, f, fm, pol, o={})=>({label, u, cur:sum(cur.map(f)), prev:prv?sum(prv.map(f)):null, fm, pol, sp:rollW(f), ...o});
   const ratio = (label, nf, df, pol)=>{const r=(rows)=>{const d=sum(rows.map(df)); return d?sum(rows.map(nf))/d:null;}; return {label, u, cur:r(cur), prev:prv?r(prv):null, fm:v=>fmt.pct(v,1), pol, pp:true, sp:rollR(nf,df)};};
-  const level = (label, cv, f, fm, pol, o={})=>({label, u:'', cur:cv, prev:L0?f(L0):null, fm, pol, sp:W?lvl(f):Sh.map(f), ...o});
+  const level = (label, cv, f, fm, pol, o={})=>({label, u:'', cur:cv, prev:L0?f(L0):null, fm, pol, sp:(W ? last(Sh, W+1) : Sh).map(f), ...o});
   document.querySelector('#p_gm .pt').textContent = `Growth monitor, ${W ? 'trailing '+W+' days' : 'since launch'}`;
   const eqN = r=>sum(stockPools.map(p=>r['spVolMine_'+p]??r['spVol_'+p]??0)), eqD = r=>sum(stockPools.map(p=>r['chainVol_'+p]||0));
   const G = [

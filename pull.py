@@ -612,6 +612,9 @@ def main():
         f_ = {s_: (pfees[s_]["days"].get(row["date"]) or [0.0] * 4) for s_ in lp_pools}
         for s_, v_ in f_.items(): row["spFee_" + s_] = round(v_[2], 6)
         row["spFee"] = round(sum(v_[2] for v_ in f_.values()), 6); row["spFeeLpad"] = round(sum(v_[3] for v_ in f_.values()), 6)
+        if all(len(v_) > 4 for v_ in f_.values()):   # volume served, exact from the replay (was each swap's USDG amount times the share at its final tick)
+            for s_, v_ in f_.items(): row["spVolMine_" + s_] = round(v_[4], 6)
+            row["spVolMine"] = round(sum(v_[4] for v_ in f_.values()), 6)
     closes = extra.pool_closes(x, {**{pid_: SEED_BLOCK for pid_ in pools}, STD_POOL: G})
     # STANDARD's daily close: the protocol pool's own price after the day's last trade, at Coinbase's ETH close, the same basis as the live
     # price (DexScreener reads that pool's price). GeckoTerminal's close is the last trade's execution price with the 1% pool fee in it, so it
@@ -695,12 +698,23 @@ def main():
                   0.01, unit="USD")
         reconcile("poolfees_" + s_, f"{s_ if s_ != 'ETH' else 'ETH/USDG'} pool fees not yet collected, replayed from swaps, at today’s pool price", ours_, owed_,
            "uncollected fees read from the reserve’s positions", 0.02, unit="USD", note=f"{pfees[s_]['mismatch']} swaps whose reported liquidity differed from the replay")
+    for s_, p_ in lp_pools.items():   # a fixed-tier pool pays its providers exactly the tier on what they serve, so served = LP fees / tier
+        if p_["tier"] < 1 << 23:
+            w_ = [r_ for r_ in series[-8:-1]]; f_ = sum(r_.get("spFee_" + s_) or 0 for r_ in w_); v_ = sum(r_.get("spVolMine_" + s_) or 0 for r_ in w_)
+            reconcile("served_" + s_, f"{s_ if s_ != 'ETH' else 'ETH/USDG'} volume served, last 7 days", v_, f_ / (p_["tier"] / 1e6) if f_ else None,
+                      f"its LP fees divided by the {p_['tier'] / 1e4:.2f}% fee tier", 0.005, unit="USD")
     yday = (dt.datetime.fromtimestamp(x.tip_ts, dt.timezone.utc).date() - dt.timedelta(1)).isoformat()   # complete days only
     cp = extra.counterparties(x, reg, lp_pools, "2026-10-14", yday)
     cls = extra.cpty_classes(cp, {s_: p_["tier"] for s_, p_ in lp_pools.items()}, routers=set(extra.LPAD["routers"]))
     lpad, lpad_held = extra.launchpad(x, lp_pools, closes, eth_day)
     for row in series:
         d_ = row["date"]; row.update({k_: v_ for k_, v_ in (shares.get(d_) or {}).items()}); row.update(cls.get(d_, {})); row.update(lpad.get(d_, {}))
+        for s_ in lp_pools:   # counterparty classes keep their shares and sum to the exact volume served
+            t_ = sum(row.get(f"vol{k_}_{s_}") or 0 for k_ in ("Org", "Arb", "Bot", "Fx"))
+            if t_ and row.get("spVolMine_" + s_) is not None:
+                f_ = row["spVolMine_" + s_] / t_
+                for k_ in ("Org", "Arb", "Bot", "Fx", "Lpad"):
+                    if row.get(f"vol{k_}_{s_}") is not None: row[f"vol{k_}_{s_}"] = round(row[f"vol{k_}_{s_}"] * f_, 2)
         for s_ in lp_pools:   # the reserve's share of chain volume is the volume its liquidity served, not the whole pool's (it shares the ETH/USDG pool)
             if row.get("chainVol_" + s_): row["volShare_" + s_] = (row.get("spVolMine_" + s_) or 0) / row["chainVol_" + s_]
         for s_, v_ in (pnl.get(d_) or {}).items(): row.update({f"lpVal_{s_}": v_["lp"], f"holdVal_{s_}": v_["hold"], f"lpCost_{s_}": v_["cost"], f"lpFees_{s_}": v_["fees"]})

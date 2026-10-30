@@ -54,8 +54,9 @@ SECTIONS = {
     panel(12, "Protocol-owned liquidity by pool", "The reserve’s position in each pool and its standing among every pool for the same asset on Robinhood Chain on the last complete "
           "day. Volume is the volume the reserve’s own liquidity served. APR is trailing seven-day LP fees annualized over position value. Rank and venues count pools with "
           "at least $100 of liquidity.", table("t_pools")) +
-    panel(6, "Volume served by the reserve, by pool, daily", "Each swap’s USDG amount times the reserve’s share of in-range liquidity. The reserve is the only provider in the equity "
-          "pools; it shares the ETH/USDG pool with others.", chart("c_vol"), "h_vol") +
+    panel(6, "Volume served by the reserve, by pool, daily", "Every swap is replayed tick by tick against every provider’s liquidity; the reserve’s part of each step’s input, the fee "
+          "included, is the volume its liquidity served, valued at the swap’s price. Other providers hold part of the liquidity in some pools; the reserve’s "
+          "share is in the pools table.", chart("c_vol"), "h_vol") +
     panel(6, "LP fees by pool, daily", "LP fees earned by the reserve’s positions. Every swap is replayed from the pool’s price before it to the price after it, one "
           "initialized tick at a time, against the liquidity of every provider rebuilt from the pool’s events; the fee on each step is charged on the input token and split "
           "among the providers in range, as the pool contract does. Each swap’s fee is valued at the pool price of that swap. The ETH/USDG figure excludes Uniswap’s "

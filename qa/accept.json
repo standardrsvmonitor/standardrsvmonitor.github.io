@@ -36,5 +36,17 @@
   "to": "2026-10-28",
   "until": "2026-11-06",
   "why": "Daily closes moved from GeckoTerminal (last trade with the 1% pool fee) to the pool's own price on chain; 30 Oct 2026"
+ },
+ {
+  "fields": [
+   "spVolMine",
+   "spVolMine_.*",
+   "volShare_.*",
+   "vol(Org|Arb|Bot|Fx|Lpad)_.*"
+  ],
+  "from": "2026-10-14",
+  "to": "2026-10-28",
+  "until": "2026-11-07",
+  "why": "Volume served is exact from the swap replay (was each swap's USDG amount times the reserve's share at its final tick; ETH/USDG ran 3.3% high); 30 Oct 2026"
  }
 ]

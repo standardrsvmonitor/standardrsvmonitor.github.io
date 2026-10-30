@@ -642,10 +642,11 @@ def pool_fees(x, lp_pools, routers=()):
     """Fees earned by the reserve's positions, replayed swap by swap. Each swap is walked from the pool's price before it to the price after
     it, one initialized tick at a time, with the pool's active liquidity rebuilt from every ModifyLiquidity event (all providers, not only
     the reserve). The fee on each step is charged on the input token, less Uniswap's protocol fee, and split by liquidity among the providers
-    in range on that step, as the PoolManager does. Returns per pool: fees by day in token units and in USD at the pool price of each swap,
+    in range on that step, as the PoolManager does. Returns per pool: fees by day in token units and in USD at the pool price of each swap, the
+    volume the reserve's liquidity served (its share of each step's input, fee included, at the swap's price),
     the fees accrued and not yet collected per position (to reconcile with the positions), and the count of swaps whose reported liquidity
     differed from the replay's."""
-    c = x.jl("pool_fees.json", {}); ids = {int(i) for i in x.pos_ids} | set(x.jl("positions.json", {"ids": []})["ids"]); rt = {r.lower() for r in routers}
+    c = x.jl("pool_fees2.json", {}); ids = {int(i) for i in x.pos_ids} | set(x.jl("positions.json", {"ids": []})["ids"]); rt = {r.lower() for r in routers}
     out = {}
     for s, p in lp_pools.items():
         pid = p["pool"]; e = c.get(pid); logs = None
@@ -672,7 +673,8 @@ def pool_fees(x, lp_pools, routers=()):
                         else: mine[salt] = [tl, tu, dl]
                     continue
                 if k not in (x.SW, DONATE) or sp is None: continue
-                d = day(x.T(b)); row = days.setdefault(d, [0.0, 0.0, 0.0, 0.0])
+                d = day(x.T(b)); row = days.setdefault(d, [0.0, 0.0, 0.0, 0.0, 0.0])
+                if len(row) < 5: row.append(0.0)   # [fees currency0, fees currency1, fees USD, launchpad-routed fees USD, volume served USD]
                 if k == DONATE:
                     a0, a1 = int(w[0], 16), int(w[1], 16); m_ = sum(ml for tl, tu, ml in mine.values() if tl <= tick < tu)
                     if L and m_:
@@ -687,7 +689,7 @@ def pool_fees(x, lp_pools, routers=()):
                 if tier < 1 << 23 and fee > tier:   # a fixed-tier pool: the swap fee includes Uniswap's protocol fee, fee = p + tier - p * tier / 1e6
                     pf = fee - tier
                     while pf + tier - pf * tier // 1_000_000 < fee: pf += 1
-                z = S1 < sp; s_ = float(sp); got = [0.0, 0.0]
+                z = S1 < sp; s_ = float(sp); got = [0.0, 0.0]; srv = [0.0, 0.0]
                 while True:
                     if z:
                         i = bisect.bisect_right(tks, tick) - 1; nt = tks[i] if i >= 0 else -887272; tgt = _sqrt_at(nt)
@@ -697,6 +699,9 @@ def pool_fees(x, lp_pools, routers=()):
                         i = bisect.bisect_right(tks, tick); nt = tks[i] if i < len(tks) else 887272; tgt = _sqrt_at(nt)
                         end = min(tgt, S1); amt = L * (end - s_) / 2 ** 96 if L and end > s_ else 0.0; side = 1
                         cross = i < len(tks) and (tgt < S1 * (1 - 1e-13) or (tgt <= S1 * (1 + 1e-13) and evT >= nt))
+                    if amt > 0:   # the reserve's part of the step's input, the fee included: the volume its liquidity served
+                        m_ = sum(ml for tl, tu, ml in mine.values() if tl <= tick < tu and ml)
+                        if m_ and L: srv[side] += amt * 1e6 / (1e6 - fee) * m_ / L
                     if amt > 0 and fee:
                         fa = amt * fee / (1e6 - fee)
                         if pf: fa -= fa if pf == fee else (amt + fa) * pf / 1e6
@@ -708,8 +713,10 @@ def pool_fees(x, lp_pools, routers=()):
                     else: L += net[nt]; tick = nt
                 sp, tick = S1, evT
                 if L != evL: e["mismatch"] += 1; L = evL
+                P = (S1 / 2 ** 96) ** 2
+                if srv[0] or srv[1]: row[4] += (srv[0] + srv[1] / P) / 1e6 if p["usdg0"] else (srv[0] * P + srv[1]) / 1e6
                 if got[0] or got[1]:
-                    P = (S1 / 2 ** 96) ** 2; usd = (got[0] + got[1] / P) / 1e6 if p["usdg0"] else (got[0] * P + got[1]) / 1e6
+                    usd = (got[0] + got[1] / P) / 1e6 if p["usdg0"] else (got[0] * P + got[1]) / 1e6
                     row[0] += got[0]; row[1] += got[1]; row[2] += usd
                     if "0x" + l["topics"][2][-40:] in rt: row[3] += usd
             e.update({"last": x.tip, "sp": sp, "tick": tick, "L": L, "net": {str(t_): v for t_, v in net.items() if v}, "mine": {str(k_): v for k_, v in mine.items()},
@@ -719,7 +726,7 @@ def pool_fees(x, lp_pools, routers=()):
         out[s] = {"days": e["days"], "uncollected": acc_, "mismatch": e["mismatch"],
                   "collected": [sum(v[0] for v in e["collected"].values()), sum(v[1] for v in e["collected"].values())]}
         x.log("pool fees", s, "uncollected raw", [round(v_) for v_ in acc_], "liquidity mismatches", e["mismatch"])
-    x.js("pool_fees.json", c)
+    x.js("pool_fees2.json", c)
     return out
 
 

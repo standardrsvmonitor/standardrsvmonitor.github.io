@@ -147,6 +147,10 @@ for k in ("price", "eth", "mcFloat", "mcTotal", "reserveUsd", "spFee", "branches
     add("data", f"yesterday has {k}", Y.get(k) is not None, "")
 for k in ("lpadSafe", "volOrg_SPCX"):
     add("data", f"yesterday has {k}", Y.get(k) is not None, "", "warn")
+bad_neg = [f"{r['date']} {k} {v:,.0f}" for r in D["series"] for k, v in r.items() if re.match(r"(chainVol|chainTvl|otherTvl|spVol|spVolMine|spFee)_", k) and isinstance(v, (int, float)) and v < 0]
+bad_sh = [f"{r['date']} {k} {v:.3f}" for r in D["series"] for k, v in r.items() if re.match(r"(volShare|liqShare)_", k) and isinstance(v, (int, float)) and not -1e-9 <= v <= 1.0005]
+add("data", "venue volumes, liquidity and pool fees are never negative", not bad_neg, "; ".join(bad_neg[:8]))
+add("data", "shares of chain volume and liquidity lie between 0 and 100%", not bad_sh, "; ".join(bad_sh[:8]))
 add("data", "compile is under two hours old", (dt.datetime.now(dt.timezone.utc) - pulled).total_seconds() < 7200, f"compiled {pulled:%Y-%m-%d %H:%M} UTC", "warn")
 
 # ---------------------------------------------------------------- drift against the published page

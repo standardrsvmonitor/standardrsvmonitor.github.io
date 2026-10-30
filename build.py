@@ -104,7 +104,7 @@ SECTIONS = {
     panel(5, "Supply reconciliation", "From the genesis mint to circulating supply, the STANDARD in wallets and free float, at one block.", '<div class="bridge" id="bridge"></div>') +
     panel(7, "Net buying of STANDARD by holder group, daily", "STANDARD bought from the protocol’s STANDARD/ETH pool less STANDARD sold into it, by the group of the "
           "wallet behind each trade. Above zero a group bought more than it sold; below zero it sold more. Groups apply in order: team "
-          "wallet, bankers, S-Bill holders, frequent traders (wallets with 300 or more pool trades), launch-week buyers, others; a group with no trades is not drawn. A wallet’s group is its standing at the compile, so a "
+          "wallet, bankers, S-Bill holders, frequent traders (300 or more trades with the pool), launch-epoch buyers (first buy within three days of genesis, the first epoch), others; a group with no trades is not drawn. A wallet’s group is its standing at the compile, so a "
           "wallet that later becomes a banker moves into Bankers for its whole history; each day’s total does not change.", chart("c_sell"), "h_sell") +
     panel(5, "Largest net sellers, trailing seven days", "Net STANDARD sold into the pool by wallet over the last seven complete days; trades through routers are assigned to the "
           "wallet behind the router.", table("t_sellers")) +
@@ -417,7 +417,7 @@ const burnLedger = (r)=>(r.licBurn||0)+(r.exitFeeBurn||0)+(r.revokeFeeBurn||0), 
 const pbOf = (r)=>r&&r.reserveUsd&&r.mcFloat ? r.mcFloat/r.reserveUsd : null;
 const bkOf = (r)=>r&&r.reserveUsd&&r.float ? r.reserveUsd/r.float : null;
 const served = (r)=>r.spVolMine!=null?r.spVolMine:(r.spVol||0);
-const GROUPS = [['team','Team wallet',C.rose],['bankers','Bankers',C.gold],['sbills','S-Bill holders',C.celadon],['active','Frequent traders',C.sapphire],['launch','Launch-week buyers',C.silver],['other','Other wallets',C.grey]];
+const GROUPS = [['team','Team wallet',C.rose],['bankers','Bankers',C.gold],['sbills','S-Bill holders',C.celadon],['active','Frequent traders',C.sapphire],['launch','Launch-epoch buyers',C.silver],['other','Other wallets',C.grey]];
 const Sh = S.filter(r=>r.date<=L.date);
 const ep2 = E.length>1 ? fmt.dt(E[1].start) : '';
 const Sp = Sh.filter(r=>r.date<L.date);

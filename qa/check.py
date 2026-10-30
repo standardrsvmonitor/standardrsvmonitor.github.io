@@ -63,13 +63,19 @@ try:
     eq("price to backing", kv("reserve", "Price to backing"), gm("Price to backing")[1], em("overview", "Price and backing per token, daily"), em("reserve", "Price to backing, daily"),
        rx(r"([\d.]+×) P/B", (kpi("overview", "Reserve assets") or [""] * 3)[2]))
     eq("backing per token", kv("reserve", "Backing per token"), gm("Backing per STANDARD in wallets")[1], rx(r"backing (\$[\d.]+)", head("reserve", "Price to backing, daily")))
-    eq("revenue, 7d", kv("overview", "Revenue, 7d"), kv("revenue", "Revenue, 7d"), em("revenue", "Revenue by stream, daily"))
-    eq("LP fees, 7d", kv("revenue", "LP fees, 7d"), kv("liquidity", "LP fees, 7d"), em("liquidity", "LP fees by pool, daily"),
-       row("liquidity", "t_pools", "Total")[5])
-    eq("launchpad revenue, 7d", kv("revenue", "Launchpad revenue, 7d"), kv("launchpad", "Launchpad revenue, 7d"))
-    eq("volume served, 7d", kv("liquidity", "Volume served, 7d"), em("liquidity", "Volume served by the reserve, by pool, daily"),
-       row("liquidity", "t_pools", "Total")[4])
-    eq("organic share", kv("liquidity", "Organic share of volume"), em("liquidity", "Pool volume by counterparty, daily"))
+    # the page opens on 30D, and tiles, headlines, tables and the growth monitor all take the window from the range
+    eq("revenue, 30d", kv("overview", "Revenue, 30d"), kv("revenue", "Revenue, 30d"), em("revenue", "Revenue by stream, daily"), em("overview", "Revenue by stream, daily"),
+       gm("Revenue")[1], em("revenue", "Revenue by destination, trailing 30 days"))
+    eq("STANDARD trading fees, 30d", kv("revenue", "STANDARD trading fees, 30d"), gm("STANDARD trading fees")[1])
+    eq("LP fees, 30d", kv("revenue", "LP fees, 30d"), kv("liquidity", "LP fees, 30d"), em("liquidity", "LP fees by pool, daily"), row("liquidity", "t_pools", "Total")[5],
+       gm("LP fees")[1])
+    eq("launchpad revenue, 30d", kv("revenue", "Launchpad revenue, 30d"), kv("launchpad", "Launchpad revenue, 30d"), gm("Launchpad revenue")[1])
+    eq("charter sales, 30d", kv("revenue", "Charter sales, 30d"), gm("Charter sales")[1])
+    eq("volume served, 30d", kv("liquidity", "Volume served, 30d"), em("liquidity", "Volume served by the reserve, by pool, daily"), row("liquidity", "t_pools", "Total")[4],
+       gm("Volume served by the reserve")[1])
+    eq("launchpad volume, 30d", kv("launchpad", "Launchpad volume, 30d"), gm("Launchpad trading volume")[1])
+    eq("organic share", kv("liquidity", "Organic share of volume"), em("liquidity", "Pool volume by counterparty, daily"), row("liquidity", "t_cpty", "All pools")[1])
+    eq("LP fee APR", kv("liquidity", "LP fee APR"), row("liquidity", "t_pools", "Total")[6])
     eq("launchpad revenue, to date", kv("launchpad", "Launchpad revenue, to date"), rx(r"protocol (\S+)", head("launchpad", "Launchpad fees by recipient, daily")))
     eq("launchpad fees, to date", rx(r"of (\S+) fees", (kpi("launchpad", "Launchpad revenue, to date") or [""] * 3)[2]), em("launchpad", "Launchpad fees by recipient, daily"))
     kp = T["launchpad"]["blocks"].get("kotm_pool", [])
@@ -89,7 +95,7 @@ try:
     eq("free float", kv("token", "Free float"), br[br.index("= Free float") + 1] if "= Free float" in br else None)
     num = lambda s: float(re.sub(r"[^\d.]", "", s)) * (1e6 if s.endswith("M") else 1e3 if s.endswith("K") else 1)
     P = T["liquidity"]["tables"]["t_pools"]
-    for col, nm in ((1, "position value"), (4, "volume, 7d"), (5, "fees, 7d")):
+    for col, nm in ((1, "position value"), (4, "volume, 30d"), (5, "LP fees, 30d")):
         rows_ = [num(r[col]) for r in P[1:-1]]; tot = num(P[-1][col])
         add("consistency", f"pools table rows sum to the total, {nm}", abs(sum(rows_) - tot) / tot < 0.01, f"{sum(rows_):.0f} vs {tot:.0f}")
     for r in T["liquidity"]["tables"]["t_cpty"][1:]:
@@ -98,15 +104,15 @@ except Exception as e:
     add("consistency", "consistency checks ran", False, f"{type(e).__name__}: {e}")
 
 # ---------------------------------------------------------------- recompute from dash.json
-L = D["live"]; S = [r for r in D["series"] if r["date"] < L["date"]]; s7 = S[-7:]
+L = D["live"]; S = [r for r in D["series"] if r["date"] < L["date"]]; s7 = S[-30:]   # the page's default window is 30 days
 eth = lambda r: r.get("eth") or L["ethusd"]
 try:
     tr = sum((r.get("tradingFeeEth") or 0) * eth(r) for r in s7); pf = sum(r.get("spFee") or 0 for r in s7); lp = sum((r.get("lpadSafe") or 0) * 5 / 7 for r in s7)
     ch = sum((r.get("charterEth") or 0) * eth(r) for r in s7)
-    for nm, a, b in (("revenue, 7d", usd(tr + pf + lp + ch), kv("revenue", "Revenue, 7d")), ("STANDARD trading fees, 7d", usd(tr), kv("revenue", "STANDARD trading fees, 7d")),
-                     ("LP fees, 7d", usd(pf), kv("revenue", "LP fees, 7d")), ("launchpad revenue, 7d", usd(lp), kv("revenue", "Launchpad revenue, 7d")),
-                     ("charter sales, 7d", usd(ch), kv("revenue", "Charter sales, 7d")),
-                     ("launchpad volume, 7d", usd(sum((r.get("lpadSafe") or 0) / 0.007 for r in s7)), kv("launchpad", "Launchpad volume, 7d")),
+    for nm, a, b in (("revenue, 30d", usd(tr + pf + lp + ch), kv("revenue", "Revenue, 30d")), ("STANDARD trading fees, 30d", usd(tr), kv("revenue", "STANDARD trading fees, 30d")),
+                     ("LP fees, 30d", usd(pf), kv("revenue", "LP fees, 30d")), ("launchpad revenue, 30d", usd(lp), kv("revenue", "Launchpad revenue, 30d")),
+                     ("charter sales, 30d", usd(ch), kv("revenue", "Charter sales, 30d")),
+                     ("launchpad volume, 30d", usd(sum((r.get("lpadSafe") or 0) / 0.007 for r in s7)), kv("launchpad", "Launchpad volume, 30d")),
                      ("revenue by destination, trailing 30 days (the page opens on 30D)", usd(sum((r.get("tradingFeeEth") or 0) * eth(r) + (r.get("spFee") or 0) + (r.get("lpadSafe") or 0) * 5 / 7
                       + (r.get("charterEth") or 0) * eth(r) for r in S[-30:])), em("revenue", "Revenue by destination, trailing 30 days")),
                      ("launchpad revenue, to date", usd(sum((r.get("lpadSafe") or 0) * 5 / 7 for r in D["series"])), kv("launchpad", "Launchpad revenue, to date")),

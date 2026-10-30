@@ -15,6 +15,7 @@ permissions:
   pages: write
   id-token: write
   issues: write
+  actions: write
 
 concurrency:
   group: refresh
@@ -88,7 +89,10 @@ jobs:
           N=$(gh issue list --label qa-gate --state open --json number --jq '.[0].number // empty')
           if [ "${{ steps.gate.outcome }}" = "failure" ]; then
             printf '%s\n\nRun: %s/%s/actions/runs/%s\n' "$(cat qa/out/report.md)" "$GITHUB_SERVER_URL" "$GITHUB_REPOSITORY" "$GITHUB_RUN_ID" > qa/out/issue.md
-            if [ -z "$N" ]; then gh issue create --title "Deploy gate failing, page held at the last good compile" --label qa-gate --body-file qa/out/issue.md
+            if [ -z "$N" ]; then
+              gh issue create --title "Deploy gate failing, page held at the last good compile" --label qa-gate --body-file qa/out/issue.md
+              # a new incident starts the agent once, so a fix is on its way before anyone has read the issue
+              gh workflow run evolve.yml -f task="The deploy gate is failing and the page is held at its last good compile. The open qa-gate issue has the report. Diagnose the failing check, fix the cause, and open a pull request. If the check itself is wrong, fix the check and say so." || echo "agent dispatch failed"
             else gh issue edit "$N" --body-file qa/out/issue.md; fi
           elif [ -n "$N" ]; then
             gh issue close "$N" --comment "Gate passed at $(date -u +'%Y-%m-%d %H:%M') UTC; the page is current again."

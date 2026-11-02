@@ -36,6 +36,32 @@ class Ctx:
     def js(self, name, o): json.dump(o, open(os.path.join(self.cache, name), "w"))
 
 
+# ---------- LP fees of the protocol's own positions in the STANDARD/ETH pool, swap by swap ----------
+def std_pool_fees(x, pid, owner):
+    """({date: [ETH, STANDARD]}, {(tickLower, tickUpper, salt): liquidity now}) for the positions `owner` holds in pool `pid`: each swap's
+    fee on its input side times the share of the active liquidity those positions held at the swap's tick."""
+    c = x.jl("std_fees.json", {"last": x.G - 1, "ml": [], "days": {}})
+    if c["last"] < x.tip:
+        pos = collections.Counter()
+        for r in c["ml"]: pos[(r[2], r[3], r[5])] += int(r[4])
+        ev = [(int(l["blockNumber"], 16), int(l["logIndex"], 16), l) for q in ([x.ML, pid, x.pad(owner)], [x.SW, pid])
+              for l in x.getlogs({"address": x.PM, "topics": q}, c["last"] + 1, x.tip, 400000)]
+        for b, i, l in sorted(ev, key=lambda t: t[:2]):
+            w = words(l["data"])
+            if l["topics"][0] == x.ML:
+                k = (s256(w[0]), s256(w[1]), "0x" + w[3]); pos[k] += s256(w[2]); c["ml"].append([b, i, k[0], k[1], str(s256(w[2])), k[2]]); continue
+            a0, a1, L, tick, fee = s256(w[0]), s256(w[1]), int(w[3], 16), s256(w[4]), int(w[5], 16)
+            if not fee or not L: continue
+            share = min(1.0, sum(v for (tl, tu, _), v in pos.items() if v > 0 and tl <= tick < tu) / L)
+            v = c["days"].setdefault(day(x.T(b)), [0.0, 0.0])
+            if a0 < 0: v[0] += -a0 * fee / 1e6 * share / 1e18          # the swapper's negative delta is what went in; the fee is taken there
+            elif a1 < 0: v[1] += -a1 * fee / 1e6 * share / 1e18
+        c["last"] = x.tip; x.js("std_fees.json", c)
+    pos = collections.Counter()
+    for r in c["ml"]: pos[(r[2], r[3], r[5])] += int(r[4])
+    return c["days"], {k: v for k, v in pos.items() if v > 0}
+
+
 # ---------- daily closing sqrtPrice per pool, from Swap logs ----------
 def pool_closes(x, pids_from):
     """{pid: {date: sqrtPriceX96 of the day's last swap}}; pids_from maps pool id to the block its scan starts at."""

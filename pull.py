@@ -66,7 +66,7 @@ def get(url, tries=4, backoff=3):
             err = e; time.sleep(backoff * (i + 1))
     return {"_error": str(err)}
 
-def getlogs(q, lo, hi, step=400000):   # step halves when a range fails and stays there for the rest of the scan
+def getlogs(q, lo, hi, step=400000):   # step halves when a range fails; it grows back after too many logs, not after a timeout
     out = []; b = lo; cap = step; waits = 0
     while b <= hi:
         e = min(b + step - 1, hi); qq = dict(q, fromBlock=hex(b), toBlock=hex(e))
@@ -75,7 +75,9 @@ def getlogs(q, lo, hi, step=400000):   # step halves when a range fails and stay
             waits += 1; time.sleep(5 + waits); continue
         if "error" in r:
             if step <= 2000: raise RuntimeError(r["error"])
-            step //= 2; cap = step; continue   # stays at the size that works for the rest of this scan
+            step //= 2                         # too many logs: halve, then grow back; a timeout keeps the smaller size for the rest of this scan
+            if "exceeds" not in str(r["error"].get("message", "")): cap = step
+            continue
         out += r["result"]; b = e + 1
         if step < cap: step = min(cap, step * 2)
     return out
@@ -454,6 +456,23 @@ def main():
     while t_ < now:
         seg = min(now, (t_ // 86400 + 1) * 86400) - t_; d = day(t_)
         days[d]["tradingFeeEth"] += live_tr * seg / elapsed; days[d]["routedLive"] = 1; t_ += seg
+    # STANDARD trading fees by day, exactly: the ETH tax the tax hook collected on every STANDARD swap (TaxCollected) and LP exit
+    # (LpTaxCollected), dated by block. The routed estimate above (each epoch's routed ETH less charters, spread evenly over its days,
+    # and the live epoch from balances not yet routed) is kept as the independent reading of the same total.
+    tr_routed = sum(days[d]["tradingFeeEth"] for d in days)
+    TAXC, LPTAXC = "0x" + keccak(b"TaxCollected(bool,uint256)").hex(), "0x" + keccak(b"LpTaxCollected(address,uint256,uint256)").hex()
+    txl = jload(os.path.join(C, "tax_logs.json"), {"last": G - 1, "rows": []})
+    if txl["last"] < tip:
+        for l in getlogs({"address": H["taxHook"], "topics": [[TAXC, LPTAXC]]}, txl["last"] + 1, tip, 400000):
+            k = 0 if l["topics"][0] == TAXC else 1; w = l["data"][2:]
+            txl["rows"].append([int(l["blockNumber"], 16), str(int(w[64:128] if k == 0 else w[0:64], 16)), k])
+        txl["last"] = tip; jsave(os.path.join(C, "tax_logs.json"), txl)
+    for d in days: days[d]["tradingFeeEth"] = 0.0
+    for b, a, k in txl["rows"]: days[day(T(b))]["tradingFeeEth"] += int(a) / 1e18
+    tr_logs = sum(days[d]["tradingFeeEth"] for d in days)
+    log("STANDARD trading fees: tax hook events", round(tr_logs, 4), "ETH | routed less charters plus unrouted", round(tr_routed, 4), "ETH |", len(txl["rows"]), "events")
+    reconcile("tax_logs", "STANDARD trading fees to date, from the tax hook’s events", tr_logs, tr_routed,
+              "ETH routed by the fee splitter less charter sales, plus ETH not yet routed", 0.01, gate=False, unit="ETH")
     for c in charters:
         if c["ts"] >= ep_start: days[day(c["ts"])]["charterLive"] += c["eth"]
     for d in list(days):
@@ -649,6 +668,30 @@ def main():
         if prev_ and row.get("price") and prev_.get("price"):
             row["dPrice"] = (row["price"] - prev_["price"]) * prev_["float"]; row["dSupply"] = (row["float"] - prev_["float"]) * row["price"]
         prev_ = row
+    # STANDARD pool LP fees: the 1% pool fee earned by the protocol's own positions in the STANDARD/ETH pool, replayed swap by swap. The POL
+    # manager harvests both sides to the team wallet (FeesHarvested(eth, standard); the wallet logs the ETH as received in the same transaction).
+    sfees, spos = extra.std_pool_fees(x, STD_POOL, H["polManager"])
+    for row in series:
+        v_ = sfees.get(row["date"])
+        if v_:
+            row["stdLpFeeEth"] = round(v_[0], 9); row["stdLpFeeStd"] = round(v_[1], 6)
+            row["stdLpFee"] = round(v_[0] * (row.get("eth") or ethusd) + v_[1] * (row.get("price") or 0), 6)
+    HARV = "0x5f8f8abbc3f20f1fa8a542b530f56f36846c80ee8e0d30082ad627cf17d8b056"
+    hv_ = getlogs({"address": H["polManager"], "topics": [HARV]}, G, tip, 4_000_000)
+    hv0, hv1 = sum(int(l_["data"][2:66], 16) for l_ in hv_) / 1e18, sum(int(l_["data"][66:130], 16) for l_ in hv_) / 1e18
+    I24_ = lambda v: format(v % (1 << 256), "064x"); u0_ = u1_ = 0
+    for (tl_, tu_, salt_), _ in spos.items():
+        fg = ecall(SV, sel("getFeeGrowthInside(bytes32,int24,int24)") + STD_POOL[2:] + I24_(tl_) + I24_(tu_), BT)
+        pi = ecall(SV, sel("getPositionInfo(bytes32,address,int24,int24,bytes32)") + STD_POOL[2:] + pad(H["polManager"])[2:] + I24_(tl_) + I24_(tu_) + salt_[2:], BT)
+        L_ = int(pi[2:66], 16)
+        u0_ += L_ * ((int(fg[2:66], 16) - int(pi[66:130], 16)) % (1 << 256)) >> 128; u1_ += L_ * ((int(fg[66:130], 16) - int(pi[130:194], 16)) % (1 << 256)) >> 128
+    a0_, a1_ = sum(v_[0] for v_ in sfees.values()), sum(v_[1] for v_ in sfees.values())
+    log("STANDARD pool LP fees, replayed:", round(a0_, 4), "ETH", round(a1_), "STANDARD | harvested", len(hv_), "times", round(hv0, 4), "ETH", round(hv1),
+        "STANDARD | uncollected", round(u0_ / 1e18, 4), "ETH", round(u1_ / 1e18), "STANDARD | positions", len(spos))
+    reconcile("stdlp_eth", "STANDARD pool LP fees to date, ETH side, replayed swap by swap", a0_, hv0 + u0_ / 1e18,
+              "the protocol position’s harvests plus fees uncollected at the compile block", 0.001, unit="ETH")
+    reconcile("stdlp_std", "STANDARD pool LP fees to date, STANDARD side, replayed swap by swap", a1_, hv1 + u1_ / 1e18,
+              "the protocol position’s harvests plus fees uncollected at the compile block", 0.001, unit="STANDARD")
     today_parts = {"total": reserve["totalUsd"], "eth": (reserve["safeEth"] + reserve["contractionEth"] + reserve["expansionEth"]) * ethusd, "usdg": reserve["safeUsdg"],
                    "stocks": reserve["safeStockUsd"], "lp": {s_: v_["valueUSD"] for s_, v_ in lp.items()}}
     res_hist, res_chk = extra.reserve_history(x, lp_pools, closes, eth_day, epochs, dl, today_parts)

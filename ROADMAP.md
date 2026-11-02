@@ -96,3 +96,13 @@ Owners may reorder, add or strike items at any time.
   `venue_v4liqb`, `venue_custb`, `pool_fees3`, `pool_close2`); `cpty.json` was kept because its classes are scaled to the exact volume served each
   run, and `launchpad.json` because it dates most transfers by the log's own block timestamp (open: rebuild it for the days the RPC
   returned blockTimestamp 0x0, which fell back to interpolation). Any new cache that stores days computed at scan time must be built after `day_anchors` runs.
+- STANDARD trading fees (2 Nov 2026) come from the tax hook's TaxCollected and LpTaxCollected events, dated by block (82,598 events,
+  2,903.81 ETH to 2 Nov). The routed reading (each epoch's routed ETH less charter sales, plus ETH not yet routed) is 2,907.02 ETH: 3.2 ETH
+  (0.11%) more, unexplained so far, kept as a watch item (`tax_logs`). Open: find what else reaches the fee splitter, then make it a gate.
+- STANDARD pool LP fees (2 Nov 2026): the 1% pool fee earned by the protocol's own two positions in the STANDARD/ETH pool (owner: POL
+  manager; ticks -887200..115000 and 115000..115200, salt 0), replayed swap by swap at the share of active liquidity they held
+  (`extra.std_pool_fees`, cache `std_fees.json`). Both sides go to the team wallet at each harvest: FeesHarvested (topic 0x5f8f8abb) from
+  the POL manager, STANDARD by transfer, ETH logged by the team wallet as received. Replay 243.1151 ETH and 2,062,931 STANDARD against
+  harvests (100) plus uncollected 243.0875 ETH and 2,062,938 STANDARD: gate items `stdlp_eth` and `stdlp_std` at 0.1%.
+- License purchases move no STANDARD from the buyer's wallet: the central bank debits the charter's bank balance and the token lowers
+  its cap by the price. Lifetime licenses 24.68M exceed lifetime deposits 16.30M, so at least 8.4M came from issued balances.

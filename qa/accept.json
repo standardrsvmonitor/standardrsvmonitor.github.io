@@ -82,5 +82,14 @@
   "to": "2026-10-30",
   "until": "2026-11-09",
   "why": "launchpad-routed volume by counterparty class is sampled like the rest of the counterparty mix and re-scaled to the exact volume served; the exact launchpad-routed total (spVolLpad) is unchanged; 2 Nov 2026"
+ },
+ {
+  "fields": [
+   "tradingFeeEth"
+  ],
+  "from": "2026-09-14",
+  "to": "2026-10-30",
+  "until": "2026-11-09",
+  "why": "STANDARD trading fees by day now come from the tax hook's TaxCollected and LpTaxCollected events, dated by block, instead of each epoch's routed ETH spread evenly over its days; epoch totals unchanged within 0.11%; owner-approved 2 Nov 2026"
  }
 ]

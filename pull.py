@@ -39,12 +39,12 @@ def jload(p, default):
 def jsave(p, o): json.dump(o, open(p, "w"))
 def log(*a): print(dt.datetime.utcnow().strftime("%H:%M:%S"), *a, flush=True)
 
-def rpc(m, p, tries=6):
+def rpc(m, p, tries=6, timeout=120):
     for i in range(tries):
         try:
             r = urllib.request.Request(RPC, json.dumps({"jsonrpc": "2.0", "id": 1, "method": m, "params": p}).encode(),
                                        {"Content-Type": "application/json", "User-Agent": "Mozilla/5.0"})
-            return json.load(urllib.request.urlopen(r, timeout=120))
+            return json.load(urllib.request.urlopen(r, timeout=timeout))
         except Exception as e:
             err = e; time.sleep(2 + 2 * i)
     return {"error": {"message": str(err)}}
@@ -66,14 +66,16 @@ def get(url, tries=4, backoff=3):
             err = e; time.sleep(backoff * (i + 1))
     return {"_error": str(err)}
 
-def getlogs(q, lo, hi, step=400000):   # step halves when a range returns too many logs and grows back to the starting step
-    out = []; b = lo; cap = step
+def getlogs(q, lo, hi, step=400000):   # step halves when a range fails and stays there for the rest of the scan
+    out = []; b = lo; cap = step; waits = 0
     while b <= hi:
         e = min(b + step - 1, hi); qq = dict(q, fromBlock=hex(b), toBlock=hex(e))
-        r = rpc("eth_getLogs", [qq], tries=3)
+        r = rpc("eth_getLogs", [qq], tries=2, timeout=45)   # a range too large for a busy pool times out; halving it sooner is faster than waiting
+        if "error" in r and "429" in str(r["error"].get("message", "")) and waits < 40:   # rate limited: wait, the range is not the problem
+            waits += 1; time.sleep(5 + waits); continue
         if "error" in r:
             if step <= 2000: raise RuntimeError(r["error"])
-            step //= 2; continue
+            step //= 2; cap = step; continue   # stays at the size that works for the rest of this scan
         out += r["result"]; b = e + 1
         if step < cap: step = min(cap, step * 2)
     return out
@@ -116,6 +118,23 @@ def find_block(ts, lo, hi):
         if block_ts(mid) < ts: lo = mid + 1
         else: hi = mid
     return lo
+def day_anchors(t0, tip):   # the first block of every UTC day and the block before it, read exactly: interpolation then never dates a block on the wrong day
+    seen = jload(os.path.join(C, "midnights.json"), {}); t_tip = block_ts(tip)
+    for v in seen.values():   # [first block, its timestamp, the previous block's]; kept here too because the restored anchor cache may predate them
+        if isinstance(v, list): ANCH[str(v[0])] = v[1]; ANCH[str(v[0] - 1)] = v[2]
+    m = (int(t0) // 86400 + 1) * 86400
+    while m <= t_tip:
+        if not isinstance(seen.get(str(m)), list):
+            b = seen.get(str(m))
+            if not isinstance(b, int):
+                g = ts_block(m); lo, hi = max(1, g - 20000), min(tip, g + 20000)
+                while lo > 1 and block_ts(lo) >= m: lo = max(1, lo - 500000)
+                while hi < tip and block_ts(hi) < m: hi = min(tip, hi + 500000)
+                b = find_block(m, lo, hi)
+            seen[str(m)] = [b, block_ts(b), block_ts(b - 1)]
+        m += 86400
+    jsave(os.path.join(C, "midnights.json"), seen); jsave(os.path.join(C, "blocks.json"), ANCH)
+    return seen
 
 def main():
     t_start = time.time()
@@ -177,7 +196,8 @@ def main():
     meta = jload(os.path.join(C, "meta.json"), {})
     if "genesisBlock" not in meta:
         meta["genesisBlock"] = find_block(genesis_ts, 55000000, 70000000); jsave(os.path.join(C, "meta.json"), meta)
-    G = meta["genesisBlock"]; ensure_anchors(G, tip); block_ts(tip); log("genesis block", G, "anchors", len(ANCH))   # anchor the tip so the last hours interpolate
+    G = meta["genesisBlock"]; ensure_anchors(G, tip); block_ts(tip)   # anchor the tip so the last hours interpolate
+    mids = day_anchors(genesis_ts, tip); log("genesis block", G, "anchors", len(ANCH), "| midnights read exactly", len(mids))
 
     # ---------- STANDARD protocol-side transfers (backfill + incremental) ----------
     tf = jload(os.path.join(C, "transfers.json"), {"last": G - 1, "rows": []})

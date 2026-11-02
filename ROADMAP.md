@@ -88,3 +88,11 @@ Owners may reorder, add or strike items at any time.
   carried a final-tick share error and the fees settled by the 14 Oct 2026 liquidity add (0.0097 ETH, 26.00 USDG). The RPC keeps no
   historical state (eth_call at old blocks fails), so the replay's starting tick map is today's map with every change since seeding
   undone. A rebuild takes about 7 minutes and can outlast the compile block's state, so the cache is committed.
+- Block dating (2 Nov 2026). Robinhood Chain's block times are irregular, and dating blocks by interpolating between anchors 100,000 blocks
+  apart put swaps near midnight on the wrong day: the swap cache and the venue scan, dated with different anchor sets, disagreed by one
+  swap at the 30/31 Oct boundary (ETH/USDG 675 USD, SPCX 2,200 USD) and the 1/2 Nov boundary (SKHY 3,926 USD, gate held 00:21 to the fix).
+  Each run now reads the first block of every UTC day and the block before it (`day_anchors` in `pull.py`, `data/cache/midnights.json`),
+  so interpolation can never cross a midnight. The day-keyed caches written at scan time were rebuilt under new names (`venue_v4b`,
+  `venue_v4liqb`, `venue_custb`, `pool_fees3`, `pool_close2`); `cpty.json` was kept because its classes are scaled to the exact volume served each
+  run, and `launchpad.json` because it dates most transfers by the log's own block timestamp (open: rebuild it for the days the RPC
+  returned blockTimestamp 0x0, which fell back to interpolation). Any new cache that stores days computed at scan time must be built after `day_anchors` runs.

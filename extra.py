@@ -39,14 +39,14 @@ class Ctx:
 # ---------- daily closing sqrtPrice per pool, from Swap logs ----------
 def pool_closes(x, pids_from):
     """{pid: {date: sqrtPriceX96 of the day's last swap}}; pids_from maps pool id to the block its scan starts at."""
-    c = x.jl("pool_close.json", {})
+    c = x.jl("pool_close2.json", {})
     for pid, start in pids_from.items():
         e = c.setdefault(pid, {"last": start - 1, "close": {}}); x.log("pool closes", pid[:10], "from", e["last"] + 1)
         if e["last"] < x.tip:
             for l in x.getlogs({"address": x.PM, "topics": [x.SW, pid]}, e["last"] + 1, x.tip):
                 e["close"][day(x.T(int(l["blockNumber"], 16)))] = str(int(words(l["data"])[2], 16))
             e["last"] = x.tip
-    x.js("pool_close.json", c)
+    x.js("pool_close2.json", c)
     return {pid: {d: int(v) for d, v in e["close"].items()} for pid, e in c.items()}
 
 
@@ -391,14 +391,14 @@ def venue_scan(x, pairs, reserve_pids):
                         "base": (p.get("baseToken") or {}).get("address", "").lower(), "quote": (p.get("quoteToken") or {}).get("address", "").lower(),
                         "bsym": (p.get("baseToken") or {}).get("symbol"), "qsym": (p.get("quoteToken") or {}).get("symbol")})
     keys = v4_keys(x, [r["id"] for r in reg if r["v4"]])
-    sw = x.jl("venue_v4.json", {}); lq = x.jl("venue_v4liq.json", {}); cu = x.jl("venue_cust.json", {})
+    sw = x.jl("venue_v4b.json", {}); lq = x.jl("venue_v4liqb.json", {}); cu = x.jl("venue_custb.json", {})
     for r in reg:
         if not r["v4"] or r["id"] not in keys: continue
         e = sw.setdefault(r["id"], {"last": r["start"] - 1, "d": {}, "snd": {}})
         if e["last"] < r["start"]: x.log("venue v4 backfill", r["sym"], r["id"][:10], "from", r["start"])
         if e["last"] < x.tip:
             mine = r["id"] in reserve_pids
-            for l in x.getlogs({"address": x.PM, "topics": [x.SW, r["id"]]}, e["last"] + 1, x.tip, 4000000):
+            for l in x.getlogs({"address": x.PM, "topics": [x.SW, r["id"]]}, e["last"] + 1, x.tip, 500000):   # busy pools time out at larger ranges
                 w = words(l["data"]); d = day(x.T(int(l["blockNumber"], 16)))
                 v = e["d"].setdefault(d, [0.0, 0.0, None]); v[0] += abs(s256(w[0])); v[1] += abs(s256(w[1])); v[2] = str(int(w[2], 16))
                 if mine:
@@ -412,6 +412,7 @@ def venue_scan(x, pairs, reserve_pids):
                 dd = f["d"].setdefault(d, {}); dd[k] = str(int(dd.get(k, "0")) + s256(w[2]))
                 if dd[k] == "0": dd.pop(k)
             f["last"] = x.tip
+        x.js("venue_v4b.json", sw); x.js("venue_v4liqb.json", lq)   # saved per venue, so an interrupted rebuild resumes where it stopped
     import time
     quiet = [r["id"] for r in reg if r["v4"] and r["id"] in sw and not sw[r["id"]]["d"]]   # no swaps since the reserve's launch: price from slot0 now
     for k in range(0, len(quiet), 10):
@@ -420,7 +421,7 @@ def venue_scan(x, pairs, reserve_pids):
         for i, v in zip(quiet[k:k + 10], res):
             if v and len(v) >= 66: sw[i]["spNow"] = str(int(v[2:66], 16))
         time.sleep(0.3)
-    x.js("venue_v4.json", sw); x.js("venue_v4liq.json", lq)
+    x.js("venue_v4b.json", sw); x.js("venue_v4liqb.json", lq)
     cust = [r for r in reg if not r["v4"]]; calls = [(r["id"], t) for r in cust for t in {r["base"], r["quote"]}]
     for k in range(0, len(calls), 10):
         part = calls[k:k + 10]
@@ -453,7 +454,7 @@ def venue_scan(x, pairs, reserve_pids):
                 if len(vals) == 2 and vals[0] * vals[1] < 0:      # one token in, the other out: a swap through this pool
                     for tok, a in fl.items(): v["sw_" + tok] = str(int(v.get("sw_" + tok, "0")) + abs(int(a)))
             e["last"] = x.tip
-    x.js("venue_v4.json", sw); x.js("venue_v4liq.json", lq); x.js("venue_cust.json", cu)
+    x.js("venue_v4b.json", sw); x.js("venue_v4liqb.json", lq); x.js("venue_custb.json", cu)
     return reg, keys, sw, lq, cu
 
 
@@ -646,7 +647,7 @@ def pool_fees(x, lp_pools, routers=()):
     volume the reserve's liquidity served (its share of each step's input, fee included, at the swap's price),
     the fees accrued and not yet collected per position (to reconcile with the positions), and the count of swaps whose reported liquidity
     differed from the replay's."""
-    c = x.jl("pool_fees2.json", {}); ids = {int(i) for i in x.pos_ids} | set(x.jl("positions.json", {"ids": []})["ids"]); rt = {r.lower() for r in routers}
+    c = x.jl("pool_fees3.json", {}); ids = {int(i) for i in x.pos_ids} | set(x.jl("positions.json", {"ids": []})["ids"]); rt = {r.lower() for r in routers}
     out = {}
     for s, p in lp_pools.items():
         pid = p["pool"]; e = c.get(pid); logs = None
@@ -726,7 +727,7 @@ def pool_fees(x, lp_pools, routers=()):
         out[s] = {"days": e["days"], "uncollected": acc_, "mismatch": e["mismatch"],
                   "collected": [sum(v[0] for v in e["collected"].values()), sum(v[1] for v in e["collected"].values())]}
         x.log("pool fees", s, "uncollected raw", [round(v_) for v_ in acc_], "liquidity mismatches", e["mismatch"])
-    x.js("pool_fees2.json", c)
+    x.js("pool_fees3.json", c)
     return out
 
 

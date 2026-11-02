@@ -106,6 +106,9 @@ jobs:
         with:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
           github_token: ${{ github.token }}
+          # the refresh workflow starts this run on a gate incident as github-actions[bot]; the action refuses bot actors unless listed.
+          # Only this repository's own workflows act as that bot, and this workflow has no trigger outsiders can fire.
+          allowed_bots: "github-actions"
           claude_args: >-
             --model ${{ steps.pick.outputs.model }} --max-turns 150
             --allowedTools "Bash,Read,Edit,Write,Glob,Grep,WebFetch"

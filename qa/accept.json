@@ -48,5 +48,39 @@
   "to": "2026-10-28",
   "until": "2026-11-07",
   "why": "Volume served is exact from the swap replay (was each swap's USDG amount times the reserve's share at its final tick; ETH/USDG ran 3.3% high); 30 Oct 2026"
+ },
+ {
+  "fields": [
+   "burnBuyback",
+   "burn_sbills",
+   "sbillOut",
+   "mktNet",
+   "poolIn",
+   "spFeeGross_.*",
+   "spVolZeroFee",
+   "spVol_.*",
+   "spVolMine_.*",
+   "spFee_.*",
+   "spFee",
+   "spVol",
+   "spVolMine",
+   "spFeeLpad",
+   "spVolLpad",
+   "lpFees_.*"
+  ],
+  "from": "2026-10-14",
+  "to": "2026-10-30",
+  "until": "2026-11-09",
+  "why": "blocks dated exactly at every UTC midnight (first block of each day and the one before it) instead of interpolating across 100,000-block anchors; swaps and transfers near midnight moved to their true day; 2 Nov 2026"
+ },
+ {
+  "fields": [
+   "volLpad_.*",
+   "feeLpad_.*"
+  ],
+  "from": "2026-10-14",
+  "to": "2026-10-30",
+  "until": "2026-11-09",
+  "why": "launchpad-routed volume by counterparty class is sampled like the rest of the counterparty mix and re-scaled to the exact volume served; the exact launchpad-routed total (spVolLpad) is unchanged; 2 Nov 2026"
  }
 ]

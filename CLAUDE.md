@@ -56,7 +56,7 @@ Out of scope, by the owner's decision: Token Terminal-style financial statements
   times the STANDARD in wallets. Backing per token and price to backing use the STANDARD in wallets, and say so.
 - **Fees** are what users pay. **Revenue** is what the protocol keeps: **STANDARD trading fees** (the buy and sell tax, always named with STANDARD so they are not confused with LP or launchpad fees), **LP fees** earned by
   the reserve's pool positions, **STANDARD pool LP fees** (the 1% fee the protocol's own STANDARD/ETH position earns, harvested to the team wallet), **launchpad revenue** (the protocol's 50% of the 1% base fee), **charter sales** and **license sales** (ledger STANDARD bankers pay for expansion licenses, burned, valued at the day's close less the resolution fee; owner decision 3 Nov 2026). **Launchpad fees** are the full
-  base fee, all recipients. **Price to revenue** is market cap over annualized seven-day revenue.
+  base fee, all recipients. **Price to revenue** is market cap over annualized revenue: seven days at 7D, thirty days otherwise.
 - Routed fees: **fee routing**, **fee engine**; the panel showing where revenue went is **Revenue by destination** (the protocol's own phrase, "where fees land", goes in its note). Never "income", "recurring revenue", "outstanding supply" or "minted supply".
 
 ## House style (the gate enforces what it can)

@@ -127,6 +127,7 @@ try:
     for label, f in (("Revenue", lambda r: (r.get("tradingFeeEth") or 0) * eth(r) + (r.get("spFee") or 0) + (r.get("stdLpFee") or 0) + (r.get("lpadSafe") or 0) * 5 / 7 + (r.get("charterEth") or 0) * eth(r) + lic(r)),
                      ("STANDARD trading fees", lambda r: (r.get("tradingFeeEth") or 0) * eth(r)), ("LP fees", lambda r: r.get("spFee") or 0),
                      ("Launchpad revenue", lambda r: (r.get("lpadSafe") or 0) * 5 / 7), ("Charter sales", lambda r: (r.get("charterEth") or 0) * eth(r)), ("License sales", lic),
+                     ("STANDARD pool LP fees", lambda r: r.get("stdLpFee") or 0),
                      ("Volume served by the reserve", served), ("Launchpad trading volume", lambda r: (r.get("lpadSafe") or 0) / 0.007)):
         a_, b_ = usd(sum(f(r) for r in s30)), gm(label)[1]
         add("recompute", f"growth monitor, {label}, 30 days", a_ == b_, f"recomputed {a_}, page {b_}")

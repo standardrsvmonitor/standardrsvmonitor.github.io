@@ -115,5 +115,14 @@
   "to": "2026-10-31",
   "until": "2026-11-10",
   "why": "Resolution fee history now counts revoked balances in the contract's seven-day buckets (reproduces every feeWad charged on chain exactly; 15 to 17 Oct read 3% against the 60% charged), and In banks credits the stayers' cut as it streams over the next epoch (ledger now within 4 STANDARD of the contract); 3 Nov accuracy audit"
+ },
+ {
+  "fields": [
+   "routedEth"
+  ],
+  "from": "2026-09-14",
+  "to": "2026-10-31",
+  "until": "2026-11-10",
+  "why": "Routed ETH is dated on the day each epoch settled instead of spread over the epoch's days; 3 Nov accuracy audit"
  }
 ]

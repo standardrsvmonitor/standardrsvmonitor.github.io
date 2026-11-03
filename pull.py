@@ -449,18 +449,20 @@ def main():
             days[ds_]["issuance"] += base_issue * m_by_epoch.get(k, m_by_epoch[max(m_by_epoch)]) * seg / 86400; t_ += seg
         k_mid = max(1, (d_start + 43200 - genesis_ts) // ep_len + 1); days[ds_]["multiplier"] = m_by_epoch.get(k_mid, m_by_epoch[max(m_by_epoch)])
         dd += dt.timedelta(days=1)
-    # token-loop routed per day (epoch routed spread evenly over its days), charter part separated
+    # routed ETH is dated on the day the epoch settled; the trading-fee estimate (each epoch's routed ETH less charters, spread evenly over
+    # its days) only feeds the independent reading of the trading-fee total below
     for e in epochs:
+        days[day(e.get("settledAt") or e["end"])]["routedEth"] += e["routed"]
         per = e["routed"] / epoch_days; cper = e["charterEth"] / epoch_days
         for j in range(epoch_days):
-            d = day(e["start"] + j * 86400 + 3600)
-            days[d]["routedEth"] += per; days[d]["tradingFeeEth"] += per - cper
+            days[day(e["start"] + j * 86400 + 3600)]["tradingFeeEth"] += per - cper
     # live epoch: fees collected but not yet routed (tax hook + fee splitter balances), spread over the elapsed days
     # the fee splitter holds charter ETH forwarded this epoch; the tax hook holds trading fees. Charter ETH stays on its sale day,
     # trading fees (hook + any splitter balance beyond the epoch's charters) are spread evenly over elapsed time.
     ep_start = int(snap["bank"]["epochStart"]); elapsed = max(1, now - ep_start)
     live_ch = sum(c["eth"] for c in charters if c["ts"] >= ep_start)
-    live_acc = bal["feeSplitter"]["ETH"] + bal.get("taxHook", {}).get("ETH", 0)
+    team_owed = int(ecall(H["feeSplitter"], sel("teamOwed()"), BT) or "0x0", 16) / 1e18   # the team's share of settled epochs sits in the splitter until claimed
+    live_acc = bal["feeSplitter"]["ETH"] - team_owed + bal.get("taxHook", {}).get("ETH", 0)
     live_tr = max(0.0, live_acc - live_ch); t_ = ep_start
     while t_ < now:
         seg = min(now, (t_ // 86400 + 1) * 86400) - t_; d = day(t_)
@@ -481,11 +483,9 @@ def main():
     tr_logs = sum(days[d]["tradingFeeEth"] for d in days)
     log("STANDARD trading fees: tax hook events", round(tr_logs, 4), "ETH | routed less charters plus unrouted", round(tr_routed, 4), "ETH |", len(txl["rows"]), "events")
     reconcile("tax_logs", "STANDARD trading fees to date, from the tax hook’s events", tr_logs, tr_routed,
-              "ETH routed by the fee splitter less charter sales, plus ETH not yet routed", 0.01, gate=False, unit="ETH")
+              "ETH routed by the fee splitter less charter sales, plus ETH not yet routed (the team’s unclaimed share excluded)", 0.0001, gate=False, unit="ETH")
     for c in charters:
         if c["ts"] >= ep_start: days[day(c["ts"])]["charterLive"] += c["eth"]
-    for d in list(days):
-        if days[d].get("routedLive"): days[d]["routedEth"] += days[d]["tradingFeeEth"] + days[d]["charterLive"] if days[d]["routedEth"] == 0 else days[d]["charterLive"]
     # supply history reconstructed backwards from today's balances
     dl = sorted(days.keys())
     pool_now = bal["poolManager"]["STANDARD"]; inc_now = bal["incentivesVault"].get("STANDARD", 0); sb_now = bal["sbills"].get("STANDARD", 0)

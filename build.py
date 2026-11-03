@@ -45,7 +45,8 @@ SECTIONS = {
           "burned on purchase, valued at the day’s closing price less the resolution fee in force that day, what the banker could have withdrawn instead<span id=\"lic_dep\"></span>.", chart("c_rev", "l"), "h_rev") +
     panel(5, "Revenue by destination, trailing 30 days", "Where revenue over the selected range went: the protocol’s own phrase is where fees land. STANDARD trading fees and charter sales are routed by the fee engine at settlement: 70% to the "
           "reserve in expansion or to buybacks in contraction, 15% to POL buybacks and 15% to the team. LP fees accrue inside the reserve’s positions. STANDARD pool LP fees go to the team wallet. License sales are burned. The launchpad’s "
-          "protocol share sits in the fee Safe and has not been routed.", '<div class="alloc" id="alloc"></div>', "h_alloc", "p_alloc") +
+          "protocol share sits in the fee Safe and has not been routed. Buybacks counts ETH routed to the contraction vault and the POL buyback whether "
+          "spent yet or not; the contraction vault’s unspent ETH is also in reserve assets. Each day takes the split of the epoch in force for most of it.", '<div class="alloc" id="alloc"></div>', "h_alloc", "p_alloc") +
     panel(7, "Fee routing by epoch", "STANDARD trading fees and charter proceeds routed by the fee engine at each settlement, in ETH, for the epochs settled inside the selected range. "
           "Green bars are expansion epochs, red contraction.",
           chart("c_epochs"), "h_epochs") +
@@ -499,13 +500,13 @@ function renderKpis(){ derive();
       {l:'STANDARD price', v:fmt.px(L.price), c:chg(L.price, W0&&W0.price, {pol:1}), s:wl, sp:lvl(r=>r.price), tip:'Live price of the protocol’s STANDARD/ETH pool, from DexScreener. Past days use the pool’s own price after its last trade of the day.'},
       {l:'Market cap', v:fmt.usd(mcTotal), c:chg(mcTotal, W0&&W0.mcTotal, {pol:1}), s:`in wallets ${fmt.usd(mcFloat)}`, sp:lvl(r=>r.mcTotal), tip:'Price times circulating supply, every STANDARD minted, the figure the protocol’s site and DexScreener show. In wallets leaves out the protocol’s own liquidity and the Incentives vault.'},
       {l:'Reserve assets', v:fmt.usd(L.reserve.totalUsd), c:chg(L.reserve.totalUsd, W0&&W0.reserveUsd, {pol:1}), s:`${fmt.x(pbNow)} P/B`, sp:lvl(r=>r.reserveUsd), col:C.blue, tip:'ETH and USDG in the reserve Safe, ETH in the policy vaults, equities held outside pools and the Safe’s Uniswap v4 positions, read at the compile block.'},
-      {l:`Revenue, ${wl}`, v:fmt.usd(rev7), c:chg(rev7, revP, {pol:1}), sp:rollW(inc), col:C.gold, tip:`What the protocol kept over the ${W?W+' complete days':'days since launch'} to ${yd}: STANDARD trading fees, LP fees, STANDARD pool LP fees, the launchpad’s 50%, charter sales and license sales.`},
+      {l:`Revenue, ${wl}`, v:fmt.usd(rev7), c:chg(rev7, revP, {pol:1}), s:`license sales ${fmt.usd(S_(lic))}`, sp:rollW(inc), col:C.gold, tip:`What the protocol kept over the ${W?W+' complete days':'days since launch'} to ${yd}: STANDARD trading fees, LP fees, STANDARD pool LP fees, the launchpad’s 50%, charter sales and license sales.`},
       {l:'Branches', v:fmt.int(L.branches), c:chg(L.branches, W0&&W0.branches, {pol:1}), s:`${fmt.int(L.activeCharters)} charters`, sp:lvl(r=>r.branches), col:C.violet, tip:'Branches open now, from the indexer census.'},
       {l:`Epoch ${L.epoch} net flow`, v:fmt.sx(L.epochNetFlow,1)+' ETH', c:{t:`${L.epochNetFlow>=0?'expansion':'contraction'}`, c:L.epochNetFlow>=0?'up':'dn'}, s:`${Math.floor(epLeft/86400)}d ${Math.floor(epLeft%86400/3600)}h left`,
         sp:E.slice(-12).map(e=>e.netFlow), col:L.epochNetFlow>=0?C.green:C.red, tip:`ETH bought less ETH sold through the STANDARD/ETH pool this epoch; its sign at settlement sets the regime. Multiplier ${fmt.x(L.multiplier)}. The line shows settled epochs.`},
     ],
     revenue:[
-      {l:`Revenue, ${wl}`, v:fmt.usd(rev7), c:chg(rev7, revP, {pol:1}), sp:rollW(inc), col:C.teal},
+      {l:`Revenue, ${wl}`, v:fmt.usd(rev7), c:chg(rev7, revP, {pol:1}), s:`license sales ${fmt.usd(S_(lic))}`, sp:rollW(inc), col:C.teal},
       {l:`STANDARD trading fees, ${wl}`, v:fmt.usd(S_(tr)), c:chg(S_(tr), P_(tr), {pol:1}), sp:rollW(tr), col:STREAM.tr},
       {l:`LP fees, ${wl}`, v:fmt.usd(pf7), c:chg(pf7, pfP, {pol:1}), sp:rollW(r=>r.spFee||0), col:STREAM.pool},
       {l:`Launchpad revenue, ${wl}`, v:fmt.usd(S_(lpp)), c:chg(S_(lpp), P_(lpp), {pol:1}), sp:rollW(lpp), col:STREAM.lpad, tip:'The protocol’s 50% of the 1% launchpad base fee, held in the launchpad fee Safe.'},
@@ -575,7 +576,7 @@ function renderHero(){
   const R_ = L.reserve, ethU = (R_.safeEth+R_.contractionEth+R_.expansionEth)*L.ethusd;
   const parts = [...pools.map(p=>[pname(p), L.lp[p].valueUSD, MEDAL[p]||C.sand]), ['USDG', R_.safeUsdg, '#e8e3d9'], ['ETH', ethU, '#77776c'], ['Equities outside pools', R_.safeStockUsd, C.bronze]].filter(x=>x[1]>1);
   const tot = sum(parts.map(x=>x[1])), left = `${Math.floor(epLeft/86400)}d ${Math.floor(epLeft%86400/3600)}h`;
-  const {W, sw, pw, wl} = win(), S_ = f=>sum(sw.map(f)), P_ = f=>pw?sum(pw.map(f)):null, tk = r=>tr(r)+chs(r)+lic(r);
+  const {W, sw, pw, wl} = win(), S_ = f=>sum(sw.map(f)), P_ = f=>pw?sum(pw.map(f)):null, tk = r=>tr(r)+slp(r)+chs(r)+lic(r);
   const tok7 = S_(tk), tokP = P_(tk), pf7 = S_(r=>r.spFee||0), sv7 = S_(served), lp7 = S_(lpp), lv7 = S_(lvol);
   const eqd = S_(r=>sum(stockPools.map(p=>r['chainVol_'+p]||0))), eqn = S_(r=>sum(stockPools.map(p=>r['spVolMine_'+p]??r['spVol_'+p]??0)));
   const span = W ? (W===7 ? 'seven days' : W+' days') : 'since launch', before = W===7 ? 'the week before' : `the ${W} days before`;
@@ -589,7 +590,7 @@ function renderHero(){
     <div class="totals"><ol>${parts.map(x=>`<li><i style="background:${x[2]}"></i><span>${x[0]}</span> ${fmt.pct(x[1]/tot,0)}</li>`).join('')}</ol>
       <p>${fmt.usd(S_(inc))} <span>revenue, ${wl}</span> ${fmt.int(L.branches)} <span>branches</span></p></div>
     <ul class="how">
-      <li><b>Token economy</b><strong>${fmt.usd(tok7)}</strong>STANDARD trading fees, charter and license sales ${W?'over ':''}${span}${cg(tok7,tokP)}.</li>
+      <li><b>Token economy</b><strong>${fmt.usd(tok7)}</strong>STANDARD trading fees, STANDARD pool LP fees, charter and license sales ${W?'over ':''}${span}${cg(tok7,tokP)}.</li>
       <li><b>Liquidity business</b><strong>${fmt.usd(pf7)}</strong>LP fees on ${fmt.usd(S_(paying))} of fee-paying volume, ${fmt.pct(eqd?eqn/eqd:null,0)} of chain equity volume.</li>
       <li><b>Launchpad</b><strong>${fmt.usd(lp7)}</strong>Launchpad revenue on ${fmt.usd(lv7)} of volume${cg(lp7, P_(lpp))}.</li></ul>`;
 }
@@ -613,6 +614,7 @@ function renderGM(){
       flow('Revenue', inc, fmt.usd, 1),
       flow('STANDARD trading fees', tr, fmt.usd, 1),
       flow('LP fees', r=>r.spFee||0, fmt.usd, 1),
+      flow('STANDARD pool LP fees', slp, fmt.usd, 1),
       flow('Launchpad revenue', lpp, fmt.usd, 1),
       flow('Charter sales', chs, fmt.usd, 1),
       flow('License sales', lic, fmt.usd, 1)]],

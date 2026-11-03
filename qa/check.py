@@ -106,15 +106,16 @@ except Exception as e:
 # ---------------------------------------------------------------- recompute from dash.json
 L = D["live"]; S = [r for r in D["series"] if r["date"] < L["date"]]; s7 = S[-30:]   # the page's default window is 30 days
 eth = lambda r: r.get("eth") or L["ethusd"]
+lic = lambda r: (r.get("licBurn") or 0) * (r.get("price") or L["price"]) * (1 - (r.get("exitFee") or 0))   # license sales, as build.py values them
 try:
     tr = sum((r.get("tradingFeeEth") or 0) * eth(r) for r in s7); pf = sum(r.get("spFee") or 0 for r in s7); lp = sum((r.get("lpadSafe") or 0) * 5 / 7 for r in s7)
-    ch = sum((r.get("charterEth") or 0) * eth(r) for r in s7); sl = sum(r.get("stdLpFee") or 0 for r in s7)
-    for nm, a, b in (("revenue, 30d", usd(tr + pf + sl + lp + ch), kv("revenue", "Revenue, 30d")), ("STANDARD trading fees, 30d", usd(tr), kv("revenue", "STANDARD trading fees, 30d")),
+    ch = sum((r.get("charterEth") or 0) * eth(r) for r in s7); sl = sum(r.get("stdLpFee") or 0 for r in s7); li = sum(lic(r) for r in s7)
+    for nm, a, b in (("revenue, 30d", usd(tr + pf + sl + lp + ch + li), kv("revenue", "Revenue, 30d")), ("STANDARD trading fees, 30d", usd(tr), kv("revenue", "STANDARD trading fees, 30d")),
                      ("LP fees, 30d", usd(pf), kv("revenue", "LP fees, 30d")), ("launchpad revenue, 30d", usd(lp), kv("revenue", "Launchpad revenue, 30d")),
                      ("charter sales, 30d", usd(ch), kv("revenue", "Charter sales, 30d")),
                      ("launchpad volume, 30d", usd(sum((r.get("lpadSafe") or 0) / 0.007 for r in s7)), kv("launchpad", "Launchpad volume, 30d")),
                      ("revenue by destination, trailing 30 days (the page opens on 30D)", usd(sum((r.get("tradingFeeEth") or 0) * eth(r) + (r.get("spFee") or 0) + (r.get("stdLpFee") or 0) + (r.get("lpadSafe") or 0) * 5 / 7
-                      + (r.get("charterEth") or 0) * eth(r) for r in S[-30:])), em("revenue", "Revenue by destination, trailing 30 days")),
+                      + (r.get("charterEth") or 0) * eth(r) + lic(r) for r in S[-30:])), em("revenue", "Revenue by destination, trailing 30 days")),
                      ("launchpad revenue, to date", usd(sum((r.get("lpadSafe") or 0) * 5 / 7 for r in D["series"])), kv("launchpad", "Launchpad revenue, to date")),
                      ("reserve assets", usd(L["reserve"]["totalUsd"]), kv("reserve", "Reserve assets")),
                      ("market cap, in wallets", usd(L["price"] * L["float"]), kv("token", "Market cap, in wallets")),
@@ -122,9 +123,9 @@ try:
         add("recompute", nm, a == b, f"recomputed {a}, page {b}")
     # the growth monitor follows the range; the page opens on 30D, so its flow rows are the last 30 complete days
     s30 = S[-30:]; served = lambda r: r["spVolMine"] if r.get("spVolMine") is not None else (r.get("spVol") or 0)
-    for label, f in (("Revenue", lambda r: (r.get("tradingFeeEth") or 0) * eth(r) + (r.get("spFee") or 0) + (r.get("stdLpFee") or 0) + (r.get("lpadSafe") or 0) * 5 / 7 + (r.get("charterEth") or 0) * eth(r)),
+    for label, f in (("Revenue", lambda r: (r.get("tradingFeeEth") or 0) * eth(r) + (r.get("spFee") or 0) + (r.get("stdLpFee") or 0) + (r.get("lpadSafe") or 0) * 5 / 7 + (r.get("charterEth") or 0) * eth(r) + lic(r)),
                      ("STANDARD trading fees", lambda r: (r.get("tradingFeeEth") or 0) * eth(r)), ("LP fees", lambda r: r.get("spFee") or 0),
-                     ("Launchpad revenue", lambda r: (r.get("lpadSafe") or 0) * 5 / 7), ("Charter sales", lambda r: (r.get("charterEth") or 0) * eth(r)),
+                     ("Launchpad revenue", lambda r: (r.get("lpadSafe") or 0) * 5 / 7), ("Charter sales", lambda r: (r.get("charterEth") or 0) * eth(r)), ("License sales", lic),
                      ("Volume served by the reserve", served), ("Launchpad trading volume", lambda r: (r.get("lpadSafe") or 0) / 0.007)):
         a_, b_ = usd(sum(f(r) for r in s30)), gm(label)[1]
         add("recompute", f"growth monitor, {label}, 30 days", a_ == b_, f"recomputed {a_}, page {b_}")

@@ -517,6 +517,19 @@ def main():
        "Standard Reserve indexer, cumulativeIssued", 0.001, unit="STANDARD")
     reconcile("branches", "Branches, replayed from events", census[max(census)][2], int(snap["bank"]["totalBranches"]), "Standard Reserve indexer, totalBranches", 0.002)
     reconcile("charters", "Active charters, replayed from events", census[max(census)][0], int(snap["census"]["active"]), "Standard Reserve indexer, census", 0.002)
+    # license payments (license sales, a revenue stream since 3 Nov 2026) against the chain: LicensesPurchased(count, unitPrice) on the three
+    # license auction contracts (genesis, the 22 Sep and the 26 Sep 2026 deployments), summed to the indexer's last license event
+    LICP = "0x" + keccak(b"LicensesPurchased(uint256,uint256,uint256,uint256)").hex()
+    lcl = jload(os.path.join(C, "lic_logs.json"), {"last": G - 1, "rows": []})
+    if lcl["last"] < tip:
+        for a_ in ("0xa45ce49303eed5846f841bfd4bac6ae8c805ec05", "0x44731eff9da8fdd30003aa7c0b324368b3dffe5e", "0x7cd3c6ec047b1a21ea65af64d7c850e6f6049015"):
+            for l in getlogs({"address": a_, "topics": [LICP]}, lcl["last"] + 1, tip, 4000000):
+                lcl["rows"].append([int(l["blockNumber"], 16), str(int(l["data"][2:66], 16) * int(l["data"][66:130], 16))])
+        lcl["last"] = tip; jsave(os.path.join(C, "lic_logs.json"), lcl)
+    lcut = max((int(e.get("blockNumber") or 0) for e in act["licenses-purchased"]), default=0)
+    reconcile("licenses_chain", "License payments to date, from the license auctions’ events", sum(int(a_) for b_, a_ in lcl["rows"] if b_ <= lcut) / 1e18,
+              sum(int(e["values"]["count"]) * int(e["values"]["unitPrice"]) for e in act["licenses-purchased"]) / 1e18,
+              "Standard Reserve indexer, licenses-purchased", 1e-6, unit="STANDARD")
     series = []
     prev = None
     for d in dl:

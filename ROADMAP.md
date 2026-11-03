@@ -138,3 +138,11 @@ Owners may reorder, add or strike items at any time.
 - Open for the owner, 3 Nov 2026:
   - Protocol liquidity is the PoolManager's whole STANDARD balance, as the protocol's own site defines it. That balance also holds third-party liquidity and other pools' STANDARD, about 86K to 402K, so In wallets reads 0.2% to 0.76% low.
   - The S-Bill premium pot (1.15M funded by the Incentives vault) sits inside In wallets, as on the protocol's site.
+- 3 Nov 2026 audit, launchpad batch: launchpad figures come from every trade's Trade event (topic 0xaca20ddd…, from curves and launch
+  hooks; data words 4 to 8 = side, total fee, creator, fee Safe, snipe), cache `lpad_trades.json` (seeded from the auditor's full scan,
+  verified against the chain; launches from the factories' events 0xa0354dae…/0x93e9aed1…). Volume is the traded side (snipe fees had
+  inflated the implied volume 9%, 30% on 14 Oct); snipe fees are all the protocol's, per its fee table (launchpad revenue +$5.4K to date);
+  days are dated by block; gate `lpad_trades` ties the trades' fee Safe part to the Safe's Transfer receipts (exact). The Safe's native ETH
+  (launch fees, 0.0005 ETH a launch) shows in its holdings and is not counted as revenue (owner decision pending).
+- Open: launchpad-routed LP fees remain a floor; matching reserve-pool swaps to Trade events by transaction would make them exact
+  (creator buys in launch transactions, 1,271 swaps, and trades through other routers are missed).

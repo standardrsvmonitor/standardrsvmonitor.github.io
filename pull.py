@@ -815,9 +815,13 @@ def main():
     cp = extra.counterparties(x, reg, lp_pools, "2026-10-14", yday)
     cls = extra.cpty_classes(cp, {s_: p_["tier"] for s_, p_ in lp_pools.items()}, routers=set(extra.LPAD["routers"]))
     lpad, lpad_held = extra.launchpad(x, lp_pools, closes, eth_day)
+    ltr, ltr_safe = extra.launchpad_trades(x, lp_pools, closes, eth_day)   # every trade's own fee split: exact volume, base fee, snipe fee, dated by block
+    tot_ = sum(lpad_held.get(s_, 0) for s_ in ltr_safe) or None
+    reconcile("lpad_trades", "Launchpad fee Safe receipts to date, summed from every trade’s Trade event (token units, all assets)", sum(ltr_safe.values()), tot_,
+              "transfers into the fee Safe, Transfer logs", 1e-6, unit="tokens", note="; ".join(f"{s_} {ltr_safe[s_] - lpad_held.get(s_, 0):+.6f}" for s_ in sorted(ltr_safe)))
     fx_raw = []   # (date, fee-exempt volume from the counterparty pass, the replay's), per pool and day
     for row in series:
-        d_ = row["date"]; row.update({k_: v_ for k_, v_ in (shares.get(d_) or {}).items()}); row.update(cls.get(d_, {})); row.update(lpad.get(d_, {}))
+        d_ = row["date"]; row.update({k_: v_ for k_, v_ in (shares.get(d_) or {}).items()}); row.update(cls.get(d_, {})); row.update(lpad.get(d_, {})); row.update(ltr.get(d_, {}))
         for s_ in lp_pools:   # counterparty classes sum to the exact volume served: fee-exempt is the replay's own figure, the sampled classes keep their shares of the rest
             t_ = sum(row.get(f"vol{k_}_{s_}") or 0 for k_ in ("Org", "Arb", "Bot", "Fx"))
             if t_ and row.get("spVolMine_" + s_) is not None:
@@ -845,7 +849,7 @@ def main():
     ks_, kp_ = get(MK + "pilot/summary", tries=2), get(MK + "pilot/pool?limit=1", tries=2)
     lp_px = {s_: v_["price"] for s_, v_ in lp.items()}; lp_px.update({"USDG": 1.0, "WETH": ethusd})
     out["launchpad"] = {"feeSafe": extra.LPAD["feeSafe"], "held": lpad_held, "heldUsd": sum(a_ * (lp_px.get(s_) or 0) for s_, a_ in lpad_held.items()),
-                        "feeSafeEth": int(rpc("eth_getBalance", [extra.LPAD["feeSafe"], "latest"]).get("result") or "0x0", 16) / 1e18,
+                        "feeSafeEth": int(rpc("eth_getBalance", [extra.LPAD["feeSafe"], BT]).get("result") or "0x0", 16) / 1e18,   # launch fees, 0.0005 ETH a launch
                         "indexerFeesUsd": kp_.get("feesUsd"), "indexerAsOf": kp_.get("asOfTime"),
                         "season": ks_.get("season"), "teams": ks_.get("countries"), "seedUsd": 1_100_000}
     log("launchpad: fee Safe", {k_: round(v_, 3) for k_, v_ in lpad_held.items()}, "| received, all days", round(sum(v_.get("lpadSafe", 0) for v_ in lpad.values())),

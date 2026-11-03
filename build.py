@@ -86,7 +86,9 @@ SECTIONS = {
 "launchpad": kpis("launchpad") + '<div class="grid">' +
     panel(7, "Launchpad fees by recipient, daily", "Every launchpad-token trade, on the bonding curve or in the graduated pool, pays a 1% base fee on its stock or WETH side: "
           "30% to the token’s creator, 20% to the King of the Markets reward pool and 50% to the protocol. The reward pool and protocol shares arrive together in one 2-of-4 "
-          "Safe signed by the reserve’s signers and are split here 2:5. Creator receipts include optional hook-module fees. Valued at each day’s closing prices.",
+          "Safe signed by the reserve’s signers and are split here 2:5. Curve buys in the first seconds after a launch also pay a snipe fee, all of it the protocol’s, as the "
+          "protocol’s fee table states. Each trade’s split is read from the Trade event its curve or hook emits, dated by block. Creator receipts also include creator "
+          "taxes and optional hook-module fees. Launches pay a fixed 0.0005 ETH to the fee Safe, shown in its holdings and not counted here. Valued at each day’s closing prices.",
           chart("c_lfee", "l"), "h_lfee") +
     panel(5, "King of the Markets standings", "Season 1 points by team from the launchpad’s markets API. Launchpad-token trades score five points a dollar; stock trades through "
           "reserve markets scored one point a dollar until 21 Oct 13:55 UTC. The reward pool opens with $1.1M from the Standard Reserve, as the protocol’s site states; "
@@ -415,8 +417,8 @@ const sum = (a)=>a.reduce((x,y)=>x+(y||0),0);
 const ethOf = (r)=>r.eth||L.ethusd;
 // revenue streams
 const tr = (r)=>(r.tradingFeeEth||0)*ethOf(r), chs = (r)=>(r.charterEth||0)*ethOf(r);
-const lpp = (r)=>(r.lpadSafe||0)*5/7, lpot = (r)=>(r.lpadSafe||0)*2/7, lcr = (r)=>r.lpadEsc||0;   // launchpad base fee: protocol 50%, reward pool 20% (both into the fee Safe), creators 30% plus module fees
-const lvol = (r)=>(r.lpadSafe||0)/0.007;                                                              // launchpad trading volume implied by the 0.7% the fee Safe receives
+const lpp = (r)=>r.lpadSafeBase!=null ? r.lpadSafeBase*5/7+(r.lpadSnipe||0) : (r.lpadSafe||0)*5/7, lpot = (r)=>r.lpadSafeBase!=null ? r.lpadSafeBase*2/7 : (r.lpadSafe||0)*2/7, lcr = (r)=>r.lpadEsc||0;   // from every trade's Trade event: the fee Safe's 0.7% base part splits 5:2 between the protocol and the reward pool; snipe fees are all the protocol's; creators' escrows also receive creator taxes and module fees
+const lvol = (r)=>r.lpadVol!=null ? r.lpadVol : (r.lpadSafe||0)/0.007;                               // launchpad trading volume, the stock or WETH side of every trade
 const slp = (r)=>r.stdLpFee||0;                                                                    // the protocol position's 1% fee in the STANDARD/ETH pool, both sides, to the team wallet
 const lic = (r)=>(r.licBurn||0)*(r.price||L.price)*(1-(r.exitFee||0));                            // license sales: ledger STANDARD paid for expansion licenses (burned), at the day's close less the day's resolution fee
 const rec = (r)=>tr(r)+(r.spFee||0)+slp(r)+lpp(r);                                                 // trading fees, LP fees, STANDARD pool LP fees and the launchpad's 50%; inc adds charter and license sales, which are revenue
@@ -510,7 +512,7 @@ function renderKpis(){ derive();
       {l:`Revenue, ${wl}`, v:fmt.usd(rev7), c:chg(rev7, revP, {pol:1}), s:`license sales ${fmt.usd(S_(lic))}`, sp:rollW(inc), col:C.teal},
       {l:`STANDARD trading fees, ${wl}`, v:fmt.usd(S_(tr)), c:chg(S_(tr), P_(tr), {pol:1}), sp:rollW(tr), col:STREAM.tr},
       {l:`LP fees, ${wl}`, v:fmt.usd(pf7), c:chg(pf7, pfP, {pol:1}), sp:rollW(r=>r.spFee||0), col:STREAM.pool},
-      {l:`Launchpad revenue, ${wl}`, v:fmt.usd(S_(lpp)), c:chg(S_(lpp), P_(lpp), {pol:1}), sp:rollW(lpp), col:STREAM.lpad, tip:'The protocol’s 50% of the 1% launchpad base fee, held in the launchpad fee Safe.'},
+      {l:`Launchpad revenue, ${wl}`, v:fmt.usd(S_(lpp)), c:chg(S_(lpp), P_(lpp), {pol:1}), sp:rollW(lpp), col:STREAM.lpad, tip:'The protocol’s 50% of the 1% launchpad base fee plus snipe fees, held in the launchpad fee Safe.'},
       {l:`Charter sales, ${wl}`, v:fmt.usd(S_(chs)), c:chg(S_(chs), P_(chs), {pol:1}), sp:rollW(chs), col:STREAM.ch},
       {l:'Price to revenue', v:fmt.x(prrOf(Y),1), c:chg(prrOf(Y), W&&Sp.length>W?prrOf(Sp[Sp.length-1-W]):null, {pol:-1, abs:true, f:v=>v.toFixed(1)+'×'}), s:`${prrK()}d revenue`, sp:sw.map(prrOf), col:C.fg2},
     ],
@@ -676,7 +678,7 @@ function renderStatic(){
   // launchpad: standings and the fee Safe
   const TEAM = {US:['United States','SPCX'], CN:['China','BABA'], KR:['South Korea','SKHY'], ETH:['ETH','ETH']}, TCOL = {US:C.silver, CN:C.gold, KR:C.celadon, ETH:C.sapphire};
   const tm = (LPD.teams||[]).slice().sort((a,b)=>b.points-a.points), tp = sum(tm.map(t=>t.points));
-  document.getElementById('t_kotm').innerHTML = '<tr><th>Team</th><th>Points</th><th>Share</th><th>Scored volume</th></tr>' +
+  document.getElementById('t_kotm').innerHTML = '<tr><th>Team</th><th>Points</th><th>Share</th><th>API volume</th></tr>' +
     tm.map((t,i)=>`<tr class="${i===0?'today':''}" title="${fmt.int(t.traders)} traders"><td><i style="display:inline-block;width:6px;height:6px;margin-right:.5rem;background:${TCOL[t.country]||C.sand}"></i>${(TEAM[t.country]||[t.country])[0]} <span style="color:var(--dis);font-size:.75rem">$${(TEAM[t.country]||[])[1]||''}</span></td><td>${fmt.n(t.points,1)}</td><td>${fmt.pct(tp?t.points/tp:null,0)}</td><td>${fmt.usd(t.volumeUsd,1)}</td></tr>`).join('');
   const potFees = sum(Sh.map(lpot)), pot = (LPD.seedUsd||0)+potFees;
   document.getElementById('kotm_pool').innerHTML = [['Opening pot, per the protocol’s site', fmt.usd(LPD.seedUsd||0)], ['Reward pool share of fees, 20%', fmt.usd(potFees)], ['Incentives, 65%, by points', fmt.usd(pot*.65)], ['Jackpot, 35%, leading team', fmt.usd(pot*.35)]].map(x=>`<div>${x[0]}</div><div>${x[1]}</div>`).join('');
@@ -686,7 +688,8 @@ function renderStatic(){
   const hTot = sum(held.map(([s,a])=>a*(HP[s]||0)));
   document.getElementById('t_fsafe').innerHTML = '<tr><th>Token</th><th>Balance</th><th>Value</th></tr>' +
     held.map(([s,a])=>`<tr title="at ${pxf(HP[s]||0)}"><td>${s}</td><td>${a.toFixed(2)}</td><td>${fmt.usd(a*(HP[s]||0))}</td></tr>`).join('') +
-    `<tr class="tot"><td>Total</td><td></td><td>${fmt.usd(hTot)}</td></tr>` +
+    (LPD.feeSafeEth ? `<tr title="launch fees, 0.0005 ETH a launch"><td>ETH</td><td>${LPD.feeSafeEth.toFixed(4)}</td><td>${fmt.usd(LPD.feeSafeEth*L.ethusd)}</td></tr>` : '') +
+    `<tr class="tot"><td>Total</td><td></td><td>${fmt.usd(hTot+(LPD.feeSafeEth||0)*L.ethusd)}</td></tr>` +
     `<tr><td>Withdrawn since launch</td><td></td><td>${fmt.usd(sum(S.map(r=>r.lpadSafeOut||0)))}</td></tr>`;
   document.getElementById('h_fsafe').innerHTML = `<a href="https://robin.etherscan.io/address/${LPD.feeSafe||''}" target="_blank" rel="noopener" style="text-decoration:none">${(LPD.feeSafe||'').slice(0,6)}…${(LPD.feeSafe||'').slice(-4)}</a> · 2-of-4`;
 }
@@ -819,7 +822,7 @@ reg('liquidity', ({Rf})=>{ const Rq = Rf.filter(r=>r.date>=LP0), pnl = (r,p)=>r[
 // launchpad
 reg('launchpad', ({Rf})=>{ const Rq = Rf.filter(r=>r.date>=LP0);
   document.getElementById('h_lfee').innerHTML = `<em>${fmt.usd(sum(Sh.map(r=>(r.lpadSafe||0)+(r.lpadEsc||0))))}</em> since 14 Oct · protocol ${fmt.usd(sum(Sh.map(lpp)))}`;
-  return mk(c_lfee, Rq.map(r=>dm(r.date)), [bar('Protocol, 50%', Rq.map(lpp), C.sapphire), bar('Reward pool, 20%', Rq.map(lpot), C.gold), bar('Creators, 30% and module fees', Rq.map(lcr), C.silver)],
+  return mk(c_lfee, Rq.map(r=>dm(r.date)), [bar('Protocol, 50% and snipe fees', Rq.map(lpp), C.sapphire), bar('Reward pool, 20%', Rq.map(lpot), C.gold), bar('Creators, 30%, creator taxes and module fees', Rq.map(lcr), C.silver)],
     {stacked:true, y:usd0, tf:usd1}); });
 reg('launchpad', ({Rf})=>{ const Rc = Rf.filter(r=>r.date>=LP0), lf_ = r=>r.spFeeLpad||0, all_ = r=>r.spFee||0;
   const {sw, wl} = win(), a = sum(sw.map(lf_)), b = sum(sw.map(all_));

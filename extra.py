@@ -911,6 +911,49 @@ def launchpad(x, lp_pools, closes, eth_day):
     return out, dict(held)
 
 
+LTRADE = "0xaca20dddb264298fd1f9f05d1dc1e0847e30f73956ee42aaf896b91eb73628b6"   # Trade, from every bonding curve and launch hook; topic 1 the launched token
+LAUNCH = ["0xa0354dae199953f2dbde6be8415166a744e7f92b7328671692196d8fdbb6bd9d", "0x93e9aed10a0259070dbc9cbe242cfd7dfde85172011e531fff069983bfeb470f"]
+LFACT = ["0x3d69104da2518f4833d71444d6611310f2d685f2", "0x3d6ea4e97b8ab9e1a1b4943febffe22d8c920091"]   # launchpad factories, current and earlier
+
+
+def launchpad_trades(x, lp_pools, closes, eth_day):
+    """Every launchpad-token trade, from the Trade event the curves and launch hooks emit: data words 4 to 8 are the stock or WETH side, the
+    total fee, the creator's part, the fee Safe's part and the snipe fee (the extra fee on curve buys in the first seconds after a launch,
+    all of it the protocol's). Summed per UTC day and pair asset, dated by block. Launched tokens and their pair asset come from the
+    factories' launch events. Returns ({date: {lpadVol, lpadSafeBase, lpadSnipe, lpadCre, lpadTrades}} in USD, {asset: fee Safe receipts})."""
+    c = x.jl("lpad_trades.json", {"last": LPAD["start"] - 1, "launches": {}, "days": {}})
+    pairs = {a: s for s, (a, _) in LPAD["tokens"].items() if s != "USDG"}
+    if c["last"] < x.tip:
+        lo = c["last"] + 1
+        for l in x.getlogs({"address": LFACT, "topics": [LAUNCH]}, lo, x.tip, 100000):
+            ws = words(l["data"]); p = next((pairs["0x" + w[-40:]] for w in ws if "0x" + w[-40:] in pairs), None)
+            if p: c["launches"]["0x" + l["topics"][1][-40:]] = p
+        for l in x.getlogs({"topics": [LTRADE]}, lo, x.tip, 30000):
+            p = c["launches"].get("0x" + l["topics"][1][-40:]) if len(l["topics"]) > 1 else None
+            if not p: continue
+            w = words(l["data"]); d = day(x.T(int(l["blockNumber"], 16)))
+            r = c["days"].setdefault(d, {}).setdefault(p, [0.0] * 6)   # [side, total fee, creator, fee Safe, snipe, trades], token units
+            for k_, i_ in enumerate((4, 5, 6, 7, 8)): r[k_] += int(w[i_], 16) / 1e18
+            r[5] += 1
+        c["last"] = x.tip; x.js("lpad_trades.json", c)
+    pid = {s: p["pool"] for s, p in lp_pools.items()}
+    def px(s, d):
+        if s == "WETH":
+            ks = sorted(k for k in eth_day if k <= d); return eth_day[ks[-1]] if ks else None
+        sp = close_on(closes.get(pid.get(s), {}), d, first=True)
+        if not sp: return None
+        P = (sp / 2 ** 96) ** 2; return 1e12 / P if lp_pools[s]["usdg0"] else P * 1e12
+    out = {}; safe_tok = collections.Counter()
+    for d, v in c["days"].items():
+        o = out.setdefault(d, {"lpadVol": 0.0, "lpadSafeBase": 0.0, "lpadSnipe": 0.0, "lpadCre": 0.0, "lpadTrades": 0})
+        for s, r in v.items():
+            q = px(s, d) or 0.0
+            o["lpadVol"] += r[0] * q; o["lpadSafeBase"] += (r[3] - r[4]) * q; o["lpadSnipe"] += r[4] * q; o["lpadCre"] += r[2] * q; o["lpadTrades"] += int(r[5])
+            safe_tok[s] += r[3]
+        for k in ("lpadVol", "lpadSafeBase", "lpadSnipe", "lpadCre"): o[k] = round(o[k], 2)
+    return out, dict(safe_tok)
+
+
 def cpty_classes(c, tiers=None, hf=1000, routers=()):
     """Classes per day and pool from the cached draws: Arb (the transaction also trades the asset the other way on another pool), Bot (a private
     contract, one whose sending wallets are a single wallet or wallets of similar activity, as a bot operator's rotating wallets are; or a

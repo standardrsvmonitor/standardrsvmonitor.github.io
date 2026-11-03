@@ -385,6 +385,7 @@ def main():
     for e in act["revoked"]:
         d = day(int(e["timestamp"])); v = e["values"]; fee = (int(v["gross"]) - int(v["bounty"]) - int(v["ownerNet"])) / 1e18
         days[d]["revokeFeeBurn"] += fee / 2; days[d]["revoked"] += 1; days[d]["revokeGross"] += int(v["gross"]) / 1e18
+        days[d]["revokePaid"] += (int(v["bounty"]) + int(v["ownerNet"])) / 1e18   # minted to the reporter (bounty) and the revoked charter's owner
     lc = {}
     for e in act["licenses-purchased"]:
         d = day(int(e["timestamp"])); ts_ = int(e["timestamp"])
@@ -552,6 +553,9 @@ def main():
     reconcile("licenses_chain", "License payments to date, from the license auctions’ events", sum(int(r_[1]) for r_ in lcl["rows"] if r_[0] <= lcut) / 1e18,
               sum(int(e["values"]["count"]) * int(e["values"]["unitPrice"]) for e in act["licenses-purchased"]) / 1e18,
               "Standard Reserve indexer, licenses-purchased", 1e-6, unit="STANDARD")
+    mint_l = sum(days[d]["mint"] for d in days); paid_l = sum(days[d]["wdNet"] + days[d]["revokePaid"] for d in days)
+    reconcile("mint_split", "STANDARD minted from banks to date, from transfer logs", mint_l, paid_l,
+              "net withdrawals plus revocation payouts (bounty and owner), indexer events", 1e-9, gate=False, unit="STANDARD")
     series = []
     prev = None
     for d in dl:
@@ -560,7 +564,8 @@ def main():
         row = {"date": d, "price": p, "eth": e_, "supply": T_hist[d], "pool": pool_hist[d], "incentives": inc_hist[d], "sbills": sb_hist[d], "float": flt,
                "mcTotal": p * T_hist[d] if p else None, "mcFloat": p * flt if p else None}
         row.update({k: round(v, 6) for k, v in x.items()})
-        row["burnBuyback"] = round(x["burn_contraction"] + x["burn_polManager"] + x["burn_sbills"], 6)   # tokens bought back and burned
+        row["burnBuyback"] = round(x["burn_contraction"], 6)                                              # tokens bought back by the contraction vault and burned
+        row["burnFees"] = round(x["burn_polManager"] + x["burn_sbills"], 6)                               # S-Bill fee burns and the POL manager's launch-day fee burn
         row["depositBurn"] = round(x["deposits"], 6)                                                     # deposits converted to ledger (burned), from deposited events
         row["burnOther"] = round(max(0.0, x["burn_other"] + x["burn_bank"] - x["deposits"]), 6)          # burns that are not deposits: the tax hook burning STANDARD it takes from the pool (26,801.5 lifetime to 27 Oct 2026)
         row.update({"stayersCut": round(x["stayersCut"], 6), "pending": pend_hist[d], "exitFee": fee_hist[d], "sbRate": rate_hist[d], "sbLocked": sbl_hist[d], "teamStd": tm_hist[d],

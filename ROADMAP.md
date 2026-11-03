@@ -131,3 +131,10 @@ Owners may reorder, add or strike items at any time.
   - The live overlay retries the RPC and keeps the whole page compiled when the chain replay fails.
   - New watch `served_cp`: replay against counterparty-pass served volume.
 - The stock pools are not sole-LP: SPCX has 27 live third-party positions, the largest 19 times the reserve's in-range liquidity (3 Nov).
+- 3 Nov 2026 audit, token batch:
+  - Minted from banks splits into net withdrawals and revocation payouts (bounty plus owner net); watch item `mint_split` is exact.
+  - Buybacks burned counts the contraction vault only; S-Bill fee burns and the POL manager's 4.34 launch-day burn are `burnFees`.
+  - Live overlay fixes: tax-hook burns are included (the replay names the hook taxHook), and the complete-day window moves past midnight.
+- Open for the owner, 3 Nov 2026:
+  - Protocol liquidity is the PoolManager's whole STANDARD balance, as the protocol's own site defines it. That balance also holds third-party liquidity and other pools' STANDARD, about 86K to 402K, so In wallets reads 0.2% to 0.76% low.
+  - The S-Bill premium pot (1.15M funded by the Incentives vault) sits inside In wallets, as on the protocol's site.

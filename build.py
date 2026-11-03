@@ -110,7 +110,7 @@ SECTIONS = {
     panel(5, "Supply reconciliation", "From the genesis mint to circulating supply, the STANDARD in wallets and free float, at one block.", '<div class="bridge" id="bridge"></div>') +
     panel(7, "Net buying of STANDARD by holder group, daily", "STANDARD bought from the protocol’s STANDARD/ETH pool less STANDARD sold into it, by the group of the "
           "wallet behind each trade. Above zero a group bought more than it sold; below zero it sold more. Groups apply in order: team "
-          "wallet, current bankers (owners of at least one branch today), S-Bill holders, frequent traders (300 or more trades with the pool), launch-epoch buyers (first buy within three days of genesis, the first epoch), others; a group with no trades is not drawn. A wallet’s group is its standing at the compile, so a "
+          "wallet, current bankers (owners of at least one branch today), S-Bill holders (wallets that have ever deposited into S-Bills), frequent traders (300 or more trades with the pool), launch-epoch buyers (first buy within three days of genesis, the first epoch), others; a group with no trades is not drawn. A wallet’s group is its standing at the compile, so a "
           "wallet that later becomes a banker moves into Bankers for its whole history; each day’s total does not change.", chart("c_sell"), "h_sell") +
     panel(5, "Largest net sellers, trailing seven days", "Net STANDARD sold into the pool by wallet over the last seven complete days; trades through routers are assigned to the "
           "wallet behind the router.", table("t_sellers")) +
@@ -421,7 +421,7 @@ const slp = (r)=>r.stdLpFee||0;                                                 
 const lic = (r)=>(r.licBurn||0)*(r.price||L.price)*(1-(r.exitFee||0));                            // license sales: ledger STANDARD paid for expansion licenses (burned), at the day's close less the day's resolution fee
 const rec = (r)=>tr(r)+(r.spFee||0)+slp(r)+lpp(r);                                                 // trading fees, LP fees, STANDARD pool LP fees and the launchpad's 50%; inc adds charter and license sales, which are revenue
 const inc = (r)=>rec(r)+chs(r)+lic(r);
-const burnLedger = (r)=>(r.licBurn||0)+(r.exitFeeBurn||0)+(r.revokeFeeBurn||0), burnTokens = (r)=>(r.burnBuyback||0)+(r.burnOther||0), burnAll = (r)=>burnLedger(r)+burnTokens(r);
+const burnLedger = (r)=>(r.licBurn||0)+(r.exitFeeBurn||0)+(r.revokeFeeBurn||0), burnTokens = (r)=>(r.burnBuyback||0)+(r.burnFees||0)+(r.burnOther||0), burnAll = (r)=>burnLedger(r)+burnTokens(r);
 const pbOf = (r)=>r&&r.reserveUsd&&r.mcFloat ? r.mcFloat/r.reserveUsd : null;
 const bkOf = (r)=>r&&r.reserveUsd&&r.float ? r.reserveUsd/r.float : null;
 const served = (r)=>r.spVolMine!=null?r.spVolMine:(r.spVol||0);
@@ -429,9 +429,10 @@ const paying = (r)=>served(r)-(r.spVolExempt||0);   // volume served that paid t
 const GROUPS = [['team','Team wallet',C.rose],['bankers','Bankers',C.gold],['sbills','S-Bill holders',C.celadon],['active','Frequent traders',C.sapphire],['launch','Launch-epoch buyers',C.silver],['other','Other wallets',C.grey]];
 const Sh = S.filter(r=>r.date<=L.date);
 const ep2 = E.length>1 ? fmt.dt(E[1].start) : '';
-const Sp = Sh.filter(r=>r.date<L.date);
-const s7 = last(Sp,7), P7 = Sp.length>=14 ? Sp.slice(-14,-7) : [];
-const Y = Sp[Sp.length-1]||{}, yd = Y.date ? dm(Y.date) : '';
+let Sp = Sh.filter(r=>r.date<L.date);
+let s7 = last(Sp,7), P7 = Sp.length>=14 ? Sp.slice(-14,-7) : [];
+let Y = Sp[Sp.length-1]||{}, yd = Y.date ? dm(Y.date) : '';
+const rewin = ()=>{ Sp = Sh.filter(r=>r.date<L.date); s7 = last(Sp,7); P7 = Sp.length>=14 ? Sp.slice(-14,-7) : []; Y = Sp[Sp.length-1]||{}; yd = Y.date ? dm(Y.date) : ''; };   // complete days move on when a page stays open past midnight
 const regime = {};
 const isExp = (e)=>e.expansion===true||e.expansion==='true'||e.expansion===1;
 E.forEach(e=>{for(let t=e.start+3600;t<e.end;t+=86400) regime[fmt.dt(t)] = isExp(e);});
@@ -690,9 +691,9 @@ function renderStatic(){
   document.getElementById('h_fsafe').innerHTML = `<a href="https://robin.etherscan.io/address/${LPD.feeSafe||''}" target="_blank" rel="noopener" style="text-decoration:none">${(LPD.feeSafe||'').slice(0,6)}…${(LPD.feeSafe||'').slice(-4)}</a> · 2-of-4`;
 }
 function renderBridge(){
-  const mintAll = sum(S.map(r=>r.mint||0)), bbAll = sum(S.map(r=>r.burnBuyback||0)), depAll = sum(S.map(r=>r.depositBurn||0)), othAll = sum(S.map(r=>r.burnOther||0));
-  const sbLock = L.sbills.locked||0, sbPot = Math.max(0, L.sbillsStd - sbLock), resid = L.totalSupply-(100e6+mintAll-bbAll-othAll-depAll);
-  const br = [['Genesis liquidity mint', 100e6], ['+ Withdrawn from banks, minted', mintAll], ['− Buybacks burned', -bbAll], ['− Tax hook burns', -othAll], ['− Deposited into banks', -depAll],
+  const wdAll = sum(S.map(r=>r.wdNet||0)), rvAll = sum(S.map(r=>r.revokePaid||0)), bbAll = sum(S.map(r=>r.burnBuyback||0)), bfAll = sum(S.map(r=>r.burnFees||0)), depAll = sum(S.map(r=>r.depositBurn||0)), othAll = sum(S.map(r=>r.burnOther||0));
+  const sbLock = L.sbills.locked||0, sbPot = Math.max(0, L.sbillsStd - sbLock), resid = L.totalSupply-(100e6+wdAll+rvAll-bbAll-bfAll-othAll-depAll);
+  const br = [['Genesis liquidity mint', 100e6], ['+ Withdrawn by closing branches, minted', wdAll], ['+ Paid out from revoked charters, minted', rvAll], ['− Buybacks burned', -bbAll], ['− S-Bill and POL fee burns', -bfAll], ['− Tax hook burns', -othAll], ['− Deposited into banks', -depAll],
     ...(Math.abs(resid)>=0.5?[['± Unreconciled', resid]]:[]), ['= Circulating supply', L.totalSupply, 'tot'],
     ['− Protocol liquidity', -L.poolStd], ['− Incentives vault', -L.incentivesStd], ['= In wallets', L.float, 'tot'],
     ['− S-Bill principal', -sbLock], ['− S-Bill premium pot', -sbPot], ['− Team wallet', -L.teamStd], ['= Free float', L.float-L.sbillsStd-L.teamStd, 'tot']];
@@ -845,10 +846,10 @@ reg('token', ({Rl, ll, dl})=>{ document.getElementById('h_mc').innerHTML = `<em>
   sets.forEach((s,i)=>{s.fill=i===0?'origin':'-1'; s.backgroundColor=alpha(s.borderColor,.4); s.borderWidth=1; s.stack='sup';});
   return mk(c_mc, ll, sets, {stacked:true, y:n0, tf:v=>fmt.n(v,2), footer:i=>{const r=Rl[i[0].dataIndex]; return `total ${fmt.n((r.supply||0)+(r.pending||0),2)}`;}}); });
 reg('token', ({Rf, lf, df})=>{ const ofl = (r)=>{const i=Sh.indexOf(r), p=i>0?Sh[i-1]:null; if(!p) return null;
-    const dF=r.float-p.float, W=(r.mint||0), Dist=(r.fromIncentives||0), Fees=(r.feesToTeam||0), Mk=-(r.mktNet||0), Dep=-(r.depositBurn||0), Ob=-((r.burn||0)-(r.depositBurn||0)-(r.burn_contraction||0)-(r.burnOther||0));
-    return {dF, W, Dist, Fees, Mk, Dep, Ob, Oth:dF-(W+Dist+Fees+Mk+Dep+Ob)};};
+    const dF=r.float-p.float, W=(r.wdNet||0), Rv=(r.revokePaid||0), Dist=(r.fromIncentives||0), Fees=(r.feesToTeam||0), Mk=-(r.mktNet||0), Dep=-(r.depositBurn||0), Ob=-((r.burn||0)-(r.depositBurn||0)-(r.burn_contraction||0)-(r.burnOther||0));
+    return {dF, W, Rv, Dist, Fees, Mk, Dep, Ob, Oth:dF-(W+Rv+Dist+Fees+Mk+Dep+Ob)};};
   const OF = Rf.map(ofl), of = (k)=>OF.map(o=>o?o[k]:null);
-  return mk(c_flows, lf, [bar('Withdrawn from banks, minted', of('W'), C.green), bar('Incentives Vault distributions', of('Dist'), C.teal), bar('Position fees to the team', of('Fees'), C.pink),
+  return mk(c_flows, lf, [bar('Withdrawn by closing branches', of('W'), C.green), bar('Paid out from revoked charters', of('Rv'), C.violet), bar('Incentives Vault distributions', of('Dist'), C.teal), bar('Position fees to the team', of('Fees'), C.pink),
     bar('Net buying', of('Mk'), C.blue), bar('Deposited into banks', of('Dep'), C.grey), bar('S-Bill burns', of('Ob'), C.red),
     ...(OF.some(o=>o&&Math.abs(o.Oth)>=0.5)?[bar('Protocol contracts, other', of('Oth'), C.orange)]:[]), line('Change in wallets', of('dF'), C.fg2, {pts:2})],
     {stacked:true, zero:false, y:n0, tf:v=>fmt.sgn(v)+fmt.n(v,2)}); });
@@ -964,7 +965,7 @@ const scl = (v,inv)=>v==null?'<td>–</td>':`<td class="${(inv?-v:v)>0?'pos':(in
 let floatOpen = false;
 function renderFloat(){
   const frows = Sh.map((r,i)=>({r, ...fl(r,i)})).reverse();
-  document.getElementById('t_float').innerHTML = '<tr><th>Date</th><th>Circulating supply</th><th>Change</th><th>+ Withdrawals</th><th>− Deposits</th><th>− Burned</th><th>Protocol pool</th><th>Change</th><th>+ Market sales</th><th>− Protocol</th><th>Incentives vault, change</th><th>In wallets</th><th>Change</th><th>%</th><th>Price</th></tr>' +
+  document.getElementById('t_float').innerHTML = '<tr><th>Date</th><th>Circulating supply</th><th>Change</th><th>+ Minted from banks</th><th>− Deposits</th><th>− Burned</th><th>Protocol pool</th><th>Change</th><th>+ Market sales</th><th>− Protocol</th><th>Incentives vault, change</th><th>In wallets</th><th>Change</th><th>%</th><th>Price</th></tr>' +
     frows.map((x,i)=>`<tr class="${x.r.date===L.date?'today':''}${i>=10?' more':''}"><td>${x.r.date}</td><td>${fmt.n(x.r.supply,2)}</td>${scl(x.dS)}${scl(x.mint)}${scl(-x.dep)}${scl(-x.bb)}<td>${fmt.n(x.r.pool,2)}</td>${scl(x.dP,true)}${scl(x.mkt,true)}${scl(x.prot,true)}${scl(x.dI,true)}<td>${fmt.n(x.r.float,2)}</td>${scl(x.dF)}<td class="${x.dF>0?'pos':x.dF<0?'neg':''}">${x.p?fmt.sgn(x.dF)+fmt.pct(x.dF/x.p.float,2):'–'}</td><td>${x.r.price!=null?'$'+x.r.price.toFixed(4):'–'}</td></tr>`).join('');
   document.getElementById('t_float').classList.toggle('open', floatOpen);
   document.getElementById('fmore').textContent = floatOpen ? 'Last 10 days' : `All ${frows.length} days`;
@@ -1044,7 +1045,7 @@ function restore(){
   Object.keys(L).forEach(k=>{if(!(k in BASE.L)) delete L[k];}); Object.assign(L, clone(BASE.L));
   Sh.length = BASE.n; S.length = BASE.sn; const R0 = Sh[BASE.n-1];
   if (R0) { Object.keys(R0).forEach(k=>{if(!(k in BASE.row)) delete R0[k];}); Object.assign(R0, clone(BASE.row)); }
-  CH.length = 0; CH.push(...clone(BASE.ch)); LP.length = 0; LP.push(...clone(BASE.lp)); LD = clone(BASE.ld);
+  CH.length = 0; CH.push(...clone(BASE.ch)); LP.length = 0; LP.push(...clone(BASE.lp)); LD = clone(BASE.ld); rewin();
 }
 async function rpc(calls){   // the public RPC rate-limits (HTTP 429, sent without CORS headers, so it surfaces as a failed fetch): retry with backoff
   for (let k=0;;k++) { try {
@@ -1089,7 +1090,7 @@ async function replay(s, B){
   const tsd = e=>fmt.dt(+e.timestamp), V = e=>e.values||{};
   wd.forEach(e=>{const d=tsd(e), g=big(V(e).gross), n=big(V(e).net); add(d,'wdGross',g); add(d,'wdNet',n); add(d,'exitFeeBurn',(g-n)/2); add(d,'exitFeeRedis',(g-n)/2); add(d,'exits',1);});
   dep.forEach(e=>add(tsd(e),'deposits',big(V(e).amount)));
-  rev.forEach(e=>{const v=V(e), g=big(v.gross), fee=g-big(v.bounty)-big(v.ownerNet); add(tsd(e),'revokeFeeBurn',fee/2); add(tsd(e),'revokeGross',g); add(tsd(e),'revoked',1);});
+  rev.forEach(e=>{const v=V(e), g=big(v.gross), fee=g-big(v.bounty)-big(v.ownerNet); add(tsd(e),'revokeFeeBurn',fee/2); add(tsd(e),'revokeGross',g); add(tsd(e),'revoked',1); add(tsd(e),'revokePaid',big(v.bounty)+big(v.ownerNet));});
   lic.sort((a,b)=>a.timestamp-b.timestamp).forEach(e=>{const v=V(e), c=+v.count, px=big(v.unitPrice), d=tsd(e); add(d,'licBurn',c*px); add(d,'licCount',c); f(d).licClose = px;
     let q = LP.find(p=>p.day===+v.day && (p.c??2)===2); if(!q){ q={day:+v.day, c:2, start:+e.timestamp, sold:0, burned:0, close:0, sales:0}; LP.push(q);} q.sold+=c; q.burned+=c*px; q.close=px; q.sales+=1;});
   cc.forEach(e=>{ if (+e.charterId > (DATA.foundingCharters||1000)) add(tsd(e),'chartersSold',1); });
@@ -1098,8 +1099,8 @@ async function replay(s, B){
   const R0 = Sh[Sh.length-1], dLive = fmt.dt(+s.blockTimestamp), rows = [R0];
   for (let t=Date.parse(R0.date+'T00:00:00Z')/1000+86400; fmt.dt(t)<=dLive; t+=86400) { const r = {date:fmt.dt(t), eth:R0.eth}; S.push(r); Sh.push(r); rows.push(r); }
   rows.forEach(r=>{ Object.entries(F[r.date]||{}).forEach(([k,v])=>{ if(k==='licClose') r[k]=v; else r[k]=(r[k]||0)+v; });
-    r.burnBuyback = (r.burn_contraction||0)+(r.burn_polManager||0)+(r.burn_sbills||0); r.depositBurn = r.deposits||0;
-    r.burnOther = Math.max(0, (r.burn_other||0)+(r.burn_bank||0)-(r.deposits||0)); });
+    r.burnBuyback = r.burn_contraction||0; r.burnFees = (r.burn_polManager||0)+(r.burn_sbills||0); r.depositBurn = r.deposits||0;
+    r.burnOther = Math.max(0, (r.burn_other||0)+(r.burn_bank||0)+(r.burn_taxHook||0)-(r.deposits||0)); });
   const tNow = +s.blockTimestamp, iss = (a,b)=>{ if(b<=a) return 0; const c=Math.min(Math.max(L.epochStart,a),b); return L.baseIssuance*(BASE.L.multiplier*(c-a)+L.multiplier*(b-c))/86400; };
   rows.forEach(r=>{const ds=Date.parse(r.date+'T00:00:00Z')/1000, a=iss(Math.max(ds,TIPTS), Math.min(ds+86400,tNow)), rc=(L.recycleRate||0)*Math.max(0, Math.min(ds+86400,tNow)-Math.max(ds,TIPTS));
     r.issuance=(r===R0?(BASE.row.issuance||0):0)+a; r._iss=a; r.stayersCut=(r===R0?(BASE.row.stayersCut||0):0)+rc; r._rec=rc;});
@@ -1115,6 +1116,7 @@ async function replay(s, B){
     multiplier:L.multiplier, branches:L.branches, activeCharters:L.activeCharters, burnedCharters:L.burnedCharters});
   Object.assign(L, {date:RL.date, totalSupply:RL.supply, poolStd:RL.pool, incentivesStd:RL.incentives, sbillsStd:RL.sbills, teamStd:RL.teamStd, float:RL.float,
     burnedForever:big(st[5]), maxSupply:big(st[6]), teamEth:st[7]?Number(BigInt(st[7]))/1e18:L.teamEth});
+  rewin();
 }
 async function goLive(){
   try{

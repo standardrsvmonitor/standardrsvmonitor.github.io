@@ -168,7 +168,7 @@ def flat(r):
                         if isinstance(v3, (int, float)): o[f"{k}.{k2}.{k3}"] = float(v3)
     return o
 def tol_for(k):   # (relative, absolute floor); None = judged another way
-    if re.match(r"(vol|fee)(Org|Arb|Bot|Fx)_", k): return None                        # counterparty mix: judged by share below
+    if re.match(r"(vol|fee)(Org|Arb|Bot|Fx|Lpad)_", k): return None                   # counterparty mix, launchpad class included (sampled): judged by share below; the exact spVolLpad/spFeeLpad stay held
     if k.startswith("sell_"): return None                                              # holder groups are today's membership; the day's total, mktNet, is held
     if re.match(r"(venues|rank)_", k): return (0, 2)                                   # venue counts move as new pools are found
     if re.match(r"(chainVol|chainTvl|otherTvl|liqShare|volShare|poolVolChain)_", k): return (0.15, 1e-3)

@@ -106,3 +106,12 @@ Owners may reorder, add or strike items at any time.
   harvests (100) plus uncollected 243.0875 ETH and 2,062,938 STANDARD: gate items `stdlp_eth` and `stdlp_std` at 0.1%.
 - License purchases move no STANDARD from the buyer's wallet: the central bank debits the charter's bank balance and the token lowers
   its cap by the price. Lifetime licenses 24.68M exceed lifetime deposits 16.30M, so at least 8.4M came from issued balances.
+- 3 Nov 2026: the reserve Safe re-ranged at 07:05 UTC (tx 0x75eae165…): it removed and burned positions 3789188 and 3789189 and minted
+  4154479 to 4154481 in one transaction. The reserve history and pool P&L had counted only positions the Safe still owns, so the burned
+  positions vanished from every day back to 14 Oct (BABA LP value and cost −15%) and the gate held the page from 07:27 UTC. Both now use
+  every position the Safe has held (`positions.json`); `lp_liquidity` still checks the summed liquidity against the positions held now.
+- The stock pools' hook (0xc15b155a…6080, owner EOA 0xb1748f18…c3c1) keeps a fee-exemption list, event FeeExemptSet(address,bool)
+  (topic 0x5a8cf666…). Exempt swaps report fee 0 in the Swap event; everyone else pays 2900 pips in SKHY and 450 in SPCX. History:
+  14 Oct 14:55 UTC 0x4dbd3fe6, 0xce5be7b4, 0xc348f695, 0x6353e3ec exempted; 19:50 the last three removed; 21 Oct 05:52 0x922ec650 added;
+  30 Oct 14:08 0xce5be7b4, 0xc348f695 (the largest bot executor) and 0x6353e3ec exempted again. Since then most stock-pool volume pays
+  nothing: 2 Nov $5.21M of $6.45M served was fee-exempt and LP fees were $727 (27 to 29 Oct averaged $6,358 a day).

@@ -148,8 +148,9 @@ def reserve_history(x, lp_pools, closes, eth_day, epochs, dates, today_parts):
     for _, s, v in tev: tf[s] += v
     now_tok = {s: x.bal["reserveSafe"].get(s, 0.0) for s in toks}
     checks.update({"tok_" + s: round(tf[s] - now_tok[s], 6) for s in toks})
-    # the Safe's positions: liquidity by ModifyLiquidity (salt = token id), range from the event
-    ids = {"0x" + format(i, "064x") for i in x.pos_ids}
+    # the Safe's positions: liquidity by ModifyLiquidity (salt = token id), range from the event. Every position it has held, not only the ones
+    # it holds now: a closed position (liquidity removed, NFT burned) stays in the days it existed (lp_liquidity checks the sum against now)
+    ids = {"0x" + format(i, "064x") for i in set(x.pos_ids) | set(x.jl("positions.json", {"ids": []})["ids"])}
     pid_sym = {p["pool"]: s for s, p in lp_pools.items()}
     lm = x.jl("lp_mods.json", {"last": x.SEED_BLOCK - 1, "rows": []}); x.log("reserve: position liquidity from", lm["last"] + 1)
     if lm["last"] < tip:      # PositionManager liquidity changes in the reserve's pools, cached: [block, pool, tickLower, tickUpper, liquidityDelta, salt]
@@ -586,7 +587,7 @@ def lp_pnl(x, lp_pools, closes, dates, res_hist, fee_tokens_by_day):
     and fees are all marked at one price. Returns per pool and day: position value, holding value, cost in USD, fees earned to date."""
     import time
     lm = x.jl("lp_mods.json", {"rows": []}); cache = x.jl("lp_cost.json", {})
-    ids = {"0x" + format(i, "064x") for i in x.pos_ids}
+    ids = {"0x" + format(i, "064x") for i in set(x.pos_ids) | set(x.jl("positions.json", {"ids": []})["ids"])}   # closed positions included
     INIT = x.INIT
     def price_before(pid, b):
         for span in (20000, 200000, 2000000):

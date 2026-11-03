@@ -119,3 +119,15 @@ Owners may reorder, add or strike items at any time.
   `pool_fees4.json` (rebuilt from the seeding blocks in 607 s, 0 liquidity mismatches, every earlier figure identical to `pool_fees3`).
   The volume chart's headline is the volume that paid the fee; the counterparty mix takes its fee-exempt class from the replay and scales
   the sampled classes to the rest; watch item `exempt_served` compares the replay with the counterparty pass (0.08% apart on 3 Nov).
+- 3 Nov 2026 accuracy audit, fixed:
+  - Resolution fee history counts revoked balances in the seven-day buckets (the contract's withdrawnOnDay does), so every feeWad on chain is reproduced exactly.
+  - In banks credits the stayers' cut as it streams: FeesRecycled(epoch, amount) (topic 0xee894dd5…), spread evenly over that epoch; the live epoch uses recycleRate. The ledger now ties to totalPendingLive within 4 STANDARD and is gated at 0.02%.
+  - License periods are keyed by auction contract (`lic_logs2.json`): 93 periods, previously 76.
+  - charterNft.nextId() is the last id minted, not the next one.
+  - Epoch settlement and routing events are paired by transaction.
+  - Chain liquidity per asset counts v4 liquidity added before 14 Oct.
+  - Reserve positions are read at the compile block.
+  - The pools table shows the fee each pool charges now (450 / 2900 / 900 pips for SPCX / SKHY / BABA; 500 for ETH/USDG), and APR follows the range.
+  - The live overlay retries the RPC and keeps the whole page compiled when the chain replay fails.
+  - New watch `served_cp`: replay against counterparty-pass served volume.
+- The stock pools are not sole-LP: SPCX has 27 live third-party positions, the largest 19 times the reserve's in-range liquidity (3 Nov).

@@ -91,5 +91,29 @@
   "to": "2026-10-30",
   "until": "2026-11-09",
   "why": "STANDARD trading fees by day now come from the tax hook's TaxCollected and LpTaxCollected events, dated by block, instead of each epoch's routed ETH spread evenly over its days; epoch totals unchanged within 0.11%; owner-approved 2 Nov 2026"
+ },
+ {
+  "fields": [
+   "chainTvl_.*",
+   "liqShare_.*",
+   "rank_.*",
+   "venues_.*",
+   "otherTvl_.*",
+   "poolTvl_.*"
+  ],
+  "from": "2026-10-14",
+  "to": "2026-10-31",
+  "until": "2026-11-10",
+  "why": "Chain liquidity per asset now includes v4 liquidity added before 14 Oct 2026 (the loop had skipped those days' changes but still subtracted later withdrawals of them); found by the 3 Nov accuracy audit"
+ },
+ {
+  "fields": [
+   "exitFee",
+   "pending"
+  ],
+  "from": "2026-09-14",
+  "to": "2026-10-31",
+  "until": "2026-11-10",
+  "why": "Resolution fee history now counts revoked balances in the contract's seven-day buckets (reproduces every feeWad charged on chain exactly; 15 to 17 Oct read 3% against the 60% charged), and In banks credits the stayers' cut as it streams over the next epoch (ledger now within 4 STANDARD of the contract); 3 Nov accuracy audit"
  }
 ]

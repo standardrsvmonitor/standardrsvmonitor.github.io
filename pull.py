@@ -236,10 +236,10 @@ def main():
         except Exception: s = a[:8]
         symcache[a] = s; return s
     for i in sorted(pm["ids"]):
-        own = ecall(POSM, sel("ownerOf(uint256)") + u(i))
+        own = ecall(POSM, sel("ownerOf(uint256)") + u(i), BT)   # every read of the reserve at the compile block
         if not own or int(own, 16) != int(H["reserveSafe"], 16): continue
-        liq = int(ecall(POSM, sel("getPositionLiquidity(uint256)") + u(i)), 16)
-        r = ecall(POSM, sel("getPoolAndPositionInfo(uint256)") + u(i)); w = [r[2 + 64 * k:2 + 64 * (k + 1)] for k in range(6)]
+        liq = int(ecall(POSM, sel("getPositionLiquidity(uint256)") + u(i), BT), 16)
+        r = ecall(POSM, sel("getPoolAndPositionInfo(uint256)") + u(i), BT); w = [r[2 + 64 * k:2 + 64 * (k + 1)] for k in range(6)]
         key = bytes.fromhex("".join(w[:5])); pid = "0x" + keccak(key).hex()
         c0 = "0x" + w[0][-40:]; c1 = "0x" + w[1][-40:]; info = int(w[5], 16)
         s24 = lambda x: x - (1 << 24) if x >= (1 << 23) else x
@@ -252,7 +252,7 @@ def main():
     jsave(os.path.join(C, "symbols.json"), symcache)
     lp = {}
     for pid, p in pools.items():
-        r = ecall(SV, sel("getSlot0(bytes32)") + pid[2:]); sp = int(r[2:66], 16) / 2 ** 96; P = sp * sp
+        r = ecall(SV, sel("getSlot0(bytes32)") + pid[2:], BT); sp = int(r[2:66], 16) / 2 ** 96; P = sp * sp
         x = y = 0.0
         for q in pos:
             if q["pool"] != pid or not q["liq"]: continue
@@ -261,7 +261,7 @@ def main():
         if p["usdg0"]: usdg = x / 1e6; stock = y / 1e18; px = 1e12 / P if P else 0   # P = token1 raw per token0 raw; USDG 6dp, stock 18dp
         else: stock = x / 1e18; usdg = y / 1e6; px = P * 1e18 / 1e6
         tick_now = int(r[2 + 64:2 + 128], 16); tick_now = tick_now - (1 << 256) if tick_now >= (1 << 255) else tick_now
-        pool_liq = int(ecall(SV, sel("getLiquidity(bytes32)") + pid[2:]), 16)
+        pool_liq = int(ecall(SV, sel("getLiquidity(bytes32)") + pid[2:], BT), 16)
         mine_liq = sum(l_ for tl_, tu_, l_ in p.get("ranges", []) if tl_ <= tick_now < tu_)
         f0 = f1 = 0   # fees accrued in the positions and not yet withdrawn: liquidity x fee growth inside the range since the position's last update
         I24 = lambda v: format(v % (1 << 256), "064x")
@@ -272,7 +272,13 @@ def main():
             L_ = int(pi[2:66], 16)
             f0 += L_ * ((int(fg[2:66], 16) - int(pi[66:130], 16)) % (1 << 256)) >> 128; f1 += L_ * ((int(fg[66:130], 16) - int(pi[130:194], 16)) % (1 << 256)) >> 128
         ou, os_ = (f0 / 1e6, f1 / 1e18) if p["usdg0"] else (f1 / 1e6, f0 / 1e18)
-        lp[p["stock"]] = {"pool": pid, "stock": stock, "usdg": usdg, "price": px, "valueUSD": stock * px + usdg, "positions": p["positions"], "feeTier": p["fee"], "isEth": p["stockAddr"].lower() == ZERO,
+        if p["fee"] < 1 << 23: fee_now = p["fee"]   # a fixed tier: what providers earn (the Swap event's fee adds Uniswap's protocol fee)
+        else:   # the hook sets the fee: the one charged on the latest fee-paying swap (senders on its exemption list pay none)
+            fee_now = None
+            for back_ in (50000, 500000, 4000000):
+                lg_ = [l for l in getlogs({"address": PM, "topics": [SW, pid]}, max(SEED_BLOCK, tip - back_), tip, 500000) if int(l["data"][2 + 64 * 5:2 + 64 * 6], 16)]
+                if lg_: fee_now = int(lg_[-1]["data"][2 + 64 * 5:2 + 64 * 6], 16); break
+        lp[p["stock"]] = {"pool": pid, "stock": stock, "usdg": usdg, "price": px, "valueUSD": stock * px + usdg, "positions": p["positions"], "feeTier": p["fee"], "feeNow": fee_now, "isEth": p["stockAddr"].lower() == ZERO,
                           "share": (min(1.0, mine_liq / pool_liq) if pool_liq else 0.0), "poolLiqUsd": None,
                           "feesOwed": {"stock": os_, "usdg": ou, "usd": os_ * px + ou}}
         if p["stockAddr"].lower() != ZERO: toks[p["stock"]] = (p["stockAddr"], 18)
@@ -355,7 +361,10 @@ def main():
     settled = sorted(act["epoch-settled"], key=lambda e: int(e["values"]["epoch"]))
     routed = sorted(act["epoch-routed"], key=lambda e: int(e["timestamp"]))
     epochs = []
-    for i, (s, r) in enumerate(zip(settled, routed), 1):
+    rby = {e["txHash"]: e for e in act["epoch-routed"]}   # each settlement routes its fees in the same transaction (16 of 16 on 3 Nov 2026)
+    pairs = [(s_, rby.get(s_["txHash"])) for s_ in settled]
+    if any(r_ is None for _, r_ in pairs): pairs = list(zip(settled, routed))
+    for i, (s, r) in enumerate(pairs, 1):
         v = r["values"]; tot = (int(v["toPol"]) + int(v["toVault"]) + int(v["teamAccrued"])) / 1e18
         st = genesis_ts + (i - 1) * epoch_days * 86400; en = st + epoch_days * 86400
         ch_eth = sum(c["eth"] for c in charters if st <= c["ts"] < en)
@@ -495,12 +504,25 @@ def main():
     reconcile("incentives_zero", "Incentives vault STANDARD, rebuilt from transfer logs", inc_now - inn, inc_now, "balance at the compile block", 1, absolute=True, unit="STANDARD")
     # forward ledger: pending = issuance + deposits + recycled exit fees - licenses - gross withdrawals - gross revocations
     sb_pts = sorted([(int(p["t"]), int(p.get("after", 0)) / 1e18, int(p.get("locked", 0)) / 1e18) for p in (sb.get("points") or []) if p.get("t")])
-    wd_ev = [(int(e["timestamp"]), int(e["values"]["gross"]) / 1e18) for e in act["withdrawn"]]
+    wd_ev = [(int(e["timestamp"]), int(e["values"]["gross"]) / 1e18) for e in act["withdrawn"] + act["revoked"]]   # the contract's 7-day buckets count revoked balances too (withdrawnOnDay; every feeWad on chain reproduced exactly, 3 Nov 2026)
     sb_c = sb.get("current") or {}; sb_dps = int(sb_c.get("driftPerSecond", 0)) / 1e18 if sb_c.get("drifting") else 0.0; sb_cap = int(sb_c.get("ceiling", 0)) / 1e18 or 1.0
+    # the stayers' cut reaches bankers a epoch late: the halves of exit and revocation fees collected in an epoch sit in the recycle buffer and
+    # stream evenly over the next one (FeesRecycled(epoch, amount) at its start; the live epoch at recycleRate). Credited per day as streamed.
+    FREC = "0xee894dd54fd65a2c69a3247565cfcf3f64c9e468076fe25a53b9510e2b22fb44"
+    rcy = jload(os.path.join(C, "recycled.json"), {"last": G - 1, "rows": {}})
+    if rcy["last"] < tip:
+        for l in getlogs({"address": H["centralBank"], "topics": [FREC]}, rcy["last"] + 1, tip, 4000000):
+            rcy["rows"][str(int(l["topics"][1], 16))] = str(int(l["data"][2:66], 16))
+        rcy["last"] = tip; jsave(os.path.join(C, "recycled.json"), rcy)
+    EPL = int(snap["bank"]["epochDays"]) * 86400; cur_ep = int(snap["bank"]["epochNumber"]); ep0_ = int(snap["bank"]["epochStart"]) - (cur_ep - 1) * EPL
+    rec_amt = {int(k_): int(v_) / 1e18 for k_, v_ in rcy["rows"].items()}; rec_amt[cur_ep] = int(snap["bank"].get("recycleRate") or 0) / 1e18 * EPL
+    for d in dl:
+        a_ = int(dt.datetime.strptime(d, "%Y-%m-%d").replace(tzinfo=dt.timezone.utc).timestamp()); b_ = min(a_ + 86400, now)
+        days[d]["stayersCut"] = sum(v_ * max(0, min(b_, ep0_ + k_ * EPL) - max(a_, ep0_ + (k_ - 1) * EPL)) / EPL for k_, v_ in rec_amt.items())
     pend = 0.0; pend_hist = {}; fee_hist = {}; rate_hist = {}; sbl_hist = {}; cen_last = (0, 0, 0); cen_hist = {}
     for i, d in enumerate(dl):
         x = days[d]
-        pend += x["issuance"] + x["deposits"] + x["exitFeeRedis"] + x["revokeFeeBurn"] - x["licBurn"] - x["wdGross"] - x["revokeGross"]
+        pend += x["issuance"] + x["deposits"] + x["stayersCut"] - x["licBurn"] - x["wdGross"] - x["revokeGross"]
         pend_hist[d] = pend
         d_end = int(dt.datetime.strptime(d, "%Y-%m-%d").replace(tzinfo=dt.timezone.utc).timestamp()) + 86400
         t_end = min(now, d_end); pd_ = (t_end - genesis_ts) // 86400   # resolution fee at the day's close, over the contract's seven protocol-day buckets
@@ -512,7 +534,7 @@ def main():
         cen_hist[d] = cen_last
     log("ledger check: pending reconstructed", round(pend), "live", round(int(snap["bank"]["totalPendingLive"]) / 1e18),
         "| issued", round(sum(days[d]["issuance"] for d in dl)), "live", round(int(snap["bank"]["cumulativeIssued"]) / 1e18))
-    reconcile("ledger", "In banks (ledger balance), rebuilt from events", pend, int(snap["bank"]["totalPendingLive"]) / 1e18, "Standard Reserve indexer, totalPendingLive", 0.005, unit="STANDARD")
+    reconcile("ledger", "In banks (ledger balance), rebuilt from events", pend, int(snap["bank"]["totalPendingLive"]) / 1e18, "Standard Reserve indexer, totalPendingLive", 0.0002, unit="STANDARD")
     reconcile("issued", "STANDARD issued to bankers, rebuilt by epoch", sum(days[d]["issuance"] for d in dl), int(snap["bank"]["cumulativeIssued"]) / 1e18,
        "Standard Reserve indexer, cumulativeIssued", 0.001, unit="STANDARD")
     reconcile("branches", "Branches, replayed from events", census[max(census)][2], int(snap["bank"]["totalBranches"]), "Standard Reserve indexer, totalBranches", 0.002)
@@ -520,14 +542,14 @@ def main():
     # license payments (license sales, a revenue stream since 3 Nov 2026) against the chain: LicensesPurchased(count, unitPrice) on the three
     # license auction contracts (genesis, the 22 Sep and the 26 Sep 2026 deployments), summed to the indexer's last license event
     LICP = "0x" + keccak(b"LicensesPurchased(uint256,uint256,uint256,uint256)").hex()
-    lcl = jload(os.path.join(C, "lic_logs.json"), {"last": G - 1, "rows": []})
+    lcl = jload(os.path.join(C, "lic_logs2.json"), {"last": G - 1, "rows": []})   # rows: [block, STANDARD paid (wei), auction contract 0 genesis, 1, 2 current]
     if lcl["last"] < tip:
-        for a_ in ("0xa45ce49303eed5846f841bfd4bac6ae8c805ec05", "0x44731eff9da8fdd30003aa7c0b324368b3dffe5e", "0x7cd3c6ec047b1a21ea65af64d7c850e6f6049015"):
+        for ci_, a_ in enumerate(("0xa45ce49303eed5846f841bfd4bac6ae8c805ec05", "0x44731eff9da8fdd30003aa7c0b324368b3dffe5e", "0x7cd3c6ec047b1a21ea65af64d7c850e6f6049015")):
             for l in getlogs({"address": a_, "topics": [LICP]}, lcl["last"] + 1, tip, 4000000):
-                lcl["rows"].append([int(l["blockNumber"], 16), str(int(l["data"][2:66], 16) * int(l["data"][66:130], 16))])
-        lcl["last"] = tip; jsave(os.path.join(C, "lic_logs.json"), lcl)
+                lcl["rows"].append([int(l["blockNumber"], 16), str(int(l["data"][2:66], 16) * int(l["data"][66:130], 16)), ci_])
+        lcl["last"] = tip; jsave(os.path.join(C, "lic_logs2.json"), lcl)
     lcut = max((int(e.get("blockNumber") or 0) for e in act["licenses-purchased"]), default=0)
-    reconcile("licenses_chain", "License payments to date, from the license auctions’ events", sum(int(a_) for b_, a_ in lcl["rows"] if b_ <= lcut) / 1e18,
+    reconcile("licenses_chain", "License payments to date, from the license auctions’ events", sum(int(r_[1]) for r_ in lcl["rows"] if r_[0] <= lcut) / 1e18,
               sum(int(e["values"]["count"]) * int(e["values"]["unitPrice"]) for e in act["licenses-purchased"]) / 1e18,
               "Standard Reserve indexer, licenses-purchased", 1e-6, unit="STANDARD")
     series = []
@@ -541,7 +563,7 @@ def main():
         row["burnBuyback"] = round(x["burn_contraction"] + x["burn_polManager"] + x["burn_sbills"], 6)   # tokens bought back and burned
         row["depositBurn"] = round(x["deposits"], 6)                                                     # deposits converted to ledger (burned), from deposited events
         row["burnOther"] = round(max(0.0, x["burn_other"] + x["burn_bank"] - x["deposits"]), 6)          # burns that are not deposits: the tax hook burning STANDARD it takes from the pool (26,801.5 lifetime to 27 Oct 2026)
-        row.update({"pending": pend_hist[d], "exitFee": fee_hist[d], "sbRate": rate_hist[d], "sbLocked": sbl_hist[d], "teamStd": tm_hist[d],
+        row.update({"stayersCut": round(x["stayersCut"], 6), "pending": pend_hist[d], "exitFee": fee_hist[d], "sbRate": rate_hist[d], "sbLocked": sbl_hist[d], "teamStd": tm_hist[d],
                     "activeCharters": cen_hist[d][0], "burnedCharters": cen_hist[d][1], "branches": cen_hist[d][2]})
         if prev and p and prev.get("price"):
             row["dPrice"] = (p - prev["price"]) * prev["float"]; row["dSupply"] = (flt - prev["float"]) * p
@@ -549,10 +571,12 @@ def main():
     # license periods
     per_len = int(snap["licenseAuction"]["AUCTION_DAY"])
     lpd = {}
+    lic_c = {r_[0]: r_[2] for r_ in lcl["rows"]}   # each period belongs to one auction contract; their day numbers restart at each deployment
     for e in sorted(act["licenses-purchased"], key=lambda e: int(e["timestamp"])):
-        k = int(e["values"]["day"]); v = e["values"]; q = lpd.setdefault(k, {"day": k, "start": int(e["timestamp"]), "sold": 0, "burned": 0.0, "close": 0.0, "sales": 0})
+        k = int(e["values"]["day"]); v = e["values"]; c_ = lic_c.get(int(e.get("blockNumber") or 0), 2)
+        q = lpd.setdefault((c_, k), {"day": k, "c": c_, "start": int(e["timestamp"]), "sold": 0, "burned": 0.0, "close": 0.0, "sales": 0})
         q["sold"] += int(v["count"]); q["burned"] += int(v["count"]) * int(v["unitPrice"]) / 1e18; q["close"] = int(v["unitPrice"]) / 1e18; q["sales"] += 1
-    lic_periods = [lpd[k] for k in sorted(lpd)]
+    lic_periods = sorted(lpd.values(), key=lambda q: q["start"])
     # stock pool market context
     pool_ctx = {}
     for s, pairs in stock_ds.items():
@@ -596,7 +620,7 @@ def main():
             "cumulativeIssued": int(snap["bank"]["cumulativeIssued"]) / 1e18, "maxSupply": int(snap["token"]["maxSupply"]) / 1e18,
             "multiplier": int(snap["bank"]["multiplierWad"]) / 1e18, "epoch": cur_epoch, "epochStart": int(snap["bank"]["epochStart"]), "epochEnd": int(snap["bank"]["epochEnd"]),
             "epochNetFlow": int(snap["tax"]["epochNetFlow"]) / 1e18, "feeSplitterEth": reserve["feeSplitterEth"], "branches": int(snap["bank"]["totalBranches"]),
-            "activeCharters": int(snap["census"]["active"]), "burnedCharters": int(snap["census"]["burned"]), "chartersMinted": int(snap["charterNft"]["nextId"]) - 1,
+            "recycleRate": int(snap["bank"].get("recycleRate") or 0) / 1e18, "activeCharters": int(snap["census"]["active"]), "burnedCharters": int(snap["census"]["burned"]), "chartersMinted": int(snap["charterNft"]["nextId"]),
             "charterPriceNow": int(snap["charterAuction"]["currentPrice"]) / 1e18, "charterLastSale": int(snap["charterAuction"]["lastSalePrice"]) / 1e18,
             "charterFloor": int(snap["charterAuction"]["dayFloorPrice"]) / 1e18, "charterSoldToday": int(snap["charterAuction"]["soldToday"]), "charterCap": int(snap["charterAuction"]["dayCap"]),
             "licensePriceNow": int(snap["licenseAuction"]["currentPrice"]) / 1e18, "licenseLastSale": int(snap["licenseAuction"]["lastSalePrice"]) / 1e18,
@@ -661,7 +685,7 @@ def main():
     pfees = extra.pool_fees(x, lp_pools, extra.LPAD["routers"])   # the reserve's pool fees, replayed swap by swap; replaces the estimate from the swap cache
     for row in series:
         if "spFee" not in row and not any(row["date"] in pfees[s_]["days"] for s_ in lp_pools): continue
-        f_ = {s_: (pfees[s_]["days"].get(row["date"]) or [0.0] * 4) for s_ in lp_pools}
+        f_ = {s_: (pfees[s_]["days"].get(row["date"]) or [0.0] * 6) for s_ in lp_pools}   # a pool with no swap that day reads zero, not the old estimate
         for s_, v_ in f_.items(): row["spFee_" + s_] = round(v_[2], 6)
         row["spFee"] = round(sum(v_[2] for v_ in f_.values()), 6); row["spFeeLpad"] = round(sum(v_[3] for v_ in f_.values()), 6)
         if all(len(v_) > 4 for v_ in f_.values()):   # volume served, exact from the replay (was each swap's USDG amount times the share at its final tick)
@@ -781,7 +805,7 @@ def main():
         if p_["tier"] < 1 << 23:
             w_ = [r_ for r_ in series[-8:-1]]; f_ = sum(r_.get("spFee_" + s_) or 0 for r_ in w_); v_ = sum(r_.get("spVolMine_" + s_) or 0 for r_ in w_)
             reconcile("served_" + s_, f"{s_ if s_ != 'ETH' else 'ETH/USDG'} volume served, last 7 days", v_, f_ / (p_["tier"] / 1e6) if f_ else None,
-                      f"its LP fees divided by the {p_['tier'] / 1e4:.2f}% fee tier", 0.005, unit="USD")
+                      f"its LP fees divided by the {p_['tier'] / 1e4:.2f}% fee tier, from the same replay (an internal check of its fee and volume accounting)", 0.005, unit="USD")
     yday = (dt.datetime.fromtimestamp(x.tip_ts, dt.timezone.utc).date() - dt.timedelta(1)).isoformat()   # complete days only
     cp = extra.counterparties(x, reg, lp_pools, "2026-10-14", yday)
     cls = extra.cpty_classes(cp, {s_: p_["tier"] for s_, p_ in lp_pools.items()}, routers=set(extra.LPAD["routers"]))
@@ -794,7 +818,7 @@ def main():
             if t_ and row.get("spVolMine_" + s_) is not None:
                 ex_ = row.get("spVolExempt_" + s_)
                 if ex_ is not None:
-                    fx_raw.append((d_, row.get(f"volFx_{s_}") or 0.0, ex_))
+                    fx_raw.append((d_, row.get(f"volFx_{s_}") or 0.0, ex_, t_, row["spVolMine_" + s_]))
                     t2_ = t_ - (row.get(f"volFx_{s_}") or 0); f_ = (row["spVolMine_" + s_] - ex_) / t2_ if t2_ else 0.0
                     row[f"volFx_{s_}"] = round(ex_, 2)
                     for k_ in ("Org", "Arb", "Bot", "Lpad"):
@@ -806,7 +830,9 @@ def main():
         for s_ in lp_pools:   # the reserve's share of chain volume is the volume its liquidity served, not the whole pool's (it shares the ETH/USDG pool)
             if row.get("chainVol_" + s_): row["volShare_" + s_] = (row.get("spVolMine_" + s_) or 0) / row["chainVol_" + s_]
         for s_, v_ in (pnl.get(d_) or {}).items(): row.update({f"lpVal_{s_}": v_["lp"], f"holdVal_{s_}": v_["hold"], f"lpCost_{s_}": v_["cost"], f"lpFees_{s_}": v_["fees"]})
-    w7_ = {r_["date"] for r_ in series[-8:-1]}; a_ = sum(c_ for d__, c_, e_ in fx_raw if d__ in w7_); e7_ = sum(e_ for d__, c_, e_ in fx_raw if d__ in w7_)
+    w7_ = {r_["date"] for r_ in series[-8:-1]}; a_ = sum(q_[1] for q_ in fx_raw if q_[0] in w7_); e7_ = sum(q_[2] for q_ in fx_raw if q_[0] in w7_)
+    reconcile("served_cp", "Volume served, last 7 days, from the swap replay", sum(q_[4] for q_ in fx_raw if q_[0] in w7_), sum(q_[3] for q_ in fx_raw if q_[0] in w7_) or None,
+              "every swap's volume at the reserve's share of liquidity at the swap's final tick (the counterparty pass)", 0.05, gate=False, unit="USD")
     reconcile("exempt_served", "Fee-exempt volume served, last 7 days, from the swap replay", e7_, a_ if a_ else None,
               "zero-fee swaps summed in the counterparty pass at each swap's final-tick share", 0.05, gate=False, unit="USD")
     # King of the Markets standings and the indexer's own launchpad fee total (the markets API allows only standardreserve.xyz in the browser)

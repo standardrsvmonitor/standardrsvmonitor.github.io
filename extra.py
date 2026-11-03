@@ -527,8 +527,15 @@ def chain_shares(x, reg, keys, sw, lq, cu, lp_pools, closes, eth_day, dates, res
                     if kk.startswith("net_"): tot[kk[4:]] += int(v)
             after[(r["id"], "_all")] = dict(tot)
         last_sp = {}
+        for r in venues:   # liquidity added before the first day shown is still in the pool: each v4 venue starts from every change before it
+            if not r["v4"]: continue
+            for dd, chg in lq.get(r["id"], {}).get("d", {}).items():
+                if dd < "2026-10-14":
+                    for rk, L in chg.items(): cum_rng[r["id"]][rk] += int(L)
+            early = [(dd, v) for dd, v in sw.get(r["id"], {}).get("d", {}).items() if dd < "2026-10-14" and v[2]]
+            if early: last_sp[r["id"]] = int(max(early)[1][2]) / 2 ** 96
         for d in dates:
-            if d < "2026-10-14": continue                 # the reserve's pools opened on 14 October
+            if d < "2026-10-14": continue                 # the reserve's pools opened on 14 October; earlier days are not shown
             ap = asset_px(sym, d)
             if ap is None: continue
             vol = {}; tvl = {}

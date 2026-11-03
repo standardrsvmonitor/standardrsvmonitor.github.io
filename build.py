@@ -54,7 +54,7 @@ SECTIONS = {
 
 "liquidity": kpis("liquidity") + '<div class="grid">' +
     panel(12, "Protocol-owned liquidity by pool", "The reserve’s position in each pool and its standing among every pool for the same asset on Robinhood Chain on the last complete "
-          "day. Volume is the volume the reserve’s own liquidity served. APR is trailing seven-day LP fees annualized over position value. Rank and venues count pools with "
+          "day. Volume is the volume the reserve’s own liquidity served. APR is LP fees over the selected range, annualized over position value. The fee is the rate the pool charged on its latest fee-paying swap. Rank and venues count pools with "
           "at least $100 of liquidity.", table("t_pools")) +
     panel(6, "Volume served by the reserve, by pool, daily", "Every swap is replayed tick by tick against every provider’s liquidity; the reserve’s part of each step’s input, the fee "
           "included, is the volume its liquidity served, valued at the swap’s price. Other providers hold part of the liquidity in some pools; the reserve’s "
@@ -64,8 +64,8 @@ SECTIONS = {
     panel(6, "LP fees by pool, daily", "LP fees earned by the reserve’s positions. Every swap is replayed from the pool’s price before it to the price after it, one "
           "initialized tick at a time, against the liquidity of every provider rebuilt from the pool’s events; the fee on each step is charged on the input token and split "
           "among the providers in range, as the pool contract does. Each swap’s fee is valued at the pool price of that swap. The ETH/USDG figure excludes Uniswap’s "
-          "0.0125% protocol fee. A change to a position settles its accrued fees to the Safe; the only one so far, the 14 Oct 2026 addition to the ETH/USDG "
-          "position, settled 0.0097 ETH and 26.00 USDG, counted on the days they accrued. Each compile reconciles the fees not yet collected, at today’s pool price, with the "
+          "0.0125% protocol fee. A change to a position settles its accrued fees to the Safe: the 14 Oct 2026 addition to the ETH/USDG "
+          "position settled 0.0097 ETH and 26.00 USDG, and the 3 Nov 2026 re-range of the BABA positions 2,614.69 USDG and 31.44 BABA, counted on the days they accrued. Each compile reconciles the fees not yet collected, at today’s pool price, with the "
           "same fees read from the positions; the difference from the sum of daily figures is the move in the pool price since each fee was earned.", chart("c_pfee"), "h_pfee") +
     panel(6, "Share of chain volume by pool, daily", "Volume served by the reserve’s liquidity as a share of all on-chain volume in the same asset, across every pool DexScreener "
           "lists against USDG or ETH.", chart("c_vshare"), "h_vshare", "p_vshare") +
@@ -126,7 +126,7 @@ SECTIONS = {
 "banks": kpis("banks") + '<div class="grid">' +
     panel(6, "STANDARD in banks, inflows and outflows, daily", "Every movement of the STANDARD held in banks; each day’s bars sum to the change in the line. In: "
           "issuance, which every branch earns automatically, STANDARD bankers deposit from their wallets, and the stayers’ cut, half of every exit and "
-          "revocation fee, paid to the bankers who stay. Out: STANDARD spent on expansion licenses, which is burned, STANDARD withdrawn by closing "
+          "revocation fee, paid to the bankers who stay as it streams out evenly over the epoch after the one it was collected in. Out: STANDARD spent on expansion licenses, which is burned, STANDARD withdrawn by closing "
           "branches (before the exit fee), and the balances of revoked charters. STANDARD in banks is ledger value, minted only when withdrawn.",
           chart("c_bank"), "h_bank") +
     panel(6, "Branches and active charters, daily", "A charter opens with one branch and licenses add up to nine more. Withdrawals and revocations destroy branches.",
@@ -139,7 +139,7 @@ SECTIONS = {
     panel(6, "Issuance multiplier and resolution fee, daily", "The multiplier scales daily issuance of 700,000 STANDARD and moves at each epoch settlement within 0.20 to 1.25. "
           "The resolution fee, the exit fee on withdrawals, rises from 2% to 60% with seven-day exit pressure.", chart("c_mult"), "h_mult") +
     panel(12, "Top bankers", "Ranked as the protocol’s own leaderboard ranks, by branches, which set each banker’s share of issuance, then by this epoch’s emissions. Share of "
-          "emissions is the banker’s part of everything issued to bankers this epoch. Names are the owners’ primary ENS names on Ethereum mainnet. Rank change compares with "
+          "emissions is the banker’s part of everything streamed to bankers this epoch, issuance and the stayers’ cut. Names are the owners’ primary ENS names on Ethereum mainnet. Rank change compares with "
           "the previous epoch.", table("t_lead") + '<button class="btn" id="lead_more"></button>', "h_lead") + '</div>',
 
 "data": '<div class="grid">' +
@@ -590,7 +590,7 @@ function renderHero(){
       <p>${fmt.usd(S_(inc))} <span>revenue, ${wl}</span> ${fmt.int(L.branches)} <span>branches</span></p></div>
     <ul class="how">
       <li><b>Token economy</b><strong>${fmt.usd(tok7)}</strong>STANDARD trading fees, charter and license sales ${W?'over ':''}${span}${cg(tok7,tokP)}.</li>
-      <li><b>Liquidity business</b><strong>${fmt.usd(pf7)}</strong>LP fees on ${fmt.usd(sv7)} of volume served, ${fmt.pct(eqd?eqn/eqd:null,0)} of chain equity volume.</li>
+      <li><b>Liquidity business</b><strong>${fmt.usd(pf7)}</strong>LP fees on ${fmt.usd(S_(paying))} of fee-paying volume, ${fmt.pct(eqd?eqn/eqd:null,0)} of chain equity volume.</li>
       <li><b>Launchpad</b><strong>${fmt.usd(lp7)}</strong>Launchpad revenue on ${fmt.usd(lv7)} of volume${cg(lp7, P_(lpp))}.</li></ul>`;
 }
 let LIVEHM = '', LIVEB = 0;
@@ -701,8 +701,8 @@ function renderBridge(){
 function renderPools(){ const {sw, wl} = win(), lpDays = sw.filter(r=>r.date>=LP0).length || 1;
   const prow = pools.map(p=>{const v=L.lp[p], c=ctx[p]||{}; return {p, v, f7:sum(sw.map(r=>r['spFee_'+p]||0)), v1:pvm(Y,p), v7:sum(sw.map(r=>pvm(r,p)))};});
   const pt = {val:sum(prow.map(x=>x.v.valueUSD||0)), f7:sum(prow.map(x=>x.f7)), v1:sum(prow.map(x=>x.v1)), v7:sum(prow.map(x=>x.v7))};
-  document.getElementById('t_pools').innerHTML = `<tr><th>Pool</th><th>Position value</th><th>Price</th><th>Fee tier</th><th>Volume, ${wl}</th><th>LP fees, ${wl}</th><th>APR</th><th>Share of in-range liquidity</th><th>Share of chain volume</th><th>Share of chain liquidity</th><th>Rank on chain</th><th>Venues</th></tr>` +
-    prow.map(({p,v,f7,v7})=>`<tr title="${Y['otherTvl_'+p]?'largest other venue '+fmt.usd(Y['otherTvl_'+p],1)+' '+Y['otherDex_'+p]:''}"><td><i style="display:inline-block;width:6px;height:6px;background:${PCOL[p]||C.muted};margin-right:.5rem"></i>${shortP(p)}</td><td>${fmt.usd(v.valueUSD)}</td><td>${pxf(v.price)}</td><td>${v.feeTier>=8388608?'session':(v.feeTier/1e4).toFixed(2)+'%'}</td><td>${fmt.usd(v7)}</td><td>${fmt.usd(f7,1)}</td><td>${v.valueUSD?fmt.pct(f7*365/lpDays/v.valueUSD,0):'–'}</td><td>${v.share!=null?fmt.pct(v.share,0):'–'}</td><td>${Y['volShare_'+p]!=null?fmt.pct(Y['volShare_'+p],0):'–'}</td><td>${Y['liqShare_'+p]!=null?fmt.pct(Y['liqShare_'+p],0):'–'}</td><td>${Y['rank_'+p]?'#'+Y['rank_'+p]:'–'}</td><td>${Y['venues_'+p]??'–'}</td></tr>`).join('') +
+  document.getElementById('t_pools').innerHTML = `<tr><th>Pool</th><th>Position value</th><th>Price</th><th>Fee</th><th>Volume, ${wl}</th><th>LP fees, ${wl}</th><th>APR, ${wl}</th><th>Share of in-range liquidity</th><th>Share of chain volume</th><th>Share of chain liquidity</th><th>Rank on chain</th><th>Venues</th></tr>` +
+    prow.map(({p,v,f7,v7})=>`<tr title="${Y['otherTvl_'+p]?'largest other venue '+fmt.usd(Y['otherTvl_'+p],1)+' '+Y['otherDex_'+p]:''}"><td><i style="display:inline-block;width:6px;height:6px;background:${PCOL[p]||C.muted};margin-right:.5rem"></i>${shortP(p)}</td><td>${fmt.usd(v.valueUSD)}</td><td>${pxf(v.price)}</td><td>${v.feeNow!=null?fmt.pct(v.feeNow/1e6,3):(v.feeTier>=8388608?'set by hook':(v.feeTier/1e4).toFixed(2)+'%')}</td><td>${fmt.usd(v7)}</td><td>${fmt.usd(f7,1)}</td><td>${v.valueUSD?fmt.pct(f7*365/lpDays/v.valueUSD,0):'–'}</td><td>${v.share!=null?fmt.pct(v.share,0):'–'}</td><td>${Y['volShare_'+p]!=null?fmt.pct(Y['volShare_'+p],0):'–'}</td><td>${Y['liqShare_'+p]!=null?fmt.pct(Y['liqShare_'+p],0):'–'}</td><td>${Y['rank_'+p]?'#'+Y['rank_'+p]:'–'}</td><td>${Y['venues_'+p]??'–'}</td></tr>`).join('') +
     `<tr class="tot"><td>Total</td><td>${fmt.usd(pt.val)}</td><td></td><td></td><td>${fmt.usd(pt.v7)}</td><td>${fmt.usd(pt.f7,1)}</td><td>${pt.val?fmt.pct(pt.f7*365/lpDays/pt.val,0):'–'}</td><td></td><td></td><td></td><td></td><td></td></tr>`;
 }
 function renderResd(){ const {W, B0} = win();
@@ -801,7 +801,7 @@ reg('liquidity', (x)=>{ document.getElementById('h_lshare').innerHTML = pools.ma
 reg('liquidity', ({Rf})=>{ const Rc = Rf.filter(r=>r.date>=LP0 && pools.some(p=>r['cpN_'+p]!=null));
   const {sw, wl} = win(), c7 = Object.fromEntries(CPK.map(k=>[k, sum(sw.map(r=>ck(r,k)))])), t7 = sum(CPK.map(k=>c7[k]));
   document.getElementById('h_cpty').innerHTML = t7 ? `organic <em>${cpShares(sw).Org}%</em> ${wl}` : '';
-  return mk(c_cpty, Rc.map(r=>dm(r.date)), [bar('Organic users', Rc.map(r=>ck(r,'Org')), C.celadon), bar('Cross-venue arbitrage', Rc.map(r=>ck(r,'Arb')), C.rose), bar('Other bots', Rc.map(r=>ck(r,'Bot')), C.sapphire), bar('Fee-exempt contract', Rc.map(r=>ck(r,'Fx')), C.grey)],
+  return mk(c_cpty, Rc.map(r=>dm(r.date)), [bar('Organic users', Rc.map(r=>ck(r,'Org')), C.celadon), bar('Cross-venue arbitrage', Rc.map(r=>ck(r,'Arb')), C.rose), bar('Other bots', Rc.map(r=>ck(r,'Bot')), C.sapphire), bar('Fee-exempt traders', Rc.map(r=>ck(r,'Fx')), C.grey)],
     {stacked:true, y:usd0, tf:usd1}); });
 reg('liquidity', ({Rf})=>{ const W = Rf.filter(r=>r.date>=LP0); document.querySelector('#p_cptymix .pt').textContent = `Counterparty mix, ${N===0?'since 14 Oct':winName()}`;
   const cpRow = (ps)=>{const q=cpShares(W, ps); return CPK.map(k=>`<td>${q?q[k]+'%':'–'}</td>`).join('');};
@@ -862,7 +862,7 @@ reg('token', ({Rf, lf, df})=>{ document.getElementById('h_burn').innerHTML = `<e
 // banks
 reg('banks', ({Rf, lf, df})=>{ document.getElementById('h_bank').innerHTML = `<em>${fmt.n(L.pending,2)}</em> in banks`;
   return mk(c_bank, lf, [bar('Issued to banks', Rf.map(r=>r.issuance||0), C.gold), bar('Deposited by bankers', Rf.map(r=>r.deposits||0), C.celadon),
-    bar('Stayers’ cut', Rf.map(r=>(r.exitFeeRedis||0)+(r.revokeFeeBurn||0)), C.violet), bar('Spent on licenses, burned', Rf.map(r=>-(r.licBurn||0)), C.grey),
+    bar('Stayers’ cut', Rf.map(r=>r.stayersCut!=null?r.stayersCut:(r.exitFeeRedis||0)+(r.revokeFeeBurn||0)), C.violet), bar('Spent on licenses, burned', Rf.map(r=>-(r.licBurn||0)), C.grey),
     bar('Withdrawn by closing branches', Rf.map(r=>-(r.wdGross||0)), C.orange), bar('Revoked charters', Rf.map(r=>-(r.revokeGross||0)), C.red),
     line('In banks', Rf.map(r=>r.pending), C.fg2, {ax:'y1'})],
     {stacked:true, zero:false, y:n0, y1:v=>fmt.n(v,1), tf:v=>fmt.sgn(v)+fmt.n(v,2), tfy1:v=>fmt.n(v,2),
@@ -1044,9 +1044,12 @@ function restore(){
   if (R0) { Object.keys(R0).forEach(k=>{if(!(k in BASE.row)) delete R0[k];}); Object.assign(R0, clone(BASE.row)); }
   CH.length = 0; CH.push(...clone(BASE.ch)); LP.length = 0; LP.push(...clone(BASE.lp)); LD = clone(BASE.ld);
 }
-async function rpc(calls){
-  const r = await fetch(RPCU, {method:'POST', headers:{'content-type':'application/json'}, body:JSON.stringify(calls.map((c,i)=>({jsonrpc:'2.0', id:i, method:c[0], params:c[1]})))});
-  const j = await r.json(), out = []; (Array.isArray(j)?j:[j]).forEach(x=>{out[x.id] = x.result;}); return out;
+async function rpc(calls){   // the public RPC rate-limits (HTTP 429, sent without CORS headers, so it surfaces as a failed fetch): retry with backoff
+  for (let k=0;;k++) { try {
+    const r = await fetch(RPCU, {method:'POST', headers:{'content-type':'application/json'}, body:JSON.stringify(calls.map((c,i)=>({jsonrpc:'2.0', id:i, method:c[0], params:c[1]})))});
+    if (!r.ok) throw new Error('HTTP '+r.status);
+    const j = await r.json(), out = []; (Array.isArray(j)?j:[j]).forEach(x=>{out[x.id] = x.result;}); return out;
+  } catch(e) { if (k>=4) throw e; await new Promise(res=>setTimeout(res, 1500*(k+1))); } }
 }
 async function logsTo(B, q){
   const out = []; for (let lo=TIP+1; lo<=B; lo+=100000) { const [r] = await rpc([['eth_getLogs', [{...q, fromBlock:'0x'+lo.toString(16), toBlock:'0x'+Math.min(B, lo+99999).toString(16)}]]]); if (!Array.isArray(r)) throw new Error('logs'); out.push(...r); } return out;
@@ -1086,7 +1089,7 @@ async function replay(s, B){
   dep.forEach(e=>add(tsd(e),'deposits',big(V(e).amount)));
   rev.forEach(e=>{const v=V(e), g=big(v.gross), fee=g-big(v.bounty)-big(v.ownerNet); add(tsd(e),'revokeFeeBurn',fee/2); add(tsd(e),'revokeGross',g); add(tsd(e),'revoked',1);});
   lic.sort((a,b)=>a.timestamp-b.timestamp).forEach(e=>{const v=V(e), c=+v.count, px=big(v.unitPrice), d=tsd(e); add(d,'licBurn',c*px); add(d,'licCount',c); f(d).licClose = px;
-    let q = LP.find(p=>p.day===+v.day); if(!q){ q={day:+v.day, start:+e.timestamp, sold:0, burned:0, close:0, sales:0}; LP.push(q);} q.sold+=c; q.burned+=c*px; q.close=px; q.sales+=1;});
+    let q = LP.find(p=>p.day===+v.day && (p.c??2)===2); if(!q){ q={day:+v.day, c:2, start:+e.timestamp, sold:0, burned:0, close:0, sales:0}; LP.push(q);} q.sold+=c; q.burned+=c*px; q.close=px; q.sales+=1;});
   cc.forEach(e=>{ if (+e.charterId > (DATA.foundingCharters||1000)) add(tsd(e),'chartersSold',1); });
   lc.forEach(l=>{const ts=lts(l), px=Number(BigInt(l.data.slice(0,66)))/1e18; add(fmt.dt(ts),'charterEth',px);
     CH.push({id:parseInt(l.topics[1]||'0x0',16), ts, eth:px, buyer:l.topics[2]?'0x'+l.topics[2].slice(-40):'', viaContract:false});});
@@ -1096,9 +1099,10 @@ async function replay(s, B){
     r.burnBuyback = (r.burn_contraction||0)+(r.burn_polManager||0)+(r.burn_sbills||0); r.depositBurn = r.deposits||0;
     r.burnOther = Math.max(0, (r.burn_other||0)+(r.burn_bank||0)-(r.deposits||0)); });
   const tNow = +s.blockTimestamp, iss = (a,b)=>{ if(b<=a) return 0; const c=Math.min(Math.max(L.epochStart,a),b); return L.baseIssuance*(BASE.L.multiplier*(c-a)+L.multiplier*(b-c))/86400; };
-  rows.forEach(r=>{const ds=Date.parse(r.date+'T00:00:00Z')/1000, a=iss(Math.max(ds,TIPTS), Math.min(ds+86400,tNow)); r.issuance=(r===R0?(BASE.row.issuance||0):0)+a; r._iss=a;});
+  rows.forEach(r=>{const ds=Date.parse(r.date+'T00:00:00Z')/1000, a=iss(Math.max(ds,TIPTS), Math.min(ds+86400,tNow)), rc=(L.recycleRate||0)*Math.max(0, Math.min(ds+86400,tNow)-Math.max(ds,TIPTS));
+    r.issuance=(r===R0?(BASE.row.issuance||0):0)+a; r._iss=a; r.stayersCut=(r===R0?(BASE.row.stayersCut||0):0)+rc; r._rec=rc;});
   if (rows.length>1) { const x=F[R0.date]||{};
-    R0.pending=(BASE.row.pending||0)+R0._iss+(x.deposits||0)+(x.exitFeeRedis||0)+(x.revokeFeeBurn||0)-(x.licBurn||0)-(x.wdGross||0)-(x.revokeGross||0); }
+    R0.pending=(BASE.row.pending||0)+R0._iss+R0._rec+(x.deposits||0)-(x.licBurn||0)-(x.wdGross||0)-(x.revokeGross||0); }
   let lv = {supply:big(st[0]), pool:big(st[1]), incentives:big(st[2]), sbills:big(st[3]), teamStd:big(st[4])};
   for (let k=rows.length-1; k>=0; k--) { const r=rows[k], x=F[r.date]||{}; Object.assign(r, lv); r.float = r.supply-r.pool-r.incentives;
     lv = {supply:lv.supply-((x.mint||0)+(x.genesisMint||0)-(x.burn||0)), pool:lv.pool-((x.poolIn||0)+(x.genesisPool||0)-(x.poolOut||0)),
@@ -1124,10 +1128,10 @@ async function goLive(){
     const b=s.bank, t=s.token, c=s.census||{}, la=s.licenseAuction, ca=s.charterAuction;
     Object.assign(L, {branches:I(b.totalBranches), multiplier:W(b.multiplierWad), epoch:I(b.epochNumber), epochStart:I(b.epochStart), epochEnd:I(b.epochEnd),
       epochNetFlow:W(s.tax.epochNetFlow), previousEpochFlow:W(b.previousEpochFlow||'0'), positiveStreak:I(b.positiveSignalStreak||'0'),
-      pending:W(b.totalPendingLive), cumulativeIssued:W(b.cumulativeIssued), cumulativeRecycled:W(b.cumulativeRecycled||'0'),
+      pending:W(b.totalPendingLive), cumulativeIssued:W(b.cumulativeIssued), cumulativeRecycled:W(b.cumulativeRecycled||'0'), recycleRate:W(b.recycleRate||'0'),
       burnedForever:W(t.burnedForever), maxSupply:W(t.maxSupply)});
     if (c.active!=null) Object.assign(L, {activeCharters:I(c.active), burnedCharters:I(c.burned)});
-    if (s.charterNft) L.chartersMinted = I(s.charterNft.nextId)-1;
+    if (s.charterNft) L.chartersMinted = I(s.charterNft.nextId);   // nextId() is the last id minted
     if (la) Object.assign(L, {licensePriceNow:W(la.currentPrice), licenseLastSale:W(la.lastSalePrice), licenseFloor:W(la.dayFloorPrice), licenseDayStart:W(la.dayStartPrice),
       licenseSoldToday:I(la.soldToday), licenseCap:I(la.dayCap), licenseRemaining:I(la.remainingToday||'0')});
     if (ca) Object.assign(L, {charterPriceNow:W(ca.currentPrice), charterLastSale:W(ca.lastSalePrice), charterFloor:W(ca.dayFloorPrice), charterDayStart:W(ca.dayStartPrice),
@@ -1140,7 +1144,7 @@ async function goLive(){
       L.sbills.rate=Math.min(cap, W(q.rate)+dps*Math.max(0, I(s.blockTimestamp)-(q.rateUpdatedAt||I(s.blockTimestamp)))); L.sbills.locked=W(q.locked); L.sbills.principal=W(q.principal||q.locked);
       if(q.floor) L.sbills.floor=W(q.floor); if(q.ceiling) L.sbills.ceiling=W(q.ceiling); }
     if (dx && dx[0] && dx[0].priceUsd) { const p=dx[0]; L.price=parseFloat(p.priceUsd); L.priceChange24h=(p.priceChange||{}).h24; L.vol24=(p.volume||{}).h24; L.poolLiqUsd=(p.liquidity||{}).usd; }
-    if (A && TIP) { try { await replay(s, I(s.blockNumber)); } catch(e) { restoreRows(); console.warn('replay unavailable', e); } }
+    if (A && TIP) { try { await replay(s, I(s.blockNumber)); } catch(e) { restore(); console.warn('replay unavailable; the page keeps its compiled figures until the next try', e); return; } }
     if (lb && Array.isArray(lb.bankers)) {
       const ens = {}; (BASE.ld.rows||[]).forEach(r=>{ens[r.owner]=r.ens;});
       const B_ = x=>BigInt(x||'0'), bk = lb.bankers.slice().sort((a,b)=>(+b.branches||0)-(+a.branches||0) || Number(B_(b.epochEmissions)-B_(a.epochEmissions)) || Number(B_(b.lifetimeEmissions)-B_(a.lifetimeEmissions)));

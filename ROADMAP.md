@@ -115,3 +115,7 @@ Owners may reorder, add or strike items at any time.
   14 Oct 14:55 UTC 0x4dbd3fe6, 0xce5be7b4, 0xc348f695, 0x6353e3ec exempted; 19:50 the last three removed; 21 Oct 05:52 0x922ec650 added;
   30 Oct 14:08 0xce5be7b4, 0xc348f695 (the largest bot executor) and 0x6353e3ec exempted again. Since then most stock-pool volume pays
   nothing: 2 Nov $5.21M of $6.45M served was fee-exempt and LP fees were $727 (27 to 29 Oct averaged $6,358 a day).
+- 3 Nov 2026: the swap replay keeps a sixth daily figure, the volume served to senders on the hook's fee-exemption list (fee 0), cache
+  `pool_fees4.json` (rebuilt from the seeding blocks in 607 s, 0 liquidity mismatches, every earlier figure identical to `pool_fees3`).
+  The volume chart's headline is the volume that paid the fee; the counterparty mix takes its fee-exempt class from the replay and scales
+  the sampled classes to the rest; watch item `exempt_served` compares the replay with the counterparty pass (0.08% apart on 3 Nov).

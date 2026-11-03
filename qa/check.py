@@ -71,8 +71,7 @@ try:
        gm("LP fees")[1])
     eq("launchpad revenue, 30d", kv("revenue", "Launchpad revenue, 30d"), kv("launchpad", "Launchpad revenue, 30d"), gm("Launchpad revenue")[1])
     eq("charter sales, 30d", kv("revenue", "Charter sales, 30d"), gm("Charter sales")[1])
-    eq("volume served, 30d", kv("liquidity", "Volume served, 30d"), em("liquidity", "Volume served by the reserve, by pool, daily"), row("liquidity", "t_pools", "Total")[4],
-       gm("Volume served by the reserve")[1])
+    eq("volume served, 30d", kv("liquidity", "Volume served, 30d"), row("liquidity", "t_pools", "Total")[4], gm("Volume served by the reserve")[1])
     eq("launchpad volume, 30d", kv("launchpad", "Launchpad volume, 30d"), gm("Launchpad trading volume")[1])
     eq("organic share", kv("liquidity", "Organic share of volume"), em("liquidity", "Pool volume by counterparty, daily"), row("liquidity", "t_cpty", "All pools")[1])
     eq("LP fee APR", kv("liquidity", "LP fee APR"), row("liquidity", "t_pools", "Total")[6])
@@ -113,6 +112,8 @@ try:
     for nm, a, b in (("revenue, 30d", usd(tr + pf + sl + lp + ch + li), kv("revenue", "Revenue, 30d")), ("STANDARD trading fees, 30d", usd(tr), kv("revenue", "STANDARD trading fees, 30d")),
                      ("LP fees, 30d", usd(pf), kv("revenue", "LP fees, 30d")), ("launchpad revenue, 30d", usd(lp), kv("revenue", "Launchpad revenue, 30d")),
                      ("charter sales, 30d", usd(ch), kv("revenue", "Charter sales, 30d")),
+                     ("volume served that paid the pool fee, 30d", usd(sum((r["spVolMine"] if r.get("spVolMine") is not None else (r.get("spVol") or 0)) - (r.get("spVolExempt") or 0) for r in s7)),
+                      em("liquidity", "Volume served by the reserve, by pool, daily")),
                      ("launchpad volume, 30d", usd(sum((r.get("lpadSafe") or 0) / 0.007 for r in s7)), kv("launchpad", "Launchpad volume, 30d")),
                      ("revenue by destination, trailing 30 days (the page opens on 30D)", usd(sum((r.get("tradingFeeEth") or 0) * eth(r) + (r.get("spFee") or 0) + (r.get("stdLpFee") or 0) + (r.get("lpadSafe") or 0) * 5 / 7
                       + (r.get("charterEth") or 0) * eth(r) + lic(r) for r in S[-30:])), em("revenue", "Revenue by destination, trailing 30 days")),

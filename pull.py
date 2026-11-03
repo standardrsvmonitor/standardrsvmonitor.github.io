@@ -667,6 +667,9 @@ def main():
         if all(len(v_) > 4 for v_ in f_.values()):   # volume served, exact from the replay (was each swap's USDG amount times the share at its final tick)
             for s_, v_ in f_.items(): row["spVolMine_" + s_] = round(v_[4], 6)
             row["spVolMine"] = round(sum(v_[4] for v_ in f_.values()), 6)
+        if all(len(v_) > 5 for v_ in f_.values()):   # of it, volume from senders on the hook's fee-exemption list (fee 0), the same replay
+            for s_, v_ in f_.items(): row["spVolExempt_" + s_] = round(v_[5], 6)
+            row["spVolExempt"] = round(sum(v_[5] for v_ in f_.values()), 6)
     closes = extra.pool_closes(x, {**{pid_: SEED_BLOCK for pid_ in pools}, STD_POOL: G})
     # STANDARD's daily close: the protocol pool's own price after the day's last trade, at Coinbase's ETH close, the same basis as the live
     # price (DexScreener reads that pool's price). GeckoTerminal's close is the last trade's execution price with the 1% pool fee in it, so it
@@ -783,17 +786,29 @@ def main():
     cp = extra.counterparties(x, reg, lp_pools, "2026-10-14", yday)
     cls = extra.cpty_classes(cp, {s_: p_["tier"] for s_, p_ in lp_pools.items()}, routers=set(extra.LPAD["routers"]))
     lpad, lpad_held = extra.launchpad(x, lp_pools, closes, eth_day)
+    fx_raw = []   # (date, fee-exempt volume from the counterparty pass, the replay's), per pool and day
     for row in series:
         d_ = row["date"]; row.update({k_: v_ for k_, v_ in (shares.get(d_) or {}).items()}); row.update(cls.get(d_, {})); row.update(lpad.get(d_, {}))
-        for s_ in lp_pools:   # counterparty classes keep their shares and sum to the exact volume served
+        for s_ in lp_pools:   # counterparty classes sum to the exact volume served: fee-exempt is the replay's own figure, the sampled classes keep their shares of the rest
             t_ = sum(row.get(f"vol{k_}_{s_}") or 0 for k_ in ("Org", "Arb", "Bot", "Fx"))
             if t_ and row.get("spVolMine_" + s_) is not None:
-                f_ = row["spVolMine_" + s_] / t_
-                for k_ in ("Org", "Arb", "Bot", "Fx", "Lpad"):
-                    if row.get(f"vol{k_}_{s_}") is not None: row[f"vol{k_}_{s_}"] = round(row[f"vol{k_}_{s_}"] * f_, 2)
+                ex_ = row.get("spVolExempt_" + s_)
+                if ex_ is not None:
+                    fx_raw.append((d_, row.get(f"volFx_{s_}") or 0.0, ex_))
+                    t2_ = t_ - (row.get(f"volFx_{s_}") or 0); f_ = (row["spVolMine_" + s_] - ex_) / t2_ if t2_ else 0.0
+                    row[f"volFx_{s_}"] = round(ex_, 2)
+                    for k_ in ("Org", "Arb", "Bot", "Lpad"):
+                        if row.get(f"vol{k_}_{s_}") is not None: row[f"vol{k_}_{s_}"] = round(row[f"vol{k_}_{s_}"] * f_, 2)
+                else:
+                    f_ = row["spVolMine_" + s_] / t_
+                    for k_ in ("Org", "Arb", "Bot", "Fx", "Lpad"):
+                        if row.get(f"vol{k_}_{s_}") is not None: row[f"vol{k_}_{s_}"] = round(row[f"vol{k_}_{s_}"] * f_, 2)
         for s_ in lp_pools:   # the reserve's share of chain volume is the volume its liquidity served, not the whole pool's (it shares the ETH/USDG pool)
             if row.get("chainVol_" + s_): row["volShare_" + s_] = (row.get("spVolMine_" + s_) or 0) / row["chainVol_" + s_]
         for s_, v_ in (pnl.get(d_) or {}).items(): row.update({f"lpVal_{s_}": v_["lp"], f"holdVal_{s_}": v_["hold"], f"lpCost_{s_}": v_["cost"], f"lpFees_{s_}": v_["fees"]})
+    w7_ = {r_["date"] for r_ in series[-8:-1]}; a_ = sum(c_ for d__, c_, e_ in fx_raw if d__ in w7_); e7_ = sum(e_ for d__, c_, e_ in fx_raw if d__ in w7_)
+    reconcile("exempt_served", "Fee-exempt volume served, last 7 days, from the swap replay", e7_, a_ if a_ else None,
+              "zero-fee swaps summed in the counterparty pass at each swap's final-tick share", 0.05, gate=False, unit="USD")
     # King of the Markets standings and the indexer's own launchpad fee total (the markets API allows only standardreserve.xyz in the browser)
     MK = "https://markets.standardreserve.xyz/v1/"
     ks_, kp_ = get(MK + "pilot/summary", tries=2), get(MK + "pilot/pool?limit=1", tries=2)

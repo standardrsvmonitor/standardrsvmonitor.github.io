@@ -58,7 +58,9 @@ SECTIONS = {
           "at least $100 of liquidity.", table("t_pools")) +
     panel(6, "Volume served by the reserve, by pool, daily", "Every swap is replayed tick by tick against every provider’s liquidity; the reserve’s part of each step’s input, the fee "
           "included, is the volume its liquidity served, valued at the swap’s price. Other providers hold part of the liquidity in some pools; the reserve’s "
-          "share is in the pools table.", chart("c_vol"), "h_vol") +
+          "share is in the pools table. The headline is the volume that paid the pool fee. The stock pools’ hook keeps a fee-exemption list (FeeExemptSet): "
+          "swaps sent by listed contracts pay no fee and show as fee-exempt traders. Its owner listed four contracts on 14 Oct 2026, removed three of them the "
+          "same day, added a fifth on 21 Oct and listed the three again on 30 Oct, an arbitrage executor among them.", chart("c_vol"), "h_vol") +
     panel(6, "LP fees by pool, daily", "LP fees earned by the reserve’s positions. Every swap is replayed from the pool’s price before it to the price after it, one "
           "initialized tick at a time, against the liquidity of every provider rebuilt from the pool’s events; the fee on each step is charged on the input token and split "
           "among the providers in range, as the pool contract does. Each swap’s fee is valued at the pool price of that swap. The ETH/USDG figure excludes Uniswap’s "
@@ -422,6 +424,7 @@ const burnLedger = (r)=>(r.licBurn||0)+(r.exitFeeBurn||0)+(r.revokeFeeBurn||0), 
 const pbOf = (r)=>r&&r.reserveUsd&&r.mcFloat ? r.mcFloat/r.reserveUsd : null;
 const bkOf = (r)=>r&&r.reserveUsd&&r.float ? r.reserveUsd/r.float : null;
 const served = (r)=>r.spVolMine!=null?r.spVolMine:(r.spVol||0);
+const paying = (r)=>served(r)-(r.spVolExempt||0);   // volume served that paid the pool fee: senders on the stock pools' fee-exemption list pay none
 const GROUPS = [['team','Team wallet',C.rose],['bankers','Bankers',C.gold],['sbills','S-Bill holders',C.celadon],['active','Frequent traders',C.sapphire],['launch','Launch-epoch buyers',C.silver],['other','Other wallets',C.grey]];
 const Sh = S.filter(r=>r.date<=L.date);
 const ep2 = E.length>1 ? fmt.dt(E[1].start) : '';
@@ -513,7 +516,7 @@ function renderKpis(){ derive();
       {l:'Capital in pools', v:fmt.usd(poolLiq), c:{t:fmt.pct(poolLiq/L.reserve.totalUsd,0)+' of reserve', c:'nt'}, sp:lvl(r=>{const q=(r.reserveParts||{}).lp; return q?sum(Object.values(q)):null;}), col:C.blue},
       {l:`LP fees, ${wl}`, v:fmt.usd(pf7), c:chg(pf7, pfP, {pol:1}), sp:rollW(r=>r.spFee||0), col:C.blue},
       {l:'LP fee APR', v:fmt.pct(poolLiq?pf7*365/lpDays/poolLiq:null,0), s:wl, sp:rollW(r=>r.spFee||0), col:C.blue, tip:'LP fees over the selected window, annualized, over the capital in the reserve’s pools.'},
-      {l:`Volume served, ${wl}`, v:fmt.usd(S_(served)), c:chg(S_(served), P_(served), {pol:1}), sp:rollW(served), col:C.blue},
+      {l:`Volume served, ${wl}`, v:fmt.usd(S_(served)), c:chg(S_(served), P_(served), {pol:1}), s:S_(served)?`${fmt.pct(S_(r=>r.spVolExempt||0)/S_(served),0)} fee-exempt`:'', sp:rollW(served), col:C.blue},
       {l:'Share of chain equity volume', v:fmt.pct(eqShare(sw),0), c:chg(eqShare(sw), pw?eqShare(pw):null, {pp:true, pol:1}), s:wl, sp:rollR(r=>sum(stockPools.map(p=>r['spVolMine_'+p]??r['spVol_'+p]??0)), r=>sum(stockPools.map(p=>r['chainVol_'+p]||0))), col:C.teal},
       {l:'Organic share of volume', v:(cpShares(sw)||{}).Org!=null?cpShares(sw).Org+'%':'–', c:chg(orgS(sw), pw?orgS(pw):null, {pp:true, pol:1}), s:wl, sp:rollR(r=>ck(r,'Org'), r=>sum(CPK.map(k=>ck(r,k)))), col:C.green},
     ],
@@ -785,9 +788,9 @@ reg('revenue', ({Rf, lf, df})=>{ const v = prrOf(Y); document.getElementById('h_
 
 // liquidity
 reg('liquidity', ()=>{ renderPools(); return null; });
-reg('liquidity', ({Rf})=>{ { const {sw, wl} = win(); document.getElementById('h_vol').innerHTML = `<em>${fmt.usd(sum(sw.map(served)))}</em> ${wl}`; } Rf = Rf.filter(r=>r.date>=LP0);
-  return mk(c_vol, Rf.map(r=>dm(r.date)), pools.map(p=>bar(shortP(p), Rf.map(r=>pvm(r,p)), PCOL[p])), {stacked:true, y:usd0, tf:usd1,
-    footer:i=>`total ${fmt.usd(served(Rf[i[0].dataIndex]),1)}`}); });
+reg('liquidity', ({Rf})=>{ { const {sw, wl} = win(); document.getElementById('h_vol').innerHTML = `<em>${fmt.usd(sum(sw.map(paying)))}</em> paying fees, ${wl}`; } Rf = Rf.filter(r=>r.date>=LP0);
+  return mk(c_vol, Rf.map(r=>dm(r.date)), [...pools.map(p=>bar(shortP(p), Rf.map(r=>Math.max(0, pvm(r,p)-(r['spVolExempt_'+p]||0))), PCOL[p])), bar('Fee-exempt traders', Rf.map(r=>r.spVolExempt||0), alpha(C.sand,.45))],
+    {stacked:true, y:usd0, tf:usd1, footer:i=>`total ${fmt.usd(served(Rf[i[0].dataIndex]),1)}`}); });
 reg('liquidity', ({Rf})=>{ { const {sw, wl} = win(); document.getElementById('h_pfee').innerHTML = `<em>${fmt.usd(sum(sw.map(r=>r.spFee||0)))}</em> ${wl}`; } Rf = Rf.filter(r=>r.date>=LP0);
   return mk(c_pfee, Rf.map(r=>dm(r.date)), pools.map(p=>bar(shortP(p), Rf.map(r=>r['spFee_'+p]||0), PCOL[p])), {stacked:true, y:usd0, tf:usd1, footer:i=>`total ${fmt.usd(Rf[i[0].dataIndex].spFee||0,1)}`}); });
 const LP0 = '2026-10-14';
@@ -988,6 +991,7 @@ const API_FIELDS = [
   ['charterSalesUsd', 'Charter auction proceeds, USD', chs],
   ['licenseSalesUsd', 'Ledger STANDARD paid for expansion licenses (burned), at the day’s close less the day’s resolution fee, USD', lic],
   ['volumeServedUsd', 'Volume served by the reserve’s own liquidity, USD', served],
+  ['volumeServedFeeExemptUsd', 'Of it, volume from senders on the stock pools’ fee-exemption list, who pay no fee, USD', r=>r.spVolExempt||0],
   ['poolVolumeUsd', 'All volume in the reserve’s pools, USD', r=>r.spVol||0],
   ['launchpadRoutedLpFeesUsd', 'LP fees from swaps executed by the launchpad routers, USD (a floor)', r=>r.spFeeLpad||0],
   ['branches', 'Branches open at the day’s end', r=>r.branches],

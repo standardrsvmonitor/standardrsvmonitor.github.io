@@ -674,7 +674,7 @@ def pool_fees(x, lp_pools, routers=()):
     volume the reserve's liquidity served (its share of each step's input, fee included, at the swap's price),
     the fees accrued and not yet collected per position (to reconcile with the positions), and the count of swaps whose reported liquidity
     differed from the replay's."""
-    c = x.jl("pool_fees3.json", {}); ids = {int(i) for i in x.pos_ids} | set(x.jl("positions.json", {"ids": []})["ids"]); rt = {r.lower() for r in routers}
+    c = x.jl("pool_fees4.json", {}); ids = {int(i) for i in x.pos_ids} | set(x.jl("positions.json", {"ids": []})["ids"]); rt = {r.lower() for r in routers}
     out = {}
     for s, p in lp_pools.items():
         pid = p["pool"]; e = c.get(pid); logs = None
@@ -701,8 +701,8 @@ def pool_fees(x, lp_pools, routers=()):
                         else: mine[salt] = [tl, tu, dl]
                     continue
                 if k not in (x.SW, DONATE) or sp is None: continue
-                d = day(x.T(b)); row = days.setdefault(d, [0.0, 0.0, 0.0, 0.0, 0.0])
-                if len(row) < 5: row.append(0.0)   # [fees currency0, fees currency1, fees USD, launchpad-routed fees USD, volume served USD]
+                d = day(x.T(b)); row = days.setdefault(d, [0.0] * 6)
+                if len(row) < 6: row += [0.0] * (6 - len(row))   # [fees currency0, fees currency1, fees USD, launchpad-routed fees USD, volume served USD, of it fee-exempt USD]
                 if k == DONATE:
                     a0, a1 = int(w[0], 16), int(w[1], 16); m_ = sum(ml for tl, tu, ml in mine.values() if tl <= tick < tu)
                     if L and m_:
@@ -742,7 +742,9 @@ def pool_fees(x, lp_pools, routers=()):
                 sp, tick = S1, evT
                 if L != evL: e["mismatch"] += 1; L = evL
                 P = (S1 / 2 ** 96) ** 2
-                if srv[0] or srv[1]: row[4] += (srv[0] + srv[1] / P) / 1e6 if p["usdg0"] else (srv[0] * P + srv[1]) / 1e6
+                if srv[0] or srv[1]:
+                    v_ = (srv[0] + srv[1] / P) / 1e6 if p["usdg0"] else (srv[0] * P + srv[1]) / 1e6; row[4] += v_
+                    if fee == 0: row[5] += v_   # a sender on the pool hook's fee-exemption list (FeeExemptSet): served, no fee
                 if got[0] or got[1]:
                     usd = (got[0] + got[1] / P) / 1e6 if p["usdg0"] else (got[0] * P + got[1]) / 1e6
                     row[0] += got[0]; row[1] += got[1]; row[2] += usd
@@ -754,7 +756,7 @@ def pool_fees(x, lp_pools, routers=()):
         out[s] = {"days": e["days"], "uncollected": acc_, "mismatch": e["mismatch"],
                   "collected": [sum(v[0] for v in e["collected"].values()), sum(v[1] for v in e["collected"].values())]}
         x.log("pool fees", s, "uncollected raw", [round(v_) for v_ in acc_], "liquidity mismatches", e["mismatch"])
-    x.js("pool_fees3.json", c)
+    x.js("pool_fees4.json", c)
     return out
 
 

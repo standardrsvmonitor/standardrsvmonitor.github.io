@@ -155,7 +155,14 @@ def main():
     log("tip", tip, "team wallet", H["teamWallet"])
 
     # ---------- indexer ----------
-    home = get(IX + f"home?chainId={CHAIN}"); snap = home["snapshot"]
+    # the leaderboard is read beside the snapshot, not after the log scans: read 34 minutes later on 4 Nov 2026, it had dropped charter 594's
+    # branch (withdrawn at block 105,899,900) and the Top bankers headline read 4,307 against the snapshot's 4,308. Re-read the pair until it agrees.
+    for i_ in range(4):
+        home = get(IX + f"home?chainId={CHAIN}"); snap = home["snapshot"]
+        lbd = get(IX + f"leaderboard?chainId={CHAIN}")
+        lb_br = sum(int(r.get("branches", 0)) for r in lbd.get("bankers", []))
+        if lb_br == int(snap["bank"]["totalBranches"]): break
+        log("leaderboard", lb_br, "branches against the snapshot's", snap["bank"]["totalBranches"], "re-reading"); time.sleep(30)
     H["taxHook"] = home["contracts"]["taxHook"]   # holds the live epoch's trading fees until they are routed
 
     # ---------- balances, read at one block; the transfer log and indexer events below are cut at the same block ----------
@@ -640,7 +647,7 @@ def main():
             "charterHalfLife": int(snap["charterAuction"].get("decayHalfLife", 7200)) / 3600, "licenseHalfLife": int(snap["licenseAuction"].get("decayHalfLife", 7200)) / 3600,
             "accruedEth": live_acc, "taxHookEth": bal.get("taxHook", {}).get("ETH", 0), "mStepUp": int(snap["bank"]["M_STEP_UP_WAD"]) / 1e18, "mStepDown": int(snap["bank"]["M_STEP_DOWN_WAD"]) / 1e18, "mMin": int(snap["bank"]["M_MIN_WAD"]) / 1e18, "mMax": int(snap["bank"]["M_MAX_WAD"]) / 1e18}
     # ---------- top bankers (indexer leaderboard) with ENS primary names from Ethereum mainnet ----------
-    lbd = get(IX + f"leaderboard?chainId={CHAIN}")
+    # lbd: read with the snapshot, above
     # ranked as the protocol's own leaderboard ranks: by branches, which set each banker's share of issuance, then this epoch's emissions
     bankers = sorted(lbd.get("bankers", []), key=lambda r: (-int(r.get("branches", 0)), -int(r.get("epochEmissions", 0)), -int(r.get("lifetimeEmissions", 0))))
     tot_ep = sum(int(r.get("epochEmissions", 0)) for r in bankers) or 1

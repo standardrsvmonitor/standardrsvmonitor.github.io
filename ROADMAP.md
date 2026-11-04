@@ -146,3 +146,8 @@ Owners may reorder, add or strike items at any time.
   (launch fees, 0.0005 ETH a launch) shows in its holdings and is not counted as revenue (owner decision pending).
 - Open: launchpad-routed LP fees remain a floor; matching reserve-pool swaps to Trade events by transaction would make them exact
   (creator buys in launch transactions, 1,271 swaps, and trades through other routers are missed).
+- 4 Nov 2026: the indexer's `home` snapshot is near-live, but its `leaderboard` is cached for about a minute and carries its own `asOfBlock`.
+  `pull.py` read the leaderboard after the log scans, 34 minutes after the snapshot. Charter 594 (one branch, owner 0x4a69…9605) was
+  withdrawn in between, at block 105,899,900 (tx 0xb337…9b1d, NFT burned), so the Top bankers headline read 4,307 while the snapshot read
+  4,308 and the gate failed. The two are now read together, and the pair is re-read until their branch totals agree.
+  Charter ownership in the per-banker replay is still the creator's; that has matched so far.

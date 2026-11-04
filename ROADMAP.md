@@ -176,3 +176,8 @@ Owners may reorder, add or strike items at any time.
   on 9 Nov). The first backfill took about 20 minutes; later runs read all v4 venues in one list-filtered query per 100 pools.
 - Custodial pool balances were read at the compile block after the v4 scans and a failed read was stored as 0; after a long backfill the
   compile block's state was gone and 25 of 34 pools read 0 (liqShare_SPCX 32 on 14 Oct). They are now read first, and a failed read stops the run.
+- 4 Nov 2026: the indexer's `home` snapshot is near-live, but its `leaderboard` is cached for about a minute and carries its own `asOfBlock`.
+  `pull.py` read the leaderboard after the log scans, 34 minutes after the snapshot. Charter 594 (one branch, owner 0x4a69…9605) was
+  withdrawn in between, at block 105,899,900 (tx 0xb337…9b1d, NFT burned), so the Top bankers headline read 4,307 while the snapshot read
+  4,308 and the gate failed. The two are now read together, and the pair is re-read until their branch totals agree.
+  Charter ownership in the per-banker replay is still the creator's; that has matched so far.

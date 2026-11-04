@@ -27,6 +27,10 @@ Owners may reorder, add or strike items at any time.
 - [ ] **Venue discovery on chain.** The "share of chain volume" and "share of chain liquidity" panels start from DexScreener's pair list.
   Discover every pool holding SPCX, SKHY, BABA or ETH against USDG or WETH from PoolManager Initialize events and pool-factory events
   instead, and keep DexScreener only as a cross-check. Done: no aggregator in the venue scan.
+- [ ] **POL buyback ETH that routing did not send.** On 4 Nov 2026 the POL buyback held 275.86 ETH against 0.046 ETH left from the
+  477.05 ETH routed to it (it spent 477.0 ETH in 79 ticks of 6 ETH, one of 9). No event log on the contract, the fee splitter, the team,
+  reserve or owner Safes shows the source; the public RPC has no trace or archive methods and the explorer is behind Cloudflare. Watch
+  `routed_pol` shows the gap. Find the source (a trace-capable RPC, or the deployment transaction) and say in the routed ETH note what it is.
 - [ ] **Outage behaviour.** When the indexer, an API or the RPC fails mid-pull, the pull must fail loudly (and the gate keep the last good
   page) rather than publish partial data. Add a test that simulates each source failing.
 
@@ -146,3 +150,13 @@ Owners may reorder, add or strike items at any time.
   (launch fees, 0.0005 ETH a launch) shows in its holdings and is not counted as revenue (owner decision pending).
 - Open: launchpad-routed LP fees remain a floor; matching reserve-pool swaps to Trade events by transaction would make them exact
   (creator buys in launch transactions, 1,271 swaps, and trades through other routers are missed).
+- Routed ETH by use (4 Nov 2026): `extra.routed_use` follows every settlement's routed ETH and the genesis seed (111.72 ETH to each vault)
+  to its use. The reserve Safe sold 1,682.3 ETH for 4.25M USDG in five swaps (2, 13, 14 Oct), paid 2.55M USDG to 0x3cf569a9 for stock
+  tokens delivered by 0x8aeaca1e on the same days (3,461.7 SPCX, 6,233.8 SKHY, 8,698.2 BABA), and has bought none since 14 Oct. The
+  contraction vault's 85 buybacks burned 5.04M STANDARD for 456.7 ETH. The POL buyback sends every STANDARD it buys to the Incentives vault,
+  which holds nothing else (gate `routed_incentives` exact); the vault paid 1.5M (1 Oct) and 250K (30 Oct) to the S-Bill premium budget,
+  1.0M to branch claims (0x6FfC470f) and 89.5K to branch top-ups (0x4a97f28A), named in the site bundle, and 40,179 to one wallet. The
+  protocol's S-Bill page says bought-back tokens top up the budget each epoch; the chain shows two top-ups in eleven epochs.
+- Beans's "King of the Markets" share chart (4 Nov 2026) counts only Uniswap v4 stock/USDG pools as Robinhood Chain trading; our venue
+  data reproduces it (SKHY 98.9%, SPCX 88.2% for the week to 2 Nov). The other venues are real trading (the Uniswap v3 SPCX/USDG pool's own
+  Swap events match our flow method to the dollar on 2 Nov; 287 of its 11,488 transactions also touched the reserve pool).

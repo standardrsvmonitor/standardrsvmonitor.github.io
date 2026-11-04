@@ -79,7 +79,7 @@ try:
     eq("launchpad fees, to date", rx(r"of (\S+) fees", (kpi("launchpad", "Launchpad revenue, to date") or [""] * 3)[2]), em("launchpad", "Launchpad fees by recipient, daily"))
     kp = T["launchpad"]["blocks"].get("kotm_pool", [])
     eq("reward pool fees", rx(r"(\S+) from fees", (kpi("launchpad", "Reward pool") or [""] * 3)[2]), kp[kp.index("Reward pool share of fees, 20%") + 1] if "Reward pool share of fees, 20%" in kp else None)
-    eq("capital in pools", kv("liquidity", "Capital in pools"), kv("reserve", "In pools"), row("liquidity", "t_pools", "Total")[1])
+    eq("capital in pools", kv("liquidity", "Capital in pools"), kv("reserve", "In pools"), row("liquidity", "t_pools", "Total")[1], em("liquidity", "Capital in pools by pool, daily"))
     eq("branches", kv("overview", "Branches"), kv("banks", "Branches"), gm("Branches")[1], em("overview", "Branches and active charters, daily"), em("banks", "Branches and active charters, daily"),
        rx(r"([\d,]+) branches", head("banks", "Top bankers")))
     eq("active charters", kv("banks", "Active charters"), gm("Active charters")[1], rx(r"([\d,]+) charters", head("overview", "Branches and active charters, daily")),
@@ -93,6 +93,16 @@ try:
     eq("STANDARD in wallets", kv("token", "In wallets"), em("token", "STANDARD supply composition, daily"), br[br.index("= In wallets") + 1] if "= In wallets" in br else None)
     eq("free float", kv("token", "Free float"), br[br.index("= Free float") + 1] if "= Free float" in br else None)
     num = lambda s: float(re.sub(r"[^\d.]", "", s)) * (1e6 if s.endswith("M") else 1e3 if s.endswith("K") else 1)
+    # the supply bar against the cap: one decimal of a million, so each figure is compared with the tile or bridge row at that rounding
+    sa = T["token"]["blocks"].get("salloc", []); sv = lambda k: sa[sa.index(k) + 1] if k in sa else None
+    near = lambda a, b, tol=0.051e6: a is not None and b is not None and abs(num(a.replace("−", "")) - num(b.replace("−", ""))) <= tol
+    for k_, ref_ in (("In wallets", kv("token", "In wallets")), ("In banks", kv("banks", "In banks")), ("Burned", kv("token", "Burned")),
+                     ("Protocol liquidity", br[br.index("− Protocol liquidity") + 1] if "− Protocol liquidity" in br else None),
+                     ("Incentives vault", br[br.index("− Incentives vault") + 1] if "− Incentives vault" in br else None)):
+        add("consistency", f"supply against the cap, {k_.lower()}", near(sv(k_), ref_), f"{sv(k_)} vs {ref_}")
+    tot_ = sum(num(sv(k)) for k in ("Protocol liquidity", "In wallets", "Incentives vault", "In banks", "Burned", "Unissued") if sv(k))
+    add("consistency", "supply against the cap sums to the 1B cap", abs(tot_ - 1e9) <= 0.31e6, f"{tot_:,.0f}")
+    eq("circulating supply", em("token", "STANDARD supply, daily"), br[br.index("= Circulating supply") + 1] if "= Circulating supply" in br else None)
     P = T["liquidity"]["tables"]["t_pools"]
     for col, nm in ((1, "position value"), (4, "volume, 30d"), (5, "LP fees, 30d")):
         rows_ = [num(r[col]) for r in P[1:-1]]; tot = num(P[-1][col])
@@ -104,6 +114,13 @@ except Exception as e:
 
 # ---------------------------------------------------------------- recompute from dash.json
 L = D["live"]; S = [r for r in D["series"] if r["date"] < L["date"]]; s7 = S[-30:]   # the page's default window is 30 days
+try:
+    ru_ = sum(r.get("ruIn", 0) for r in s7)
+    add("recompute", "routed ETH by use, 30d headline", em("revenue", "Routed ETH by use, trailing 30 days") == f"{ru_:,.1f}", f"{em('revenue', 'Routed ETH by use, trailing 30 days')} vs {ru_:,.1f}")
+    ie_ = [e for e in D["epochs"] if e.get("issued") is not None][-1]; v_ = ie_["issued"]
+    add("recompute", "issuance in the last settled epoch", em("token", "STANDARD issuance by epoch") == (f"{v_/1e6:.2f}M" if v_ >= 1e6 else f"{v_/1e3:.2f}K"), str(em("token", "STANDARD issuance by epoch")))
+except Exception as e:
+    add("recompute", "routed ETH and issuance recompute ran", False, f"{type(e).__name__}: {e}")
 eth = lambda r: r.get("eth") or L["ethusd"]
 lpr = lambda r: (r["lpadSafeBase"] * 5 / 7 + (r.get("lpadSnipe") or 0)) if r.get("lpadSafeBase") is not None else (r.get("lpadSafe") or 0) * 5 / 7   # launchpad revenue, as build.py
 lvl = lambda r: r["lpadVol"] if r.get("lpadVol") is not None else (r.get("lpadSafe") or 0) / 0.007

@@ -51,12 +51,22 @@ SECTIONS = {
           "Green bars are expansion epochs, red contraction.",
           chart("c_epochs"), "h_epochs") +
     panel(5, "Price to revenue, daily", "Market cap, price times circulating supply, over trailing revenue annualized: seven days at 7D, thirty days otherwise. Windows that include the "
-          "launch epoch are omitted.", chart("c_prr"), "h_prr") + '</div>',
+          "launch epoch are omitted.", chart("c_prr"), "h_prr") +
+    panel(12, "Routed ETH by use, trailing 30 days", "What the ETH routed over the selected range was spent on, read from the chain. Each use is dated by its own transaction: USDG the "
+          "reserve Safe paid for stock tokens; ETH and USDG it put into its pools, less what came back; the contraction vault’s buybacks, all burned; the team’s share, at "
+          "settlement; and the STANDARD the POL buyback buys for the Incentives vault, as the vault pays it out to the S-Bill premium budget or as branch claims, top-ups and "
+          "other payouts. USDG and STANDARD count at the ETH they cost, on a moving average; stock tokens are at cost, not today’s value. Cash in the reserve (ETH in the Safe "
+          "and the expansion vault, and the Safe’s USDG), routed ETH the buyback contracts have not spent, and buyback STANDARD still in the Incentives vault count by how much "
+          "they grew over the range; when one shrank, it paid for spending beyond the range’s routed ETH, shown below the bar. All includes the genesis seed. The POL buyback "
+          "also holds <span id=\"ru_extra\"></span> that no settlement routed to it; no event log shows its source, so it is left out.",
+          '<div class="alloc" id="ralloc"></div>', "h_ralloc", "p_ralloc") + '</div>',
 
 "liquidity": kpis("liquidity") + '<div class="grid">' +
     panel(12, "Protocol-owned liquidity by pool", "The reserve’s position in each pool and its standing among every pool for the same asset on Robinhood Chain on the last complete "
           "day. Volume is the volume the reserve’s own liquidity served. APR is LP fees over the selected range, annualized over position value. The fee is the rate the pool charged on its latest fee-paying swap. Rank and venues count pools with "
           "at least $100 of liquidity.", table("t_pools")) +
+    panel(12, "Capital in pools by pool, daily", "The value of the reserve’s position in each pool at the day’s close, both tokens at the pool’s own price; today at the compile "
+          "block, the figure in the Capital in pools tile. Fees not yet collected are not included.", chart("c_cap"), "h_cap") +
     panel(6, "Volume served by the reserve, by pool, daily", "Every swap is replayed tick by tick against every provider’s liquidity; the reserve’s part of each step’s input, the fee "
           "included, is the volume its liquidity served, valued at the swap’s price. Other providers hold part of the liquidity in some pools; the reserve’s "
           "share is in the pools table. The headline is the volume that paid the pool fee. The stock pools’ hook keeps a fee-exemption list (FeeExemptSet): "
@@ -110,6 +120,11 @@ SECTIONS = {
     panel(7, "Price and market capitalization, daily", "Daily close: the protocol STANDARD/ETH pool’s own price after its last trade of the UTC day, at Coinbase’s ETH close; today is live. Market cap is price times circulating supply, every STANDARD minted, as the protocol’s "
           "site and DexScreener show it. In wallets leaves out the protocol’s own liquidity and the Incentives vault. Shaded days are contraction epochs.", chart("c_price", "l"), "h_price") +
     panel(5, "Supply reconciliation", "From the genesis mint to circulating supply, the STANDARD in wallets and free float, at one block.", '<div class="bridge" id="bridge"></div>') +
+    panel(7, "STANDARD supply, daily", "Circulating supply, every STANDARD minted, and the same with the STANDARD in banks added: ledger balances owed to bankers, minted only "
+          "on withdrawal, so the upper line is every STANDARD that exists or is owed. At each day’s close; today at the compile block.", chart("c_supply"), "h_supply") +
+    panel(5, "STANDARD supply, 1B cap", "The protocol’s own split of the one-billion hard cap, at the compile block. Protocol liquidity (STANDARD in its own pool), in "
+          "wallets and the Incentives vault make up circulating supply. In banks is owed to bankers and minted on withdrawal. Burned is the cap the protocol has removed: "
+          "token burns and ledger removals that are never minted. Unissued is the rest of the maximum supply.", '<div class="alloc" id="salloc"></div>', "h_salloc") +
     panel(7, "Net buying of STANDARD by holder group, daily", "STANDARD bought from the protocol’s STANDARD/ETH pool less STANDARD sold into it, by the group of the "
           "wallet behind each trade. Above zero a group bought more than it sold; below zero it sold more. Groups apply in order: team "
           "wallet, current bankers (owners of at least one branch today), S-Bill holders (wallets that have ever deposited into S-Bills), frequent traders (300 or more trades with the pool), launch-epoch buyers (first buy within three days of genesis, the first epoch), others; a group with no trades is not drawn. A wallet’s group is its standing at the compile, so a "
@@ -124,7 +139,10 @@ SECTIONS = {
     panel(5, "STANDARD/ETH execution cost by size", "Each order simulated against the pool’s liquidity at the compile block. Cost adds the 1% pool fee and the hook’s tax.",
           table("t_slip") + '<div class="kv2" id="slip_s"></div>') +
     panel(12, "STANDARD burned by source, daily", "Expansion licenses paid from ledger balances, the burned half of resolution and revocation fees, and buybacks and other token "
-          "burns. The line is the cumulative total as a share of the 1 billion hard cap.", chart("c_burn"), "h_burn") + '</div>',
+          "burns. The line is the cumulative total as a share of the 1 billion hard cap.", chart("c_burn"), "h_burn") +
+    panel(12, "STANDARD issuance by epoch", "STANDARD issued to bankers’ ledger balances in each epoch settled inside the selected range, the central bank’s own record at "
+          "settlement: the base issuance of <span id=\"iss_base\"></span> a day times the multiplier in force, over the three-day epoch. Green bars are epochs that settled in "
+          "expansion, red in contraction; each settlement sets the next epoch’s multiplier.", chart("c_iss"), "h_iss") + '</div>',
 
 "banks": kpis("banks") + '<div class="grid">' +
     panel(6, "STANDARD in banks, inflows and outflows, daily", "Every movement of the STANDARD held in banks; each day’s bars sum to the change in the line. In: "
@@ -329,6 +347,7 @@ table.gm td.c{min-width:80px}
 .alloc .lg{display:grid;grid-template-columns:auto 1fr auto auto;gap:.6rem .75rem;margin-top:1.25rem;font-size:.8125rem;align-items:center}
 .alloc .lg i{width:6px;height:6px;display:inline-block}
 .alloc .lg .v{text-align:right;color:var(--white)} .alloc .lg .p{text-align:right;color:var(--sec);min-width:2.5rem}
+.alloc .lg2{display:grid;grid-template-columns:1fr 1fr;gap:0 3rem;align-items:start} @media (max-width:640px){.alloc .lg2{grid-template-columns:1fr}}
 .foot{margin-top:2.5rem;padding-top:1rem;border-top:1px dashed var(--dash);color:var(--dis);font-size:.75rem;line-height:1.6}
 @media (max-width:1360px){.w8,.w7,.w5,.w4{grid-column:span 12}}
 @media (max-width:980px){
@@ -782,6 +801,23 @@ reg('revenue', ({Rf})=>{ document.querySelector('#p_alloc .pt').textContent = `R
     `<div class="lg">${went.map(w=>`<i style="background:${w[2]}"></i><span>${w[0]}</span><span class="v">${fmt.usd(w[1])}</span><span class="p">${fmt.pct(w[1]/wTot,0)}</span>`).join('')}</div>`;
   document.getElementById('h_alloc').innerHTML = `<em>${fmt.usd(wTot)}</em>`;
   return null; });
+const allocHtml = (went, vf, right)=>{ const tot = sum(went.map(w=>w[1])),   // the allocation bar and its legend; right() moves rows to a second legend column
+    row = (w)=>`<i style="background:${w[2]}"></i><span>${w[0]}</span><span class="v">${vf(w[1])}</span><span class="p">${fmt.pct(w[1]/tot,0)}</span>`;
+  return `<div class="abar">${went.map(w=>`<div style="width:${(100*w[1]/tot).toFixed(2)}%;background:${w[2]}"></div>`).join('')}</div>` + (right
+    ? `<div class="lg2"><div class="lg">${went.filter(w=>!right(w)).map(row).join('')}</div><div class="lg">${went.filter(right).map(row).join('')}</div></div>`
+    : `<div class="lg">${went.map(row).join('')}</div>`); };
+const ethR = (v)=>v<100 ? v.toFixed(1)+' ETH' : Math.round(v).toLocaleString('en-US')+' ETH';
+reg('revenue', ({Rf})=>{ document.querySelector('#p_ralloc .pt').textContent = `Routed ETH by use, ${winName()}`;
+  const i0 = Sp.indexOf(Rf[0]), P0 = i0>0 ? Sp[i0-1] : {}, P1 = Rf[Rf.length-1]||{}, S_ = (k)=>sum(Rf.map(r=>r[k]||0)), D_ = (k)=>(P1[k]||0)-(P0[k]||0);   // uses summed; held amounts by their change
+  const all = [['Stock tokens', S_('ruStocks'), C.celadon], ['Reserve pool liquidity', S_('ruPools'), C.sapphire], ['Cash in the reserve', D_('ruCash'), C.violet],
+    ['Buybacks, burned', S_('ruBurned'), C.bronze], ['Buybacks, S-Bill premiums', S_('ruSbills'), C.gold], ['Buybacks, branch and other incentives', S_('ruIncent'), C.gold2],
+    ['Buybacks, in the Incentives vault', D_('ruHeld'), C.sand], ['Team', S_('ruTeam'), C.rose], ['Not yet spent', D_('ruUnspent'), C.grey]];
+  const went = all.filter(w=>w[1]>=0.05), drawn = sum(all.filter(w=>w[1]<0).map(w=>-w[1])), seed = S_('ruSeed');
+  document.getElementById('h_ralloc').innerHTML = `<em>${S_('ruIn').toLocaleString('en-US',{minimumFractionDigits:1, maximumFractionDigits:1})} ETH</em> routed${seed?' and seeded':''}`;
+  document.getElementById('ralloc').innerHTML = went.length ? allocHtml(went, ethR, w=>w[0].startsWith('Buybacks')) +
+    (drawn>=0.05 ? `<div class="kv2"><div>Spent from earlier balances</div><div>${ethR(drawn)}</div></div>` : '') : '';
+  const rp = (DATA.recon||[]).find(r=>r.id==='routed_pol'); document.getElementById('ru_extra').textContent = rp&&rp.ours!=null ? `${(rp.ref-rp.ours).toFixed(1)} ETH` : 'ETH';
+  return null; });
 reg('revenue', ()=>{ const E2 = E.filter(e=>e.epoch>1 && inRange(e.settledAt)); document.getElementById('h_epochs').innerHTML = `${E.filter(isExp).length} of ${E.length} settled epochs in expansion`;
   return new Chart(c_epochs, {type:'bar', data:{labels:E2.map(e=>'E'+e.epoch), datasets:[
     {label:'STANDARD trading fees', data:E2.map(e=>e.routed-e.charterEth), backgroundColor:E2.map(e=>isExp(e)?C.celadon:alpha(C.red,.8)), stack:'a'},
@@ -844,6 +880,25 @@ reg('token', ({Rf, lf, df})=>{ const {sw, wl} = win(), nb7 = -sum(sw.map(r=>r.mk
   document.getElementById('h_sell').innerHTML = `net ${nb7>=0?'buying':'selling'} <em>${fmt.n(Math.abs(nb7),2)}</em> STANDARD, ${wl}`;
   return mk(c_sell, lf, [...GROUPS.filter(([k])=>Sh.some(r=>Math.abs(r['sell_'+k]||0)>=0.5)).map(([k,n,c])=>bar(n, Rf.map(r=>-(r['sell_'+k]||0)), c)), line('Net buying, all groups', Rf.map(r=>-(r.mktNet||0)), C.fg2, {pts:2})],
     {stacked:true, zero:false, y:n0, tf:v=>fmt.sgn(v)+fmt.n(v,2)}); });
+reg('token', ({Rl, ll})=>{ document.getElementById('h_supply').innerHTML = `<em>${fmt.n(L.totalSupply,2)}</em> circulating`;
+  return mk(c_supply, ll, [line('Circulating and in banks', Rl.map(r=>r.supply!=null&&r.pending!=null?r.supply+r.pending:null), C.violet), line('Circulating supply', Rl.map(r=>r.supply??null), C.gold)],
+    {y:v=>fmt.n(v,0), tf:v=>fmt.n(v,2), zero:false}); });   // the axis fits the lines, so the trend shows
+function renderSupply(){ const el = document.getElementById('salloc'); if (!el) return;
+  el.innerHTML = allocHtml([['Protocol liquidity', L.poolStd, C.blue], ['In wallets', L.float, C.gold], ['Incentives vault', L.incentivesStd, C.celadon], ['In banks', L.pending, C.violet],
+    ['Burned', 1e9-L.maxSupply, C.orange], ['Unissued', L.maxSupply-L.totalSupply-L.pending, C.grey]], v=>fmt.n(v,1));
+  document.getElementById('h_salloc').innerHTML = `<em>${fmt.n(L.maxSupply,1)}</em> max supply`; }
+reg('token', ()=>{ const E2 = E.filter(e=>e.issued!=null && inRange(e.settledAt)), Lx = E.filter(e=>e.issued!=null).slice(-1)[0];
+  const mIn = (e)=>{const p = E.find(q=>q.epoch===e.epoch-1); return p ? p.multiplierAfter : e.issued/(L.baseIssuance*3);};   // the multiplier in force: set at the previous settlement
+  document.getElementById('iss_base').textContent = fmt.n(L.baseIssuance,0);
+  document.getElementById('h_iss').innerHTML = Lx ? `<em>${fmt.n(Lx.issued,2)}</em> in epoch ${Lx.epoch}` : '';
+  return new Chart(c_iss, {type:'bar', data:{labels:E2.map(e=>'E'+e.epoch), datasets:[{label:'STANDARD issued', data:E2.map(e=>e.issued), backgroundColor:E2.map(e=>isExp(e)?C.celadon:alpha(C.red,.8))}]},
+    options:{maintainAspectRatio:false, scales:{x:{grid:{display:false}}, y:{grid:{color:'rgba(255,255,255,.06)'}, ticks:{callback:v=>fmt.n(v,1)}}},
+      plugins:{legend:{display:true, onClick:()=>{}, labels:{generateLabels:()=>[{text:'Settled in expansion', fillStyle:C.celadon, strokeStyle:'transparent', fontColor:C.sand}, {text:'Settled in contraction', fillStyle:alpha(C.red,.8), strokeStyle:'transparent', fontColor:C.sand}]}},
+        tooltip:{callbacks:{afterTitle:i=>{const e=E2[i[0].dataIndex]; return `multiplier ${mIn(e).toFixed(2)}× · settled in ${isExp(e)?'expansion':'contraction'}`;}, label:c=>'issued: '+fmt.n(c.parsed.y,2)}}}}}); });
+reg('liquidity', ({Rl, ll})=>{ document.getElementById('h_cap').innerHTML = `<em>${fmt.usd(sum(pools.map(p=>L.lp[p].valueUSD)))}</em>`;
+  const lpv = (r,p)=>((r.reserveParts||{}).lp||{})[p], sets = pools.map(p=>line(pname(p), Rl.map(r=>lpv(r,p)??null), PCOL[p]));
+  sets.forEach((s,i)=>{s.fill = i===0?'origin':'-1'; s.backgroundColor = alpha(s.borderColor,.62); s.borderWidth = 1; s.stack='cap';});
+  return mk(c_cap, ll, sets, {stacked:true, y:usd0, tf:v=>fmt.usd(v), footer:i=>{const q=(Rl[i[0].dataIndex].reserveParts||{}).lp; return q?`total ${fmt.usd(sum(Object.values(q)))}`:'';}}); });
 reg('token', ({Rl, ll, dl})=>{ document.getElementById('h_mc').innerHTML = `<em>${fmt.n(L.float,2)}</em> in wallets · ${fmt.n(L.pending,2)} in banks`;
   const sets = [line('In wallets', Rl.map(r=>r.float), C.gold), line('Protocol liquidity and Incentives vault', Rl.map(r=>(r.pool||0)+(r.incentives||0)), C.blue), line('In banks', Rl.map(r=>r.pending), C.violet)];
   sets.forEach((s,i)=>{s.fill=i===0?'origin':'-1'; s.backgroundColor=alpha(s.borderColor,.4); s.borderWidth=1; s.stack='sup';});
@@ -1018,7 +1073,7 @@ const API_FIELDS = [
 const r6 = v=>typeof v==='number' ? (isFinite(v) ? +v.toPrecision(10) : null) : v ?? null;
 window.SRM_EXPORT = ()=>({compiled:COMPILED+' UTC', source:'https://standardrsvmonitor.github.io/', fields:Object.fromEntries(API_FIELDS.map(f=>[f[0], f[1]])),
   rows:Sh.map(r=>Object.fromEntries(API_FIELDS.map(f=>[f[0], r6(f[2](r))]))), epochs:E});
-function renderAll(){ renderKpis(); renderStatic(); renderBridge(); renderLeaders(); renderLog(); renderFloat(); }
+function renderAll(){ renderKpis(); renderStatic(); renderBridge(); renderSupply(); renderLeaders(); renderLog(); renderFloat(); }
 
 renderAll();
 document.querySelectorAll('#tabs button[data-t]').forEach(b=>b.addEventListener('click',()=>{ history.replaceState(null,'','#'+b.dataset.t); show(b.dataset.t); window.scrollTo({top:0}); }));

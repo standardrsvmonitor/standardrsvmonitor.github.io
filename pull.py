@@ -375,6 +375,13 @@ def main():
     m_by_epoch = {1: int(snap["bank"]["M_START_WAD"]) / 1e18}
     for e in epochs: m_by_epoch[e["epoch"] + 1] = e["multiplierAfter"]
     cur_epoch = int(snap["bank"]["epochNumber"])
+    # STANDARD issued in each settled epoch, the central bank's own record at settlement (epoch indexed; amount), against the rebuild:
+    # the base issuance times the multiplier in force, over the epoch
+    ISSUED = "0x2042733f30f10cce285e8815ec0b038aac71e397bffa1c75879d7f19087307fe"
+    iss_ = {int(l_["topics"][1], 16): int(l_["data"][2:66], 16) / 1e18 for l_ in getlogs({"address": H["centralBank"], "topics": [ISSUED]}, G, tip, 4_000_000)}
+    for e in epochs: e["issued"] = iss_.get(e["epoch"])
+    reconcile("issued_epochs", "STANDARD issued in settled epochs, central bank events", sum(iss_.get(e["epoch"], 0) for e in epochs),
+              sum(base_issue * m_by_epoch[e["epoch"]] * epoch_days for e in epochs), "base issuance times each epoch’s multiplier, rebuilt", 1e-9)
     # daily aggregates
     days = collections.defaultdict(lambda: collections.defaultdict(float))
     for e in act["licenses-purchased"]:
@@ -748,6 +755,23 @@ def main():
                1e-4, absolute=True, unit=unit_)
     reconcile("reserve_lp", "Reserve position liquidity, summed from events", 1 + res_chk.get("lp_liquidity", 0), 1.0, "positions read at the compile block", 1e-6)
     reconcile("reserve_today", "Reserve assets today, rebuilt from events", 1 + res_chk.get("today_rebuilt_vs_read", 0), 1.0, "balances and positions read at the compile block", 0.005)
+    # routed ETH by what it was spent on: stock tokens, positions, buybacks (burned, S-Bills, other incentives), team; and what is still held
+    ru_, ru_chk, ru_tot = extra.routed_use(x, epochs, dl, tf["rows"])
+    for row in series: row.update(ru_.get(row["date"], {}))
+    log("routed use:", {k_: (round(v_[0], 4), round(v_[1], 4)) if isinstance(v_, tuple) else round(v_, 4) for k_, v_ in ru_chk.items()}, ru_tot)
+    reconcile("routed_cash", "Reserve cash at cost, summed from routed ETH and the Safe’s transactions", ru_chk["cash"][0], ru_chk["cash"][1],
+              "Safe and expansion vault ETH read at the compile block, plus the Safe’s USDG at cost", 1e-4, absolute=True, unit="ETH")
+    reconcile("routed_usdg", "Reserve Safe USDG, summed from its transactions", ru_chk["usdg"][0], ru_chk["usdg"][1], "balance at the compile block", 0.01, absolute=True, unit="USDG")
+    reconcile("routed_contraction", "Contraction vault ETH, routed and seeded less buybacks", ru_chk["contraction"][0], ru_chk["contraction"][1], "balance at the compile block",
+              1e-4, absolute=True, unit="ETH")
+    reconcile("routed_incentives", "Incentives vault STANDARD, POL buybacks less payouts", ru_chk["incentives"][0], ru_chk["incentives"][1], "balance at the compile block",
+              0.01, absolute=True, unit="STANDARD")
+    reconcile("routed_incin", "STANDARD the Incentives vault received from the POL buyback", ru_chk["incIn"][0], ru_chk["incIn"][1], "the POL buyback’s own buyback events",
+              0.01, absolute=True, unit="STANDARD")
+    reconcile("routed_unclassified", "Reserve Safe ETH and USDG and Incentives vault STANDARD not classified by use", ru_chk["otherEth"] + ru_chk["otherUsdg"] + ru_chk["incInOther"], 0.0,
+              "every flow assigned a use", 0.01, absolute=True)
+    reconcile("routed_pol", "POL buyback ETH, routed less buybacks", ru_chk["pol"][0], ru_chk["pol"][1], "balance at the compile block", 1e-4, gate=False, absolute=True, unit="ETH",
+              note="the contract holds ETH that no settlement routed to it; no event log shows its source (open, see ROADMAP)")
     for k_ in sorted(hist_prev := jload(os.path.join(D, "history.json"), {})):
         if hist_prev[k_].get("reserveUsd") and k_ in res_hist: log("  reserve", k_, "snapshot", round(hist_prev[k_]["reserveUsd"]), "rebuilt close", round(res_hist[k_]["total"]))
     pf = extra.pool_flows(x)

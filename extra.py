@@ -7,6 +7,7 @@ SAFE_TX = "0x66753cd2356569ee081232e3be8909b950e0a76c1f8460c3a5e3c2be32b11bed"  
 SAFE_OK = "0x442e715f626346e8c54381002da614f62bee8d27386535b2521ec8540898556e"         # ExecutionSuccess(txHash, payment)
 CV_BUY = "0x8e8412cac6b961b95ef832e2bac486977bbd29eb9725f9eddd97f3380c31f649"          # contraction vault buyback: (ethIn, standardOut)
 EV_FWD = "0x98c9bf0d2b79ecbf5d1527aee70d8b86d4761c9f5234c3ae6f73a8ef61fc6c54"          # expansion vault forward to the reserve: (value)
+POL_BUY = "0xb226e46e9ea13f5bbac224e6b365c82beb22fbd42694f7721db493241b3337db"         # POL buyback tick: recipient indexed; (ethIn, standardOut)
 GM_FINAL = "0x9dd2a3de967ad06808d0896233a2f261db7cd96284bb119f9bcd1ae9e71fa584"        # genesis minter finalize: [charters, raised, team, pool, expansion seed, contraction seed, ...]
 GENESIS_MINTER = "0xF54B589EADC2aaE98b96DaD58d89BCBF27503e46"
 PROTOCOL = {"zero", "pool", "contraction", "polBuyback", "incentives", "sbills", "bank", "safe", "polManager", "feeSplitter", "taxHook", "expansion"}
@@ -139,11 +140,12 @@ def reserve_history(x, lp_pools, closes, eth_day, epochs, dates, today_parts):
     toks = {"USDG": (x.USDG, 6)}
     for s, p in lp_pools.items():
         if not p["isEth"]: toks[s] = (p["stockAddr"], 18)
-    tev = []; x.log("reserve: token transfers", list(toks))
+    tev = []; x.log("reserve: token transfers", list(toks)); x.safe_logs = sl; x.safe_tok = []
     for s, (ta, dec) in toks.items():
         for direction, topics in ((1, [x.TR, None, x.pad(safe)]), (-1, [x.TR, x.pad(safe)])):
             for l in x.getlogs({"address": ta, "topics": topics}, G, tip, 4000000):
                 tev.append((x.T(int(l["blockNumber"], 16)), s, direction * int(l["data"], 16) / 10 ** dec))
+                x.safe_tok.append((s, direction, l))     # kept for routed_use: the counterparty and transaction of every Safe token transfer
     tf = collections.Counter()
     for _, s, v in tev: tf[s] += v
     now_tok = {s: x.bal["reserveSafe"].get(s, 0.0) for s in toks}
@@ -192,6 +194,137 @@ def reserve_history(x, lp_pools, closes, eth_day, epochs, dates, today_parts):
         if dates[-1] in out: checks["today_rebuilt_vs_read"] = round(out[dates[-1]]["total"] / today_parts["total"] - 1, 6)
         out[dates[-1]] = today_parts
     return out, checks
+
+
+def _safe_items(l):
+    """A successful SafeMultiSigTransaction's calls as (to, ETH value): one call, or each call of a MultiSend."""
+    w = words(l["data"]); to = "0x" + w[0][-40:]; val = int(w[1], 16); off = int(w[2], 16) // 32; op = int(w[3], 16)
+    n = int(w[off], 16); data = l["data"][2:][(off + 1) * 64:(off + 1) * 64 + n * 2]
+    if not (op == 1 and data[:8] == "8d80ff0a"): return [(to, val / 1e18)]
+    p = data[8:]; o2 = int(p[:64], 16) * 2; n2 = int(p[o2:o2 + 64], 16) * 2; pk = p[o2 + 64:o2 + 64 + n2]; i = 0; out = []
+    while i < len(pk):
+        out.append(("0x" + pk[i + 2:i + 42], int(pk[i + 42:i + 106], 16) / 1e18)); dl = int(pk[i + 106:i + 170], 16); i += 170 + dl * 2
+    return out
+
+
+def _take(q, amt):
+    """Take amt from the front of a first-in, first-out queue of [cohort, amount, ETH cost] lots; returns the pieces taken as
+    (cohort, amount, ETH cost) and whatever the queue could not cover."""
+    out = []
+    while amt > 1e-12 and q:
+        lot = q[0]; t = min(amt, lot[1]); c = lot[2] * t / lot[1] if lot[1] else 0.0
+        out.append((lot[0], t, c)); lot[1] -= t; lot[2] -= c; amt -= t
+        if lot[1] <= 1e-12: q.popleft()
+    return out, max(0.0, amt)
+
+
+def routed_use(x, epochs):
+    """What each epoch's routed ETH became, first in, first out, in ETH. Cohorts are the genesis seed (0) and each settled epoch. The
+    team's share is paid at settlement. The expansion share joins the reserve's cash; the reserve Safe's transactions then sell ETH for
+    USDG (the USDG carries the cohorts and ETH cost of what was sold), pay USDG to the seller of stock tokens, put ETH and USDG into its
+    pools (less what comes back) and swap USDG back to ETH. The contraction share is spent by the contraction vault's buybacks, all
+    burned. The POL share is spent by the POL buyback, whose STANDARD goes to the Incentives vault and leaves it as S-Bill premium budget,
+    branch claims and top-ups, or other payouts. Whatever is left is cash, routed ETH not yet spent on buybacks, or buyback STANDARD still
+    in the vault. Returns ({cohort: {use: ETH}}, checks, totals)."""
+    H, G, tip = x.H, x.G, x.tip
+    safe, pm, posm, inc = H["reserveSafe"].lower(), x.PM.lower(), x.POSM.lower(), H["incentivesVault"]
+    claims = {H.get("branchClaim", "").lower(), H.get("branchTopUp", "").lower()} - {""}
+    gm = x.getlogs({"address": GENESIS_MINTER, "topics": [GM_FINAL]}, G - 200000, G + 200000, 4000000)
+    seed_x = seed_c = 0.0
+    if gm: w = words(gm[0]["data"]); seed_x, seed_c = int(w[4], 16) / 1e18, int(w[5], 16) / 1e18
+    ev = [(x.genesis_ts, 0, 0, "seed", None)] + [(e["settledAt"], 0, 0, "settle", e) for e in epochs]
+    # the reserve Safe, transaction by transaction: ETH it sent or received, USDG by counterparty
+    ok = {l["transactionHash"] for l in x.safe_logs if l["topics"][0] == SAFE_OK}
+    txs = collections.defaultdict(lambda: {"b": 0, "eo": collections.Counter(), "ei": collections.Counter(), "u": collections.Counter()})
+    for l in x.safe_logs:
+        t = txs[l["transactionHash"]]; t["b"] = int(l["blockNumber"], 16)
+        if l["topics"][0] == SAFE_RECEIVED: t["ei"]["0x" + l["topics"][1][-40:]] += int(l["data"], 16) / 1e18
+        elif l["topics"][0] == SAFE_TX and l["transactionHash"] in ok:
+            for to, v in _safe_items(l):
+                if to != safe and v: t["eo"][to] += v
+    for s, d_, l in x.safe_tok:
+        if s != "USDG": continue
+        t = txs[l["transactionHash"]]; t["b"] = int(l["blockNumber"], 16)
+        t["u"]["0x" + (l["topics"][1] if d_ == 1 else l["topics"][2])[-40:]] += d_ * int(l["data"], 16) / 1e6
+    ev += [(x.T(t["b"]), 1, t["b"], "safe", t) for t in txs.values()]
+    for l in x.getlogs({"address": H["contractionVault"], "topics": [CV_BUY]}, G, tip, 4000000):
+        b = int(l["blockNumber"], 16); ev.append((x.T(b), 1, b, "cv", int(words(l["data"])[0], 16) / 1e18))
+    pol_std = 0.0
+    for l in x.getlogs({"address": H["polBuyback"], "topics": [POL_BUY]}, G, tip, 4000000):
+        w = words(l["data"]); b = int(l["blockNumber"], 16); pol_std += int(w[1], 16) / 1e18
+        ev.append((x.T(b), 1, b, "pol", (int(w[0], 16) / 1e18, int(w[1], 16) / 1e18)))
+    inc_in = collections.Counter()
+    for l in x.getlogs({"address": x.STD, "topics": [x.TR, None, x.pad(inc)]}, G, tip, 4000000):
+        inc_in["pol" if "0x" + l["topics"][1][-40:] == H["polBuyback"].lower() else "other"] += int(l["data"], 16) / 1e18
+    for l in x.getlogs({"address": x.STD, "topics": [x.TR, x.pad(inc)]}, G, tip, 4000000):
+        b = int(l["blockNumber"], 16); ev.append((x.T(b), 2, b, "pay", ("0x" + l["topics"][2][-40:], int(l["data"], 16) / 1e18)))
+    D = collections.deque
+    cashQ, usdgQ, conQ, polQ, incQ, poolQ = D(), D(), D(), D(), D(), D()
+    fate = collections.defaultdict(collections.Counter); other = 0.0; last_k = 0
+    for ts, _, _, kind, p in sorted(ev, key=lambda r: r[:3]):
+        if kind == "seed": cashQ.append([0, seed_x, seed_x]); conQ.append([0, seed_c, seed_c]); continue
+        if kind == "settle":
+            k = p["epoch"]; last_k = k; fate[k]["team"] += p["team"]
+            (cashQ if p["expansion"] in (True, "true", 1) else conQ).append([k, p["toVault"], p["toVault"]]); polQ.append([k, p["toPol"], p["toPol"]]); continue
+        if kind == "cv":
+            got, short = _take(conQ, p); other += short
+            for k, a, c in got: fate[k]["burned"] += c
+            continue
+        if kind == "pol":
+            e_, s_ = p; got, short = _take(polQ, e_); other += short
+            for k, a, c in got: incQ.append([k, s_ * a / e_, c])
+            continue
+        if kind == "pay":
+            to, a_ = p; got, short = _take(incQ, a_); other += short
+            use = "sbills" if to == H["sbills"].lower() else "claims" if to in claims else "otherPay"
+            for k, a, c in got: fate[k][use] += c
+            continue
+        t = p                                                              # a reserve Safe transaction
+        u_in = sum(v for cp, v in t["u"].items() if v > 0 and cp not in (pm, posm)); u_out = -sum(v for cp, v in t["u"].items() if v < 0 and cp not in (pm, posm))
+        u_pos = sum(v for cp, v in t["u"].items() if cp in (pm, posm))
+        e_out = sum(v for to, v in t["eo"].items() if to != posm); e_back = sum(v for fr, v in t["ei"].items() if fr != posm)
+        # inflows first (a transaction can swap USDG back to ETH and then add that ETH to a position)
+        if u_in:
+            if e_out:                                                      # ETH sold for USDG: the USDG carries the cohorts it was bought with
+                got, short = _take(cashQ, e_out); other += short
+                for k, a, c in got: usdgQ.append([k, u_in * a / e_out, c])
+                e_out = 0.0
+            else: other += u_in / 1e3; usdgQ.append([last_k, u_in, 0.0])  # USDG from anywhere else: unclassified (flagged)
+        if u_out and e_back:                                               # USDG swapped back to ETH
+            got, short = _take(usdgQ, u_out); other += short / 1e3; cost = sum(c for _, _, c in got)
+            for k, a, c in got: cashQ.append([k, e_back * c / cost, e_back * c / cost])
+            u_out = e_back = 0.0
+        e_pos = t["eo"][posm] - t["ei"][posm]                              # one transaction's ETH into positions, net of what came back
+        if e_pos < 0:                                                      # ETH back from positions: principal first, anything beyond is fees
+            got, extra = _take(poolQ, -e_pos)
+            for k, a, c in got: fate[k]["pools"] -= c; cashQ.append([k, a, a])
+            if extra: cashQ.append([last_k, extra, extra])
+        if u_pos > 0:                                                      # USDG back from positions, at the queue's average cost
+            rate = sum(l[2] for l in usdgQ) / sum(l[1] for l in usdgQ) if usdgQ and sum(l[1] for l in usdgQ) else 0.0
+            got, extra = _take(poolQ, u_pos * rate)
+            for k, a, c in got: fate[k]["pools"] -= c; usdgQ.append([k, u_pos * c / (u_pos * rate), c])
+            if extra: usdgQ.append([last_k, u_pos * extra / (u_pos * rate), extra])
+        # then outflows
+        if e_pos > 0:
+            got, short = _take(cashQ, e_pos); other += short
+            for k, a, c in got: fate[k]["pools"] += c; poolQ.append([k, c, c])
+        if u_pos < 0:
+            got, short = _take(usdgQ, -u_pos); other += short / 1e3
+            for k, a, c in got: fate[k]["pools"] += c; poolQ.append([k, c, c])
+        if u_out:                                                          # USDG paid to the seller of stock tokens
+            got, short = _take(usdgQ, u_out); other += short / 1e3
+            for k, a, c in got: fate[k]["stocks"] += c
+        if e_out: other += e_out                                           # ETH sent anywhere else: unclassified
+    for q, use in ((cashQ, "cash"), (usdgQ, "cash"), (conQ, "unbought"), (polQ, "unbought"), (incQ, "held")):
+        for k, a, c in q: fate[k][use] += c
+    b_ = x.bal
+    checks = {"cashEth": (sum(l[1] for l in cashQ), b_["reserveSafe"]["ETH"] + b_["expansionVault"]["ETH"]), "usdg": (sum(l[1] for l in usdgQ), b_["reserveSafe"].get("USDG", 0.0)),
+              "contraction": (sum(l[1] for l in conQ), b_["contractionVault"]["ETH"]), "incentives": (sum(l[1] for l in incQ), b_["incentivesVault"].get("STANDARD", 0.0)),
+              "incIn": (inc_in["pol"], pol_std), "pol": (sum(l[1] for l in polQ), b_["polBuyback"]["ETH"]), "unclassified": other + inc_in["other"],
+              "seed": seed_x + seed_c}
+    totals = collections.Counter()
+    for v in fate.values(): totals.update(v)
+    return {k: {u: round(a, 9) for u, a in v.items()} for k, v in fate.items()}, checks, dict(totals)
 
 
 # ---------- STANDARD flows with the pool, by counterparty and by the wallet that sent the transaction ----------

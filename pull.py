@@ -22,7 +22,8 @@ H = {"reserveSafe": "0x9a6F75AE9E8bdB68e1d12a9AdcCd0bB2958E3C22", "expansionVaul
      "contractionVault": "0x796e80E8ABcedc30c700A9587F7933d3342B8946", "incentivesVault": "0x9481404d30C296e57C93f05A49934A901719bbA9",
      "polBuyback": "0x50e4C444f71dF2Db8593c6c8ba4d493De618E147", "feeSplitter": "0xaa12DEda4aC19233A315777b17ff6ff5029D01b2",
      "centralBank": "0x5977B25419f9c0dDcB2F89fE204955622f4F57ea", "sbills": "0x163B36fD07622486CB889fEEf97BfBe2c1D7c05B",
-     "polManager": "0x242F3e67BEf43470C2434d95E7D618E19f87c8f8"}   # teamWallet is read from feeSplitter.teamWallet() at runtime
+     "polManager": "0x242F3e67BEf43470C2434d95E7D618E19f87c8f8",
+     "branchClaim": "0x6FfC470fB99e3626289B5DC08DDA20B6e146Cfe3", "branchTopUp": "0x4a97f28A285eF48c4bB6bD1940d5aa39170A3a0a"}   # teamWallet is read from feeSplitter.teamWallet() at runtime; the claim contracts are named in the site bundle
 ZERO = "0x0000000000000000000000000000000000000000"
 TR = "0x" + keccak(b"Transfer(address,address,uint256)").hex()
 SW = "0x" + keccak(b"Swap(bytes32,address,int128,int128,uint160,uint128,int24,uint24)").hex()
@@ -755,21 +756,23 @@ def main():
                1e-4, absolute=True, unit=unit_)
     reconcile("reserve_lp", "Reserve position liquidity, summed from events", 1 + res_chk.get("lp_liquidity", 0), 1.0, "positions read at the compile block", 1e-6)
     reconcile("reserve_today", "Reserve assets today, rebuilt from events", 1 + res_chk.get("today_rebuilt_vs_read", 0), 1.0, "balances and positions read at the compile block", 0.005)
-    # routed ETH by what it was spent on: stock tokens, positions, buybacks (burned, S-Bills, other incentives), team; and what is still held
-    ru_, ru_chk, ru_tot = extra.routed_use(x, epochs, dl, tf["rows"])
-    for row in series: row.update(ru_.get(row["date"], {}))
-    log("routed use:", {k_: (round(v_[0], 4), round(v_[1], 4)) if isinstance(v_, tuple) else round(v_, 4) for k_, v_ in ru_chk.items()}, ru_tot)
-    reconcile("routed_cash", "Reserve cash at cost, summed from routed ETH and the Safe’s transactions", ru_chk["cash"][0], ru_chk["cash"][1],
-              "Safe and expansion vault ETH read at the compile block, plus the Safe’s USDG at cost", 1e-4, absolute=True, unit="ETH")
-    reconcile("routed_usdg", "Reserve Safe USDG, summed from its transactions", ru_chk["usdg"][0], ru_chk["usdg"][1], "balance at the compile block", 0.01, absolute=True, unit="USDG")
+    # what each epoch's routed ETH became, first in, first out: stock tokens, pools, cash, buybacks (burned, S-Bills, claims), team
+    ru_fate, ru_chk, ru_tot = extra.routed_use(x, epochs)
+    for e in epochs: e["use"] = ru_fate.get(e["epoch"], {})
+    log("routed use:", {k_: (round(v_[0], 4), round(v_[1], 4)) if isinstance(v_, tuple) else round(v_, 4) for k_, v_ in ru_chk.items()},
+        {k_: round(v_, 2) for k_, v_ in ru_tot.items()})
+    reconcile("routed_cash", "Reserve ETH, routed and seeded less what the reserve Safe spent", ru_chk["cashEth"][0], ru_chk["cashEth"][1],
+              "Safe and expansion vault ETH read at the compile block", 1e-4, absolute=True, unit="ETH")
+    reconcile("routed_usdg", "Reserve Safe USDG, followed through its transactions", ru_chk["usdg"][0], ru_chk["usdg"][1], "balance at the compile block", 0.01, absolute=True, unit="USDG")
     reconcile("routed_contraction", "Contraction vault ETH, routed and seeded less buybacks", ru_chk["contraction"][0], ru_chk["contraction"][1], "balance at the compile block",
               1e-4, absolute=True, unit="ETH")
     reconcile("routed_incentives", "Incentives vault STANDARD, POL buybacks less payouts", ru_chk["incentives"][0], ru_chk["incentives"][1], "balance at the compile block",
               0.01, absolute=True, unit="STANDARD")
     reconcile("routed_incin", "STANDARD the Incentives vault received from the POL buyback", ru_chk["incIn"][0], ru_chk["incIn"][1], "the POL buyback’s own buyback events",
               0.01, absolute=True, unit="STANDARD")
-    reconcile("routed_unclassified", "Reserve Safe ETH and USDG and Incentives vault STANDARD not classified by use", ru_chk["otherEth"] + ru_chk["otherUsdg"] + ru_chk["incInOther"], 0.0,
-              "every flow assigned a use", 0.01, absolute=True)
+    reconcile("routed_unclassified", "Routed ETH, USDG and STANDARD with no use assigned", ru_chk["unclassified"], 0.0, "every flow assigned a use", 0.01, absolute=True)
+    reconcile("routed_total", "Routed ETH followed to its uses, summed", sum(ru_tot.values()), sum(e["toVault"] + e["toPol"] + e["team"] for e in epochs) + ru_chk["seed"],
+              "routed at every settlement plus the genesis seed (uses add the reserve’s swap gains and returned position fees)", 0.001)
     reconcile("routed_pol", "POL buyback ETH, routed less buybacks", ru_chk["pol"][0], ru_chk["pol"][1], "balance at the compile block", 1e-4, gate=False, absolute=True, unit="ETH",
               note="the contract holds ETH that no settlement routed to it; no event log shows its source (open, see ROADMAP)")
     for k_ in sorted(hist_prev := jload(os.path.join(D, "history.json"), {})):

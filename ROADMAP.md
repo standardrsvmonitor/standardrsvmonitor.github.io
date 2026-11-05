@@ -150,8 +150,8 @@ Owners may reorder, add or strike items at any time.
   (launch fees, 0.0005 ETH a launch) shows in its holdings and is not counted as revenue (owner decision pending).
 - Open: launchpad-routed LP fees remain a floor; matching reserve-pool swaps to Trade events by transaction would make them exact
   (creator buys in launch transactions, 1,271 swaps, and trades through other routers are missed).
-- Routed ETH by use (4 Nov 2026): `extra.routed_use` follows every settlement's routed ETH and the genesis seed (111.72 ETH to each vault)
-  to its use. The reserve Safe sold 1,682.3 ETH for 4.25M USDG in five swaps (2, 13, 14 Oct), paid 2.55M USDG to 0x3cf569a9 for stock
+- Routed ETH by use (4 Nov 2026; first in, first out by epoch since 5 Nov, shown inside Revenue by destination): `extra.routed_use` follows
+  every settlement's routed ETH and the genesis seed (111.72 ETH to each vault) to its use; `epochs[].use` holds each epoch's split. The reserve Safe sold 1,682.3 ETH for 4.25M USDG in five swaps (2, 13, 14 Oct), paid 2.55M USDG to 0x3cf569a9 for stock
   tokens delivered by 0x8aeaca1e on the same days (3,461.7 SPCX, 6,233.8 SKHY, 8,698.2 BABA), and has bought none since 14 Oct. The
   contraction vault's 85 buybacks burned 5.04M STANDARD for 456.7 ETH. The POL buyback sends every STANDARD it buys to the Incentives vault,
   which holds nothing else (gate `routed_incentives` exact); the vault paid 1.5M (1 Oct) and 250K (30 Oct) to the S-Bill premium budget,

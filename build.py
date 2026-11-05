@@ -58,7 +58,9 @@ SECTIONS = {
           "other payouts. USDG and STANDARD count at the ETH they cost, on a moving average; stock tokens are at cost, not today’s value. Cash in the reserve (ETH in the Safe "
           "and the expansion vault, and the Safe’s USDG), routed ETH the buyback contracts have not spent, and buyback STANDARD still in the Incentives vault count by how much "
           "they grew over the range; when one shrank, it paid for spending beyond the range’s routed ETH, shown below the bar. All includes the genesis seed. The POL buyback "
-          "also holds <span id=\"ru_extra\"></span> that no settlement routed to it; no event log shows its source, so it is left out.",
+          "also holds <span id=\"ru_extra\"></span> that no settlement routed: until 22 Sep 2026 the POL share went to the POL manager, which then moved "
+          "<span id=\"ru_mig\"></span> to the buyback in one transfer, its routed share and the rest of its genesis allocation for protocol liquidity. That "
+          "remainder is genesis ETH, not routed ETH, so it is left out.",
           '<div class="alloc" id="ralloc"></div>', "h_ralloc", "p_ralloc") + '</div>',
 
 "liquidity": kpis("liquidity") + '<div class="grid">' +
@@ -816,7 +818,8 @@ reg('revenue', ({Rf})=>{ document.querySelector('#p_ralloc .pt').textContent = `
   document.getElementById('h_ralloc').innerHTML = `<em>${S_('ruIn').toLocaleString('en-US',{minimumFractionDigits:1, maximumFractionDigits:1})} ETH</em> routed${seed?' and seeded':''}`;
   document.getElementById('ralloc').innerHTML = went.length ? allocHtml(went, ethR, w=>w[0].startsWith('Buybacks')) +
     (drawn>=0.05 ? `<div class="kv2"><div>Spent from earlier balances</div><div>${ethR(drawn)}</div></div>` : '') : '';
-  const rp = (DATA.recon||[]).find(r=>r.id==='routed_pol'); document.getElementById('ru_extra').textContent = rp&&rp.ours!=null ? `${(rp.ref-rp.ours).toFixed(1)} ETH` : 'ETH';
+  const RV = L.reserve||{}; document.getElementById('ru_extra').textContent = RV.polGenesisEth!=null ? `${RV.polGenesisEth.toFixed(1)} ETH` : 'ETH';
+  document.getElementById('ru_mig').textContent = RV.polMigratedEth!=null ? `${RV.polMigratedEth.toFixed(1)} ETH` : 'its ETH';
   return null; });
 reg('revenue', ()=>{ const E2 = E.filter(e=>e.epoch>1 && inRange(e.settledAt)); document.getElementById('h_epochs').innerHTML = `${E.filter(isExp).length} of ${E.length} settled epochs in expansion`;
   return new Chart(c_epochs, {type:'bar', data:{labels:E2.map(e=>'E'+e.epoch), datasets:[

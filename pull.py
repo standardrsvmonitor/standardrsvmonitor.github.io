@@ -770,8 +770,10 @@ def main():
               0.01, absolute=True, unit="STANDARD")
     reconcile("routed_unclassified", "Reserve Safe ETH and USDG and Incentives vault STANDARD not classified by use", ru_chk["otherEth"] + ru_chk["otherUsdg"] + ru_chk["incInOther"], 0.0,
               "every flow assigned a use", 0.01, absolute=True)
-    reconcile("routed_pol", "POL buyback ETH, routed less buybacks", ru_chk["pol"][0], ru_chk["pol"][1], "balance at the compile block", 1e-4, gate=False, absolute=True, unit="ETH",
-              note="the contract holds ETH that no settlement routed to it; no event log shows its source (open, see ROADMAP)")
+    reconcile("routed_pol", "POL buyback ETH, routed and moved from the POL manager less buybacks", ru_chk["pol"][0], ru_chk["pol"][1], "balance at the compile block",
+              1e-4, absolute=True, unit="ETH",
+              note="settlements before 22 Sep 2026 routed the POL share to the POL manager, which moved its ETH to the buyback in one transfer")
+    reserve["polMigratedEth"] = round(ru_tot["polMigrated"], 6); reserve["polGenesisEth"] = round(ru_tot["polExtra"], 6)
     for k_ in sorted(hist_prev := jload(os.path.join(D, "history.json"), {})):
         if hist_prev[k_].get("reserveUsd") and k_ in res_hist: log("  reserve", k_, "snapshot", round(hist_prev[k_]["reserveUsd"]), "rebuilt close", round(res_hist[k_]["total"]))
     pf = extra.pool_flows(x)

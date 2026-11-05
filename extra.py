@@ -8,6 +8,10 @@ SAFE_OK = "0x442e715f626346e8c54381002da614f62bee8d27386535b2521ec8540898556e"  
 CV_BUY = "0x8e8412cac6b961b95ef832e2bac486977bbd29eb9725f9eddd97f3380c31f649"          # contraction vault buyback: (ethIn, standardOut)
 EV_FWD = "0x98c9bf0d2b79ecbf5d1527aee70d8b86d4761c9f5234c3ae6f73a8ef61fc6c54"          # expansion vault forward to the reserve: (value)
 POL_BUY = "0xb226e46e9ea13f5bbac224e6b365c82beb22fbd42694f7721db493241b3337db"         # POL buyback tick: recipient indexed; (ethIn, standardOut)
+POL_MIGRATE = "0x3cd0e9fb71cc7e8c6ab21b1b41cb68da5b4cc1b1a52315ee8ace91368bb6a8d6"     # POL manager: its ETH moved to the address indexed; (eth, standard)
+REGISTRY = "0x855c294dd019e9e0d84c058cff7404f5f2ddca4b"                                 # protocol registry: role (bytes32) indexed, address indexed
+REG_SET = "0xb37614c7d254ea8d16eb81fa11dddaeb266aa8ba4917980859c7740aff30c691"
+REG_POL = "0x" + b"POL_MANAGER".hex().ljust(64, "0")
 GM_FINAL = "0x9dd2a3de967ad06808d0896233a2f261db7cd96284bb119f9bcd1ae9e71fa584"        # genesis minter finalize: [charters, raised, team, pool, expansion seed, contraction seed, ...]
 GENESIS_MINTER = "0xF54B589EADC2aaE98b96DaD58d89BCBF27503e46"
 PROTOCOL = {"zero", "pool", "contraction", "polBuyback", "incentives", "sbills", "bank", "safe", "polManager", "feeSplitter", "taxHook", "expansion"}
@@ -293,8 +297,17 @@ def routed_use(x, epochs, dates, std_rows):
               "incIn": (inc_in_pol, sum(r[3] for r in lots if r[1] == 0)), "incInOther": inc_in_other, "otherEth": other, "otherUsdg": other_usdg}
     con_in = seed_c + sum(e["toVault"] for e in epochs if e["expansion"] not in (True, "true", 1)); con_spent = sum(v.get("burned", 0) for v in ev.values())
     pol_in = sum(e["toPol"] for e in epochs); pol_spent = sum(v.get("polSpent", 0) for v in ev.values())
-    checks["contraction"] = (con_in - con_spent, b_["contractionVault"]["ETH"]); checks["pol"] = (pol_in - pol_spent, b_["polBuyback"]["ETH"])
-    return out, checks, {"sales": n_sale, "stockPayments": n_stock, "polExtra": b_["polBuyback"]["ETH"] - (pol_in - pol_spent)}
+    # The registry's POL_MANAGER role passed from the POL manager to the POL buyback on 22 Sep 2026 (block 69,195,228). Settlements before then
+    # routed the POL share to the POL manager, which moved its whole ETH balance to the buyback in one transfer (POL_MIGRATE, block 69,196,474):
+    # the routed share plus the ETH it still held from its genesis allocation for protocol liquidity.
+    sw = x.getlogs({"address": REGISTRY, "topics": [REG_SET, REG_POL, x.pad(H["polBuyback"])]}, G - 200000, tip, 4000000)
+    sw_ts = x.T(int(sw[0]["blockNumber"], 16)) if sw else 0
+    mig = x.getlogs({"address": H["polManager"], "topics": [POL_MIGRATE, x.pad(H["polBuyback"])]}, G, tip, 4000000)
+    pol_mig = sum(int(words(l["data"])[0], 16) / 1e18 for l in mig)
+    pol_pre = sum(e["toPol"] for e in epochs if e["settledAt"] < sw_ts)
+    checks["contraction"] = (con_in - con_spent, b_["contractionVault"]["ETH"])
+    checks["pol"] = (pol_mig + pol_in - pol_pre - pol_spent, b_["polBuyback"]["ETH"])
+    return out, checks, {"sales": n_sale, "stockPayments": n_stock, "polMigrated": pol_mig, "polRoutedBefore": pol_pre, "polExtra": pol_mig - pol_pre}
 
 
 # ---------- STANDARD flows with the pool, by counterparty and by the wallet that sent the transaction ----------

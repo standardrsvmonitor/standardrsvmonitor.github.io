@@ -27,7 +27,7 @@ Owners may reorder, add or strike items at any time.
 - [ ] **Venue discovery on chain.** The "share of chain volume" and "share of chain liquidity" panels start from DexScreener's pair list.
   Discover every pool holding SPCX, SKHY, BABA or ETH against USDG or WETH from PoolManager Initialize events and pool-factory events
   instead, and keep DexScreener only as a cross-check. Done: no aggregator in the venue scan.
-- [ ] **POL buyback ETH that routing did not send.** On 4 Nov 2026 the POL buyback held 275.86 ETH against 0.046 ETH left from the
+- [x] **POL buyback ETH that routing did not send.** On 4 Nov 2026 the POL buyback held 275.86 ETH against 0.046 ETH left from the
   477.05 ETH routed to it (it spent 477.0 ETH in 79 ticks of 6 ETH, one of 9). No event log on the contract, the fee splitter, the team,
   reserve or owner Safes shows the source; the public RPC has no trace or archive methods and the explorer is behind Cloudflare. Watch
   `routed_pol` shows the gap. Find the source (a trace-capable RPC, or the deployment transaction) and say in the routed ETH note what it is.
@@ -160,3 +160,13 @@ Owners may reorder, add or strike items at any time.
 - Beans's "King of the Markets" share chart (4 Nov 2026) counts only Uniswap v4 stock/USDG pools as Robinhood Chain trading; our venue
   data reproduces it (SKHY 98.9%, SPCX 88.2% for the week to 2 Nov). The other venues are real trading (the Uniswap v3 SPCX/USDG pool's own
   Swap events match our flow method to the dollar on 2 Nov; 287 of its 11,488 transactions also touched the reserve pool).
+- POL buyback ETH (5 Nov 2026). The protocol registry (0x855c294d…, event 0xb37614c7: role bytes32, address) names every role. `POL_MANAGER`
+  pointed at the POL manager (0x242F3e67…) from genesis and at the POL buyback (0x50e4C444…, deployed at block 69,178,088 with no ETH) from
+  block 69,195,228 (22 Sep 2026, owner Safe MultiSend 0x7f60ac02…). Epochs 1 and 2 (381.29 ETH of POL share) were routed to the POL manager.
+  At block 69,196,474 (tx 0x2c2c0287…) the POL manager moved 657.0967 ETH to the buyback, event 0x3cd0e9fb (to indexed; eth, standard):
+  the routed 381.29 and 275.81 ETH it held from genesis. The genesis minter's finalize gave it 335.16 ETH for protocol liquidity; it seeded
+  the pool with 25.00 ETH (single-sided range 115000..115200, with 100M STANDARD below) and spent 35.94 ETH in six 6-ETH STANDARD buys for
+  single-sided liquidity adds (16 to 17 Sep, event 0xde8edd3f). In 716.44, out 718.04: 1.59 ETH of the POL manager's inflow is still
+  unexplained (open; not on the page, which reads the migration event itself). Gate `routed_pol` is exact: migrated plus POL share routed
+  after the switch less buyback ticks equals the balance. The registry also re-pointed `EXPANSION_VAULT` to the owner Safe (block 78,395,538)
+  and then the reserve Safe (78,398,944), so expansion-epoch ETH has gone straight to the reserve Safe since 29 Sep.

@@ -798,12 +798,12 @@ reg('revenue', ({Rf})=>{ document.querySelector('#p_alloc .pt').textContent = `R
       ['Held in the Incentives vault', al.held, C.sand], ['Not yet bought', al.unbought, C.grey]]],
     ['Team', [['Team', al.team+al.slp, C.rose]]], ['License sales, burned', [['License sales, burned', al.lic, C.violet]]],
     ['Launchpad fee Safe', [['Launchpad fee Safe', al.lpad, C.sapphire]]], ['Not yet routed', [['Not yet routed', al.open, alpha(C.fg,.3)]]]];
-  const leaves = G.flatMap(g=>g[1]).filter(w=>w[1]>=0.5), wTot = sum(leaves.map(w=>w[1])), pc = (v)=>fmt.pct(v/wTot,0);
-  const lg = G.map(([g, rows])=>{ const live = rows.filter(w=>w[1]>=0.5); if (!live.length) return '';
-    if (rows.length===1) return `<i style="background:${live[0][2]}"></i><span>${g}</span><span class="v">${fmt.usd(live[0][1])}</span><span class="p">${pc(live[0][1])}</span>`;
+  const leaves = G.flatMap(g=>g[1]).filter(w=>w[1]>=0.5), wTot = sum(leaves.map(w=>w[1])), pc = (v)=>fmt.pct(v/wTot,0), u$ = (v)=>v<0.5?'$0':fmt.usd(v);
+  const lg = G.map(([g, rows])=>{ const live = rows;   // every row shows in every range, $0 where nothing went, so the ranges read alike
+    if (rows.length===1) return `<i style="background:${live[0][2]}"></i><span>${g}</span><span class="v">${u$(live[0][1])}</span><span class="p">${pc(live[0][1])}</span>`;
     const gt = sum(live.map(w=>w[1]));
-    return `<i style="background:transparent"></i><span>${g}</span><span class="v">${fmt.usd(gt)}</span><span class="p">${pc(gt)}</span>` +
-      live.map(w=>`<i style="background:${w[2]}"></i><span class="sub">${w[0]}</span><span class="v sub">${fmt.usd(w[1])}</span><span class="p">${pc(w[1])}</span>`).join(''); }).join('');
+    return `<i style="background:transparent"></i><span>${g}</span><span class="v">${u$(gt)}</span><span class="p">${pc(gt)}</span>` +
+      live.map(w=>`<i style="background:${w[2]}"></i><span class="sub">${w[0]}</span><span class="v sub">${u$(w[1])}</span><span class="p">${pc(w[1])}</span>`).join(''); }).join('');
   document.getElementById('alloc').innerHTML = `<div class="abar">${leaves.map(w=>`<div style="width:${(100*w[1]/wTot).toFixed(2)}%;background:${w[2]}"></div>`).join('')}</div><div class="lg">${lg}</div>`;
   document.getElementById('h_alloc').innerHTML = `<em>${fmt.usd(wTot)}</em>`;
   const rp = (DATA.recon||[]).find(r=>r.id==='routed_pol'); document.getElementById('ru_extra').textContent = rp&&rp.ours!=null ? `${(rp.ref-rp.ours).toFixed(1)} ETH` : 'ETH';

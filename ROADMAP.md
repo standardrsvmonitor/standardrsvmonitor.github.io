@@ -150,6 +150,11 @@ Owners may reorder, add or strike items at any time.
   (launch fees, 0.0005 ETH a launch) shows in its holdings and is not counted as revenue (owner decision pending).
 - Open: launchpad-routed LP fees remain a floor; matching reserve-pool swaps to Trade events by transaction would make them exact
   (creator buys in launch transactions, 1,271 swaps, and trades through other routers are missed).
+- 4 Nov 2026: the indexer's `home` snapshot is near-live, but its `leaderboard` is cached for about a minute and carries its own `asOfBlock`.
+  `pull.py` read the leaderboard after the log scans, 34 minutes after the snapshot. Charter 594 (one branch, owner 0x4a69…9605) was
+  withdrawn in between, at block 105,899,900 (tx 0xb337…9b1d, NFT burned), so the Top bankers headline read 4,307 while the snapshot read
+  4,308 and the gate failed. The two are now read together, and the pair is re-read until their branch totals agree.
+  Charter ownership in the per-banker replay is still the creator's; that has matched so far.
 - Routed ETH by use (4 Nov 2026; first in, first out by epoch since 5 Nov, shown inside Revenue by destination): `extra.routed_use` follows
   every settlement's routed ETH and the genesis seed (111.72 ETH to each vault) to its use; `epochs[].use` holds each epoch's split. The reserve Safe sold 1,682.3 ETH for 4.25M USDG in five swaps (2, 13, 14 Oct), paid 2.55M USDG to 0x3cf569a9 for stock
   tokens delivered by 0x8aeaca1e on the same days (3,461.7 SPCX, 6,233.8 SKHY, 8,698.2 BABA), and has bought none since 14 Oct. The

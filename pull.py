@@ -842,8 +842,10 @@ def main():
     reconcile("routed_unclassified", "Routed ETH, USDG and STANDARD with no use assigned", ru_chk["unclassified"], 0.0, "every flow assigned a use", 0.01, absolute=True)
     reconcile("routed_total", "Routed ETH followed to its uses, summed", sum(ru_tot.values()), sum(e["toVault"] + e["toPol"] + e["team"] for e in epochs) + ru_chk["seed"],
               "routed at every settlement plus the genesis seed (uses add the reserve’s swap gains and returned position fees)", 0.001)
-    reconcile("routed_pol", "POL buyback ETH, routed less buybacks", ru_chk["pol"][0], ru_chk["pol"][1], "balance at the compile block", 1e-4, gate=False, absolute=True, unit="ETH",
-              note="the contract holds ETH that no settlement routed to it; no event log shows its source (open, see ROADMAP)")
+    reconcile("routed_pol", "POL buyback ETH, routed and moved from the POL manager less buybacks", ru_chk["pol"][0], ru_chk["pol"][1], "balance at the compile block",
+              1e-4, absolute=True, unit="ETH",
+              note="settlements before 22 Sep 2026 routed the POL share to the POL manager, which moved its ETH to the buyback in one transfer")
+    reserve["polMigratedEth"] = round(ru_chk["polMigrated"], 6); reserve["polGenesisEth"] = round(ru_chk["polMigrated"] - ru_chk["polRoutedBefore"], 6)
     for k_ in sorted(hist_prev := jload(os.path.join(D, "history.json"), {})):
         if hist_prev[k_].get("reserveUsd") and k_ in res_hist: log("  reserve", k_, "snapshot", round(hist_prev[k_]["reserveUsd"]), "rebuilt close", round(res_hist[k_]["total"]))
     pf = extra.pool_flows(x)

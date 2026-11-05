@@ -57,7 +57,9 @@ SECTIONS = {
           "the reserve Safe, oldest receipts first, counts in the reserve. Fees of the current epoch are not yet routed. Stock tokens are at cost. Stock tokens sent out of the "
           "reserve move to sent out: of each token’s purchase cost, the share of the reserve’s holding of that token (loose in the Safe and in its positions) that left, and "
           "launchpad tokens in full when the Safe’s loose balance left (all of its loose BABA and SKHY on 10 Nov 2026). The POL "
-          "buyback also holds <span id=\"ru_extra\"></span> that no settlement routed to it; no event log shows its source, so it is left out. ", '<div class="alloc" id="alloc"></div>', "h_alloc", "p_alloc") +
+          "buyback also holds <span id=\"ru_extra\"></span> that no settlement routed: until 22 Sep 2026 the POL share went to the POL manager, which then moved "
+          "<span id=\"ru_mig\"></span> to the buyback in one transfer, its routed share and the rest of its genesis allocation for protocol liquidity. That "
+          "remainder is genesis ETH, not routed ETH, so it is left out. ", '<div class="alloc" id="alloc"></div>', "h_alloc", "p_alloc") +
     panel(7, "Fee routing by epoch", "STANDARD trading fees and charter proceeds routed by the fee engine at each settlement, in ETH, for the epochs settled inside the selected range. "
           "Green bars are expansion epochs, red contraction.",
           chart("c_epochs"), "h_epochs") +
@@ -831,7 +833,8 @@ reg('revenue', ({Rf})=>{ document.querySelector('#p_alloc .pt').textContent = `R
       live.map(w=>`<i style="background:${w[2]}"></i><span class="sub">${w[0]}</span><span class="v sub">${u$(w[1])}</span><span class="p">${pc(w[1])}</span>`).join(''); }).join('');
   document.getElementById('alloc').innerHTML = `<div class="abar">${leaves.map(w=>`<div style="width:${(100*w[1]/wTot).toFixed(2)}%;background:${w[2]}"></div>`).join('')}</div><div class="lg">${lg}</div>`;
   document.getElementById('h_alloc').innerHTML = `<em>${fmt.usd(wTot)}</em>`;
-  const rp = (DATA.recon||[]).find(r=>r.id==='routed_pol'); document.getElementById('ru_extra').textContent = rp&&rp.ours!=null ? `${(rp.ref-rp.ours).toFixed(1)} ETH` : 'ETH';
+  const RV = L.reserve||{}; document.getElementById('ru_extra').textContent = RV.polGenesisEth!=null ? `${RV.polGenesisEth.toFixed(1)} ETH` : 'ETH';
+  document.getElementById('ru_mig').textContent = RV.polMigratedEth!=null ? `${RV.polMigratedEth.toFixed(1)} ETH` : 'its ETH';
   return null; });
 const allocHtml = (went, vf, right)=>{ const tot = sum(went.map(w=>w[1])),   // the allocation bar and its legend; right() moves rows to a second legend column
     row = (w)=>`<i style="background:${w[2]}"></i><span>${w[0]}</span><span class="v">${vf(w[1])}</span><span class="p">${fmt.pct(w[1]/tot,0)}</span>`;

@@ -8,6 +8,10 @@ SAFE_OK = "0x442e715f626346e8c54381002da614f62bee8d27386535b2521ec8540898556e"  
 CV_BUY = "0x8e8412cac6b961b95ef832e2bac486977bbd29eb9725f9eddd97f3380c31f649"          # contraction vault buyback: (ethIn, standardOut)
 EV_FWD = "0x98c9bf0d2b79ecbf5d1527aee70d8b86d4761c9f5234c3ae6f73a8ef61fc6c54"          # expansion vault forward to the reserve: (value)
 POL_BUY = "0xb226e46e9ea13f5bbac224e6b365c82beb22fbd42694f7721db493241b3337db"         # POL buyback tick: recipient indexed; (ethIn, standardOut)
+POL_MIGRATE = "0x3cd0e9fb71cc7e8c6ab21b1b41cb68da5b4cc1b1a52315ee8ace91368bb6a8d6"     # POL manager: its ETH moved to the address indexed; (eth, standard)
+REGISTRY = "0x855c294dd019e9e0d84c058cff7404f5f2ddca4b"                                 # protocol registry: role (bytes32) indexed, address indexed
+REG_SET = "0xb37614c7d254ea8d16eb81fa11dddaeb266aa8ba4917980859c7740aff30c691"
+REG_POL = "0x" + b"POL_MANAGER".hex().ljust(64, "0")
 GM_FINAL = "0x9dd2a3de967ad06808d0896233a2f261db7cd96284bb119f9bcd1ae9e71fa584"        # genesis minter finalize: [charters, raised, team, pool, expansion seed, contraction seed, ...]
 GENESIS_MINTER = "0xF54B589EADC2aaE98b96DaD58d89BCBF27503e46"
 PROTOCOL = {"zero", "pool", "contraction", "polBuyback", "incentives", "sbills", "bank", "safe", "polManager", "feeSplitter", "taxHook", "expansion"}
@@ -386,11 +390,19 @@ def routed_use(x, epochs, exits=(), weights=None):
         for u in [u for u in fate[k] if u.startswith("stocks_")]: del fate[k][u]
         if st_: fate[k]["stocks"] += st_
     b_ = x.bal
+    # The registry's POL_MANAGER role passed from the POL manager to the POL buyback on 22 Sep 2026 (block 69,195,228). Settlements before then
+    # routed the POL share to the POL manager, which moved its whole ETH balance to the buyback in one transfer (POL_MIGRATE, block 69,196,474):
+    # the routed share plus the ETH it still held from its genesis allocation for protocol liquidity. That remainder is genesis ETH, not routed.
+    sw = x.getlogs({"address": REGISTRY, "topics": [REG_SET, REG_POL, x.pad(H["polBuyback"])]}, G - 200000, tip, 4000000)
+    sw_ts = x.T(int(sw[0]["blockNumber"], 16)) if sw else 0
+    mig = x.getlogs({"address": H["polManager"], "topics": [POL_MIGRATE, x.pad(H["polBuyback"])]}, G, tip, 4000000)
+    pol_mig = sum(int(words(l["data"])[0], 16) / 1e18 for l in mig)
+    pol_pre = sum(p["toPol"] for p in epochs if p["settledAt"] < sw_ts)
     checks = {"cashEth": (sum(l[1] for l in cashQ), b_["reserveSafe"]["ETH"] + b_["expansionVault"]["ETH"]), "usdg": (sum(l[1] for l in usdgQ), b_["reserveSafe"].get("USDG", 0.0)),
               "contraction": (sum(l[1] for l in conQ), b_["contractionVault"]["ETH"]), "incentives": (sum(l[1] for l in incQ), b_["incentivesVault"].get("STANDARD", 0.0)),
-              "incIn": (inc_in["pol"], pol_std), "pol": (sum(l[1] for l in polQ), b_["polBuyback"]["ETH"]), "unclassified": other + inc_in["other"],
+              "incIn": (inc_in["pol"], pol_std), "pol": (sum(l[1] for l in polQ) + pol_mig - pol_pre, b_["polBuyback"]["ETH"]), "unclassified": other + inc_in["other"],
               "outsideIn": dict(outside_in),
-              "seed": seed_x + seed_c}
+              "seed": seed_x + seed_c, "polMigrated": pol_mig, "polRoutedBefore": pol_pre}
     totals = collections.Counter()
     for v in fate.values(): totals.update(v)
     return {k: {u: round(a, 9) for u, a in v.items()} for k, v in fate.items()}, checks, dict(totals)

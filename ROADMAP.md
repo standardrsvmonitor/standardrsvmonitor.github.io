@@ -181,3 +181,6 @@ Owners may reorder, add or strike items at any time.
   withdrawn in between, at block 105,899,900 (tx 0xb337…9b1d, NFT burned), so the Top bankers headline read 4,307 while the snapshot read
   4,308 and the gate failed. The two are now read together, and the pair is re-read until their branch totals agree.
   Charter ownership in the per-banker replay is still the creator's; that has matched so far.
+- A gate failure that is "Chart is not defined" at only one layout width, while the other widths render cleanly, means Chart.js failed to
+  load from jsDelivr during that one headless load (7 Nov 2026, 1280px). `qa/render.py` now retries a load up to three times when Chart.js
+  did not load, and only reports it (as "Chart.js did not load from the CDN") if all three attempts fail.

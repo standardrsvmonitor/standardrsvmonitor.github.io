@@ -32,7 +32,7 @@ async function run(){
   if (document.fonts) { try { await document.fonts.ready; } catch(e){} }
   const mobile = /[?&]m=1/.test(location.search);
   const tabs = [...document.querySelectorAll('#tabs button[data-t]')].map(b=>b.dataset.t);
-  const o = {errors:window.__err, width:window.innerWidth, tabs:{}};
+  const o = {errors:window.__err, width:window.innerWidth, chartjs:typeof Chart!=='undefined', tabs:{}};
   if (!mobile) {
     o.title = document.title; o.nav = [...document.querySelectorAll('#tabs button[data-t]')].map(b=>({t:b.dataset.t, text:txt(b), marks:b.querySelectorAll('i,svg,img').length}));
     o.side = txt(document.querySelector('.side-foot')); o.foot = txt(document.querySelector('.foot')); o.status = txt(document.getElementById('status'));
@@ -79,10 +79,16 @@ def chrome():
 def dump(url, width, budget):
     args = [chrome(), "--headless=new", "--disable-gpu", "--no-sandbox", "--hide-scrollbars", "--no-first-run", f"--window-size={width},1000",
             f"--virtual-time-budget={budget}", "--dump-dom", url]
-    for attempt in range(2):   # a CDN or font hiccup gets one retry
+    d = None
+    for attempt in range(3):   # a CDN or font hiccup gets a retry: no output at all, or Chart.js (jsDelivr) not loaded in this load
         r = subprocess.run(args, capture_output=True, text=True, timeout=300)
         m = re.search(r'<pre id="vfy"[^>]*>(.*?)</pre>', r.stdout, re.S)
-        if m: return json.loads(html.unescape(m.group(1)))
+        if not m: continue
+        d = json.loads(html.unescape(m.group(1)))
+        if d.get("chartjs"): return d
+        print(f"render: Chart.js did not load at width {width} (attempt {attempt + 1}), retrying", file=sys.stderr)
+    if d is not None:   # still no Chart.js after the retries: report it as such, and the gate fails as before
+        d.setdefault("errors", []).insert(0, "qa: Chart.js did not load from the CDN at width %d in 3 attempts" % width); return d
     return {"errors": ["qa: no output from Chrome at width %d: %s" % (width, (r.stderr or "")[-300:])], "fatal": "no output", "tabs": {}}
 
 

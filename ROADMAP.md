@@ -160,3 +160,6 @@ Owners may reorder, add or strike items at any time.
 - Beans's "King of the Markets" share chart (4 Nov 2026) counts only Uniswap v4 stock/USDG pools as Robinhood Chain trading; our venue
   data reproduces it (SKHY 98.9%, SPCX 88.2% for the week to 2 Nov). The other venues are real trading (the Uniswap v3 SPCX/USDG pool's own
   Swap events match our flow method to the dollar on 2 Nov; 287 of its 11,488 transactions also touched the reserve pool).
+- A gate failure that is "Chart is not defined" at only one layout width, while the other widths render cleanly, means Chart.js failed to
+  load from jsDelivr during that one headless load (7 Nov 2026, 1280px). `qa/render.py` now retries a load up to three times when Chart.js
+  did not load, and only reports it (as "Chart.js did not load from the CDN") if all three attempts fail.

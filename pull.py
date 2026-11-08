@@ -544,8 +544,16 @@ def main():
     log("ledger check: pending reconstructed", round(pend), "live", round(int(snap["bank"]["totalPendingLive"]) / 1e18),
         "| issued", round(sum(days[d]["issuance"] for d in dl)), "live", round(int(snap["bank"]["cumulativeIssued"]) / 1e18))
     reconcile("ledger", "In banks (ledger balance), rebuilt from events", pend, int(snap["bank"]["totalPendingLive"]) / 1e18, "Standard Reserve indexer, totalPendingLive", 0.0002, unit="STANDARD")
-    reconcile("issued", "STANDARD issued to bankers, rebuilt by epoch", sum(days[d]["issuance"] for d in dl), int(snap["bank"]["cumulativeIssued"]) / 1e18,
-       "Standard Reserve indexer, cumulativeIssued", 0.001, unit="STANDARD")
+    # the central bank accrues issuance lazily: cumulativeIssued stands at its last checkpoint (lastAccrual(), any interaction moves it), not
+    # at the compile time, so the rebuild is compared at that checkpoint, read at the indexer snapshot's own block (8 Nov 2026: 1.9 hours apart)
+    ck_ = ecall(H["centralBank"], sel("lastAccrual()"), hex(int(snap["blockNumber"])))
+    ck_ = min(now, int(ck_, 16)) if ck_ and ck_ != "0x" else now
+    iss_after_ck = 0.0; t_ = max(ck_, genesis_ts)
+    while t_ < now:
+        k = (t_ - genesis_ts) // ep_len + 1; seg = min(now, genesis_ts + k * ep_len) - t_
+        iss_after_ck += base_issue * m_by_epoch.get(k, m_by_epoch[max(m_by_epoch)]) * seg / 86400; t_ += seg
+    reconcile("issued", "STANDARD issued to bankers, rebuilt by epoch to the central bank’s last accrual", sum(days[d]["issuance"] for d in dl) - iss_after_ck,
+       int(snap["bank"]["cumulativeIssued"]) / 1e18, "Standard Reserve indexer, cumulativeIssued", 1e-6, unit="STANDARD")
     reconcile("branches", "Branches, replayed from events", census[max(census)][2], int(snap["bank"]["totalBranches"]), "Standard Reserve indexer, totalBranches", 0.002)
     reconcile("charters", "Active charters, replayed from events", census[max(census)][0], int(snap["census"]["active"]), "Standard Reserve indexer, census", 0.002)
     # license payments (license sales, a revenue stream since 3 Nov 2026) against the chain: LicensesPurchased(count, unitPrice) on the three

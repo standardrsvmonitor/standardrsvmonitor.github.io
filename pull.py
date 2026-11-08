@@ -351,6 +351,15 @@ def main():
         if s in ("STANDARD", "USDG") or s not in lp: continue
         stock_ds[s] = get(f"https://api.dexscreener.com/token-pairs/v1/robinhood/{a}")
     jsave(os.path.join(C, "stock_pairs.json"), stock_ds)
+    # every venue ever listed stays in the chain-share scan: DexScreener's list drops pools as their liquidity falls, and a dropped pool's
+    # past volume and liquidity would otherwise vanish from history. The live market context (pool_ctx) still uses today's list.
+    sv = jload(os.path.join(C, "stock_venues.json"), {})
+    for s, pairs in stock_ds.items():
+        known = sv.setdefault(s, {})
+        for pr in pairs if isinstance(pairs, list) else []:
+            if pr.get("pairAddress"): known[pr["pairAddress"].lower()] = pr
+    jsave(os.path.join(C, "stock_venues.json"), sv)
+    venue_pairs = {s: list(v.values()) for s, v in sv.items() if s in stock_ds}
 
     # ---------- compile ----------
     px = float(dstd.get("priceUsd") or 0)
@@ -817,7 +826,7 @@ def main():
     out["lpChanges"] = {"adds": sum(1 for r_ in mine_ if int(r_[4]) > 0), "withdrawals": len(wd_), "lastAdd": day(T(max((r_[0] for r_ in mine_ if int(r_[4]) > 0), default=SEED_BLOCK))),
                         "lastWithdrawal": day(T(max(r_[0] for r_ in wd_))) if wd_ else None}
     # every venue for each reserve asset; the reserve's position against holding; who executes swaps in the reserve's pools
-    reg, keys, vsw, vlq, vcu = extra.venue_scan(x, stock_ds, {p_["pool"] for p_ in lp_pools.values()})
+    reg, keys, vsw, vlq, vcu = extra.venue_scan(x, venue_pairs, {p_["pool"] for p_ in lp_pools.values()})
     shares = extra.chain_shares(x, reg, keys, vsw, vlq, vcu, lp_pools, closes, eth_day, dl, res_hist)
     fee_tok = collections.defaultdict(dict)   # fees earned per day in token units, so the P&L marks them at each day's close
     for s_ in lp_pools:

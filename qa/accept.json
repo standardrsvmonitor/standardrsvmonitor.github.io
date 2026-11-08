@@ -133,5 +133,21 @@
   "to": "2026-10-31",
   "until": "2026-11-10",
   "why": "Buybacks burned now counts the contraction vault only; S-Bill fee burns and the POL manager's launch-day fee burn moved to burnFees; 3 Nov accuracy audit"
+ },
+ {
+  "fields": [
+   "venues_.*",
+   "chainTvl_.*",
+   "chainVol_.*",
+   "liqShare_.*",
+   "volShare_.*",
+   "otherTvl_.*",
+   "poolVolChain_.*",
+   "rank_.*"
+  ],
+  "from": "2026-10-14",
+  "to": "2026-11-05",
+  "until": "2026-11-15",
+  "why": "Venue scan keeps every pool DexScreener ever listed for an asset; pools it had dropped as their liquidity fell are counted again (venue counts up to 9 higher for ETH, 5 for SPCX, 2 for BABA; chain volume and liquidity within 1.4% on these days); 8 Nov 2026"
  }
 ]

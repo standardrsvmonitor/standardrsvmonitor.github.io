@@ -160,3 +160,6 @@ Owners may reorder, add or strike items at any time.
 - Beans's "King of the Markets" share chart (4 Nov 2026) counts only Uniswap v4 stock/USDG pools as Robinhood Chain trading; our venue
   data reproduces it (SKHY 98.9%, SPCX 88.2% for the week to 2 Nov). The other venues are real trading (the Uniswap v3 SPCX/USDG pool's own
   Swap events match our flow method to the dollar on 2 Nov; 287 of its 11,488 transactions also touched the reserve pool).
+- DexScreener's token-pairs list drops pools as their liquidity falls (8 Nov 2026: a SKHY/USDG v4 pool, 0x0df0a8bf, with $25K of SKHY
+  volume on 17 Oct). The venue scan now reads `data/cache/stock_venues.json`, every pair ever listed per asset, so a dropped pool's past
+  volume and liquidity stay in chain volume and venue counts; `stock_pairs.json` (today's list) still feeds the live market context only.

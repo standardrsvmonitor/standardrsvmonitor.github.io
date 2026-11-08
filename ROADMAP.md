@@ -74,6 +74,11 @@ Owners may reorder, add or strike items at any time.
 
 ## Findings (facts later runs rely on)
 
+- 8 Nov 2026: the central bank accrues issuance lazily. `cumulativeIssued` stands at `lastAccrual()` (any interaction moves it), not at the
+  block time, so a rebuild run to the compile time drifts above it by the issuance rate times the time since the last interaction (1.9 hours,
+  21,797 STANDARD, 0.10%, on 8 Nov). The `issued` reconciliation now compares at `lastAccrual()`, read at the indexer snapshot's block. It
+  matches exactly, so its tolerance is 1e-6.
+
 - 29 Oct 2026: GeckoTerminal daily candles were cached the first time a day appeared (mid-day) and never refreshed; 20–27 Oct closes were
   published up to 6.6% off. Fixed in `pull.py` (fresh candles overwrite) and reconciled daily against the pool's own last trade × Coinbase.
 - 29 Oct 2026: the protocol's site names three contract sets: genesis (charter auction 0x65B4…, never sold a charter; license auction

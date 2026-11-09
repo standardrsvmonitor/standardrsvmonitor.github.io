@@ -76,9 +76,12 @@ SECTIONS = {
           "0.0125% protocol fee. A change to a position settles its accrued fees to the Safe: the 14 Oct 2026 addition to the ETH/USDG "
           "position settled 0.0097 ETH and 26.00 USDG, and the 3 Nov 2026 re-range of the BABA positions 2,614.69 USDG and 31.44 BABA, counted on the days they accrued. Each compile reconciles the fees not yet collected, at today’s pool price, with the "
           "same fees read from the positions; the difference from the sum of daily figures is the move in the pool price since each fee was earned.", chart("c_pfee"), "h_pfee") +
-    panel(6, "Share of chain volume by pool, daily", "Volume served by the reserve’s liquidity as a share of all on-chain volume in the same asset, across every pool DexScreener "
-          "lists against USDG or ETH.", chart("c_vshare"), "h_vshare", "p_vshare") +
-    panel(6, "Share of chain liquidity by pool, daily", "The reserve’s position value as a share of all on-chain liquidity in pools pairing the same asset with USDG or ETH.",
+    panel(6, "Share of chain volume by pool, daily", "Volume served by the reserve’s liquidity as a share of all on-chain volume in the same asset, across every pool pairing "
+          "the asset with USDG, ETH or WETH. Uniswap v4 pools are found on chain from the PoolManager’s Initialize events; those that held liquidity when the monitor read "
+          "them, from 8 Nov 2026, are counted. Other pools are every pair DexScreener has listed. A v4 pool emptied before 8 Nov 2026 and never listed is left out, so "
+          "chain volume is a floor and the share a ceiling.", chart("c_vshare"), "h_vshare", "p_vshare") +
+    panel(6, "Share of chain liquidity by pool, daily", "The reserve’s position value as a share of all on-chain liquidity in pools pairing the same asset with USDG, ETH or WETH, "
+          "the same pools as the share of chain volume.",
           chart("c_lshare"), "h_lshare", "p_lshare") +
     panel(7, "Pool volume by counterparty, daily", "Fee-exempt swaps are summed exactly. The rest is estimated from 150 size-weighted trades per pool and day, read from receipts. "
           "Arbitrage trades the asset the other way on another pool in the same transaction. Organic users are wallets with fewer than 1,000 transactions trading through a "

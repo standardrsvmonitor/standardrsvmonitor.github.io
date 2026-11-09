@@ -826,7 +826,7 @@ def main():
     out["lpChanges"] = {"adds": sum(1 for r_ in mine_ if int(r_[4]) > 0), "withdrawals": len(wd_), "lastAdd": day(T(max((r_[0] for r_ in mine_ if int(r_[4]) > 0), default=SEED_BLOCK))),
                         "lastWithdrawal": day(T(max(r_[0] for r_ in wd_))) if wd_ else None}
     # every venue for each reserve asset; the reserve's position against holding; who executes swaps in the reserve's pools
-    reg, keys, vsw, vlq, vcu = extra.venue_scan(x, venue_pairs, {p_["pool"] for p_ in lp_pools.values()})
+    reg, keys, vsw, vlq, vcu = extra.venue_scan(x, venue_pairs, {p_["pool"] for p_ in lp_pools.values()}, lp_pools)
     shares = extra.chain_shares(x, reg, keys, vsw, vlq, vcu, lp_pools, closes, eth_day, dl, res_hist)
     fee_tok = collections.defaultdict(dict)   # fees earned per day in token units, so the P&L marks them at each day's close
     for s_ in lp_pools:

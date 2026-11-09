@@ -534,7 +534,91 @@ def decimals(x, toks):
     return c
 
 
-def venue_scan(x, pairs, reserve_pids):
+def v4_discover(x, lp_pools, weth):
+    """Every Uniswap v4 pool that pairs a reserve asset with USDG, native ETH or WETH, read from the PoolManager's Initialize events (currency0
+    and currency1 are indexed, so one filter per pair of tokens finds them all). Pool keys come from the same events. Cached per token pair."""
+    zero = "0x" + "0" * 40; usdg = x.USDG.lower()
+    c = x.jl("v4_init.json", {}); kc = x.jl("v4_keys.json", {}); out = []
+    for sym, p in sorted(lp_pools.items()):
+        a = p["stockAddr"].lower()
+        if a == zero: pairs = [(zero, usdg, "ETH", "USDG")] + [(w, usdg, "WETH", "USDG") for w in weth]
+        else: pairs = [(a, q, sym, qs) for q, qs in [(usdg, "USDG"), (zero, "ETH")] + [(w, "WETH") for w in weth]]
+        for t, q, ts, qs in pairs:
+            c0, c1 = sorted([t, q]); e = c.setdefault(f"{c0},{c1}", {"last": -1, "pools": {}})
+            if e["last"] < x.tip:
+                for l in x.getlogs({"address": x.PM, "topics": [x.INIT, None, x.pad(c0), x.pad(c1)]}, e["last"] + 1, x.tip, 50_000_000):
+                    w = words(l["data"]); pid = l["topics"][1].lower()
+                    e["pools"][pid] = int(l["blockNumber"], 16)
+                    kc.setdefault(pid, [c0, c1, int(w[0], 16), s256(w[1]), "0x" + w[2][-40:]])
+                e["last"] = x.tip
+            for pid, b in e["pools"].items():
+                out.append({"sym": sym, "id": pid, "v4": True, "liqStart": b, "start": max(b, x.SEED_BLOCK - 3_000_000), "dex": "uniswap", "label": "v4",
+                            "base": t, "quote": q, "bsym": ts, "qsym": qs})
+    x.js("v4_init.json", c); x.js("v4_keys.json", kc)
+    return out
+
+
+MC3 = "0xcA11bde05977b3631167028862bE2a173976CA11"   # Multicall3
+
+
+def _liq_many(x, pids, block):
+    """StateView.getLiquidity for many pools at one block, 400 per Multicall3.aggregate3 call. Returns {pool id: active liquidity}."""
+    import time
+    sel = x.sel("getLiquidity(bytes32)")[2:]; out = {}
+    for k in range(0, len(pids), 400):
+        part = pids[k:k + 400]; n = len(part)
+        head = "".join(f"{n * 32 + i * 192:064x}" for i in range(n))
+        body = "".join(x.pad(x.SV)[2:] + f"{1:064x}" + f"{96:064x}" + f"{36:064x}" + (sel + p_[2:]).ljust(128, "0") for p_ in part)
+        data = "0x82ad56cb" + f"{32:064x}" + f"{n:064x}" + head + body
+        for t in range(6):
+            r = x.rpc("eth_call", [{"to": MC3, "data": data}, hex(block)])
+            if "result" in r: break
+            time.sleep(5 * (t + 1))
+        else: raise RuntimeError(f"getLiquidity multicall failed at {block}: {r.get('error')}")
+        h = r["result"][2:]; W = lambda o: int(h[o * 2:o * 2 + 64], 16)
+        base = W(0) + 32
+        for i, p_ in enumerate(part):
+            o = base + W(base + i * 32)
+            ok, ln = W(o), W(o + W(o + 32))
+            out[p_] = W(o + W(o + 32) + 32) if ok and ln >= 32 else 0
+        time.sleep(0.2)
+    return out
+
+
+def v4_held(x, pids):
+    """The pools among pids that hold active liquidity now or did at any earlier run (StateView.getLiquidity at the tip; the RPC keeps no
+    historical state, so past closes cannot be read). A pool once seen holding liquidity stays in. Pools emptied before the first read
+    (8 Nov 2026) are not found this way, so the set is a floor."""
+    c = x.jl("v4_held.json", {})
+    now = [p for p in pids if p not in c]
+    for p, L in (_liq_many(x, now, x.tip) if now else {}).items():
+        if L: c[p] = x.tip
+    x.js("v4_held.json", c)
+    return {p for p in pids if p in c}
+
+
+def _v4_batch(x, ents, topic0, step, handle, save=None):
+    """Scan one PoolManager event for many pools. Pools with the same last block and fewer than 100,000 blocks to read share a query, up to 100
+    pool ids per topic filter (the RPC allows a list of ids only over 100,000 blocks); a longer backfill reads one pool at a time over wide ranges."""
+    groups = collections.defaultdict(list)
+    for pid, e in ents:
+        if e["last"] < x.tip: groups[e["last"]].append((pid, e))
+    for last, g in sorted(groups.items()):
+        if x.tip - last <= 100_000:
+            for k in range(0, len(g), 100):
+                part = dict(g[k:k + 100])
+                for l in x.getlogs({"address": x.PM, "topics": [topic0, list(part)]}, last + 1, x.tip, 100_000):
+                    handle(part[l["topics"][1].lower()], l)
+                for e in part.values(): e["last"] = x.tip
+        else:
+            for pid, e in g:
+                for l in x.getlogs({"address": x.PM, "topics": [topic0, pid]}, last + 1, x.tip, step):
+                    handle(e, l)
+                e["last"] = x.tip
+                if save: save()                                      # saved per venue, so an interrupted backfill resumes where it stopped
+
+
+def venue_scan(x, pairs, reserve_pids, lp_pools=None):
     """Incremental per-venue daily aggregates. v4 pools: swap amounts and last sqrtPrice by day, net liquidity by range by day; for the
     reserve's own pools also the swap callers with sample transactions. Custodial pools (v2, v3, Solidly-type, Metric and others): the
     asset's and quote token's flows in and out of the pool contract, split into swaps (opposite directions in one transaction) and
@@ -550,31 +634,59 @@ def venue_scan(x, pairs, reserve_pids):
             reg.append({"sym": sym, "id": a, "v4": len(a) == 66, "liqStart": max(0, cb), "start": max(cb, x.SEED_BLOCK - 3_000_000), "dex": p.get("dexId"), "label": ((p.get("labels") or [""]) or [""])[0],
                         "base": (p.get("baseToken") or {}).get("address", "").lower(), "quote": (p.get("quoteToken") or {}).get("address", "").lower(),
                         "bsym": (p.get("baseToken") or {}).get("symbol"), "qsym": (p.get("quoteToken") or {}).get("symbol")})
-    keys = v4_keys(x, [r["id"] for r in reg if r["v4"]])
-    sw = x.jl("venue_v4b.json", {}); lq = x.jl("venue_v4liqb.json", {}); cu = x.jl("venue_custb.json", {})
-    for r in reg:
-        if not r["v4"] or r["id"] not in keys: continue
-        e = sw.setdefault(r["id"], {"last": r["start"] - 1, "d": {}, "snd": {}})
-        if e["last"] < r["start"]: x.log("venue v4 backfill", r["sym"], r["id"][:10], "from", r["start"])
-        if e["last"] < x.tip:
-            mine = r["id"] in reserve_pids
-            for l in x.getlogs({"address": x.PM, "topics": [x.SW, r["id"]]}, e["last"] + 1, x.tip, 500000):   # busy pools time out at larger ranges
-                w = words(l["data"]); d = day(x.T(int(l["blockNumber"], 16)))
-                v = e["d"].setdefault(d, [0.0, 0.0, None]); v[0] += abs(s256(w[0])); v[1] += abs(s256(w[1])); v[2] = str(int(w[2], 16))
-                if mine:
-                    s = "0x" + l["topics"][2][-40:]; q = e["snd"].setdefault(s, [0, []]); q[0] += 1
-                    if len(q[1]) < 12 and (not q[1] or q[0] % max(1, q[0] // 12 + 1) == 0): q[1].append(l["transactionHash"])
-            e["last"] = x.tip
-        f = lq.setdefault(r["id"], {"last": r["liqStart"] - 1, "d": {}})
-        if f["last"] < x.tip:
-            for l in x.getlogs({"address": x.PM, "topics": [x.ML, r["id"]]}, f["last"] + 1, x.tip, 4000000):
-                w = words(l["data"]); d = day(x.T(int(l["blockNumber"], 16))); k = f"{s256(w[0])},{s256(w[1])}"
-                dd = f["d"].setdefault(d, {}); dd[k] = str(int(dd.get(k, "0")) + s256(w[2]))
-                if dd[k] == "0": dd.pop(k)
-            f["last"] = x.tip
-        x.js("venue_v4b.json", sw); x.js("venue_v4liqb.json", lq)   # saved per venue, so an interrupted rebuild resumes where it stopped
     import time
-    quiet = [r["id"] for r in reg if r["v4"] and r["id"] in sw and not sw[r["id"]]["d"]]   # no swaps since the reserve's launch: price from slot0 now
+    cu = x.jl("venue_custb.json", {})
+    # custodial pools' balances at the compile block, read first: the RPC keeps no historical state, so the compile block's state is gone after a
+    # long backfill. A read that fails (no result) stops the run rather than being taken as a zero balance.
+    cust = [r for r in reg if not r["v4"]]; calls = [(r["id"], t) for r in cust for t in {r["base"], r["quote"]}]
+    for k in range(0, len(calls), 10):
+        part = calls[k:k + 10]
+        for t_ in range(6):
+            try:
+                res = x.rpcb([("eth_call", [{"to": t, "data": "0x70a08231" + x.pad(pid)[2:]}, hex(x.tip)]) for pid, t in part])
+                if all(v is not None for v in res): break
+            except Exception: pass
+            time.sleep(5 * (t_ + 1))
+        else: raise RuntimeError(f"custodial pool balances at block {x.tip} could not be read")
+        for (pid, t), v in zip(part, res): cu.setdefault(pid, {"last": None, "d": {}}).setdefault("now", {})[t] = str(int(v, 16)) if v != "0x" else "0"
+        time.sleep(0.3)
+    x.js("venue_custb.json", cu)
+    if lp_pools:   # DexScreener lists at most 30 pairs per token and rotates them; every v4 venue is found on chain instead
+        weth = sorted({r[k] for r in reg for k, ks in (("base", "bsym"), ("quote", "qsym")) if r[ks] == "WETH"})
+        have = {(r["sym"], r["id"]) for r in reg}
+        found = [r for r in v4_discover(x, lp_pools, weth) if (r["sym"], r["id"]) not in have]
+        held = v4_held(x, sorted({r["id"] for r in found}))
+        x.log("venue v4 pools found on chain", len(found), "beyond the listed", sum(1 for r in reg if r["v4"]), "| holding liquidity now or at an earlier run", len(held))
+        found = [r for r in found if r["id"] in held]
+        reg += found
+    keys = v4_keys(x, sorted({r["id"] for r in reg if r["v4"]}))
+    sw = x.jl("venue_v4b.json", {}); lq = x.jl("venue_v4liqb.json", {})
+    v4r = {}
+    for r in reg:
+        if r["v4"] and r["id"] in keys:
+            v4r.setdefault(r["id"], r)
+    for r in v4r.values():
+        # a new venue's swaps are read from three million blocks before the reserve's seeding (a pool has no swaps before its Initialize),
+        # its liquidity from its Initialize block (found on chain) or the day before DexScreener first listed it
+        if r["id"] not in sw: sw[r["id"]] = {"last": x.SEED_BLOCK - 3_000_000 - 1, "d": {}, "snd": {}}
+        if r["id"] not in lq: lq[r["id"]] = {"last": r["liqStart"] - 1, "d": {}}
+    def on_swap(e, l):
+        w = words(l["data"]); d = day(x.T(int(l["blockNumber"], 16)))
+        v = e["d"].setdefault(d, [0.0, 0.0, None]); v[0] += abs(s256(w[0])); v[1] += abs(s256(w[1])); v[2] = str(int(w[2], 16))
+        if l["topics"][1].lower() in reserve_pids:
+            s = "0x" + l["topics"][2][-40:]; q = e["snd"].setdefault(s, [0, []]); q[0] += 1
+            if len(q[1]) < 12 and (not q[1] or q[0] % max(1, q[0] // 12 + 1) == 0): q[1].append(l["transactionHash"])
+    def on_liq(f, l):
+        w = words(l["data"]); d = day(x.T(int(l["blockNumber"], 16))); k = f"{s256(w[0])},{s256(w[1])}"
+        dd = f["d"].setdefault(d, {}); dd[k] = str(int(dd.get(k, "0")) + s256(w[2]))
+        if dd[k] == "0": dd.pop(k)
+    reserve_pids = {p.lower() for p in reserve_pids}
+    _v4_batch(x, [(i, sw[i]) for i in v4r], x.SW, 500_000, on_swap, lambda: x.js("venue_v4b.json", sw))   # busy pools time out at larger ranges
+    x.js("venue_v4b.json", sw)
+    _v4_batch(x, [(i, lq[i]) for i in v4r], x.ML, 4_000_000, on_liq, lambda: x.js("venue_v4liqb.json", lq))
+    x.js("venue_v4liqb.json", lq)
+    import time
+    quiet = [i for i in v4r if not sw[i]["d"] and lq[i]["d"]]   # holds liquidity but no swaps since the reserve's launch: price from slot0 now
     for k in range(0, len(quiet), 10):
         try: res = x.rpcb([("eth_call", [{"to": x.SV, "data": x.sel("getSlot0(bytes32)") + i[2:]}, "latest"]) for i in quiet[k:k + 10]])
         except Exception: time.sleep(5); continue
@@ -582,15 +694,6 @@ def venue_scan(x, pairs, reserve_pids):
             if v and len(v) >= 66: sw[i]["spNow"] = str(int(v[2:66], 16))
         time.sleep(0.3)
     x.js("venue_v4b.json", sw); x.js("venue_v4liqb.json", lq)
-    cust = [r for r in reg if not r["v4"]]; calls = [(r["id"], t) for r in cust for t in {r["base"], r["quote"]}]
-    for k in range(0, len(calls), 10):
-        part = calls[k:k + 10]
-        for t_ in range(6):
-            try: res = x.rpcb([("eth_call", [{"to": t, "data": "0x70a08231" + x.pad(pid)[2:]}, hex(x.tip)]) for pid, t in part]); break
-            except Exception: time.sleep(5 * (t_ + 1))
-        else: res = [None] * len(part)
-        for (pid, t), v in zip(part, res): cu.setdefault(pid, {"last": None, "d": {}}).setdefault("now", {})[t] = str(int(v, 16)) if v and v != "0x" else "0"
-        time.sleep(0.3)
     for r in reg:
         if r["v4"]: continue
         e = cu.setdefault(r["id"], {"last": r["start"] - 1, "d": {}})

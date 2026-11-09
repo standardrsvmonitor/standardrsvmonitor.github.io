@@ -133,5 +133,21 @@
   "to": "2026-10-31",
   "until": "2026-11-10",
   "why": "Buybacks burned now counts the contraction vault only; S-Bill fee burns and the POL manager's launch-day fee burn moved to burnFees; 3 Nov accuracy audit"
+ },
+ {
+  "fields": [
+   "venues_.*",
+   "chainTvl_.*",
+   "chainVol_.*",
+   "liqShare_.*",
+   "volShare_.*",
+   "otherTvl_.*",
+   "poolVolChain_.*",
+   "rank_.*"
+  ],
+  "from": "2026-10-14",
+  "to": "2026-11-08",
+  "until": "2026-11-15",
+  "why": "Venue scan keeps every pool DexScreener ever listed for an asset, and finds every Uniswap v4 pool pairing it with USDG, ETH or WETH on chain (PoolManager Initialize events) instead of DexScreener's 30-pair list, which rotates; venue counts on settled days rise (ETH 15-17 to 38-42, SPCX 16-24 to 32-41, SKHY 3 to 11, BABA 5 to 12-13); chain liquidity and the reserve's shares within 2.6%; 8-9 Nov 2026"
  }
 ]

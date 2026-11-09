@@ -26,7 +26,9 @@ Owners may reorder, add or strike items at any time.
   every swap's transaction sender for the pools' top executors (exact), sample the rest. Done: stated error under two points a day.
 - [ ] **Venue discovery on chain.** The "share of chain volume" and "share of chain liquidity" panels start from DexScreener's pair list.
   Discover every pool holding SPCX, SKHY, BABA or ETH against USDG or WETH from PoolManager Initialize events and pool-factory events
-  instead, and keep DexScreener only as a cross-check. Done: no aggregator in the venue scan.
+  instead, and keep DexScreener only as a cross-check. Done: no aggregator in the venue scan. Uniswap v4 half done 9 Nov 2026
+  (`extra.v4_discover`); the custodial pools (Uniswap v2/v3, Aerodrome, Ramses, Metric and others) still come from DexScreener: read their
+  factories' PoolCreated/PairCreated events for the four assets.
 - [ ] **POL buyback ETH that routing did not send.** On 4 Nov 2026 the POL buyback held 275.86 ETH against 0.046 ETH left from the
   477.05 ETH routed to it (it spent 477.0 ETH in 79 ticks of 6 ETH, one of 9). No event log on the contract, the fee splitter, the team,
   reserve or owner Safes shows the source; the public RPC has no trace or archive methods and the explorer is behind Cloudflare. Watch
@@ -160,3 +162,17 @@ Owners may reorder, add or strike items at any time.
 - Beans's "King of the Markets" share chart (4 Nov 2026) counts only Uniswap v4 stock/USDG pools as Robinhood Chain trading; our venue
   data reproduces it (SKHY 98.9%, SPCX 88.2% for the week to 2 Nov). The other venues are real trading (the Uniswap v3 SPCX/USDG pool's own
   Swap events match our flow method to the dollar on 2 Nov; 287 of its 11,488 transactions also touched the reserve pool).
+- DexScreener's token-pairs list drops pools as their liquidity falls (8 Nov 2026: a SKHY/USDG v4 pool, 0x0df0a8bf, with $25K of SKHY
+  volume on 17 Oct). The venue scan now reads `data/cache/stock_venues.json`, every pair ever listed per asset, so a dropped pool's past
+  volume and liquidity stay in chain volume and venue counts; `stock_pairs.json` (today's list) still feeds the live market context only.
+- DexScreener's token-pairs endpoint returns at most 30 pairs per token and rotates which ones (9 Nov 2026: 11 of ETH's 30 changed between
+  two reads, memecoin/ETH pairs displacing ETH/USDG pools), so venue counts on settled days moved with each read (venues_ETH 17 to 21 on 1-5
+  Nov, the gate failure of issue #20). Uniswap v4 venues are now found on chain: the PoolManager's Initialize events, filtered by both indexed
+  currencies, list 633 ETH/USDG pools and about 470 SPCX pools against USDG, ETH or WETH (`data/cache/v4_init.json`, keys written to
+  `v4_keys.json` from the same events). Scanning all of them is not affordable: the RPC allows a list of pool ids in a log filter only over
+  100,000 blocks, unfiltered ModifyLiquidity logs exceed its 10,000-log cap within 100,000 blocks, and it keeps no historical state (an eth_call
+  at a block more than a few minutes old fails with "historical state ... is not available"). So a discovered pool is scanned only once
+  StateView.getLiquidity (Multicall3 at 0xcA11…CA11, 400 pools a call) shows it holding liquidity; that set is kept in `v4_held.json` (120 pools
+  on 9 Nov). The first backfill took about 20 minutes; later runs read all v4 venues in one list-filtered query per 100 pools.
+- Custodial pool balances were read at the compile block after the v4 scans and a failed read was stored as 0; after a long backfill the
+  compile block's state was gone and 25 of 34 pools read 0 (liqShare_SPCX 32 on 14 Oct). They are now read first, and a failed read stops the run.

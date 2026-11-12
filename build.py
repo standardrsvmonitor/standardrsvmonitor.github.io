@@ -29,7 +29,7 @@ SECTIONS = {
           "Trends show each day across the window: daily values for flows, daily closes for levels.", table("t_gm", "gm"), None, "p_gm") +
     '<div class="col w5">' +
     panel(12, "Revenue by stream, daily", "Revenue each complete UTC day over the selected range: STANDARD trading fees, LP fees earned by the reserve’s "
-          "pool positions, the 1% fee the protocol’s own position earns in the STANDARD/ETH pool, the protocol’s 50% of the launchpad base fee, charter sales and license sales.", chart("c_wrev", "s"), "h_wrev", "p_wrev") +
+          "pool positions, the 1% fee the protocol’s own position earns in the STANDARD/ETH pool, the protocol’s 70% of the launchpad base fee and its snipe fees, charter sales and license sales.", chart("c_wrev", "s"), "h_wrev", "p_wrev") +
     panel(12, "STANDARD supply, issued and burned, daily", "Bars: STANDARD issued to bankers each day, the base issuance times the multiplier of the epoch in force (each epoch ties to the central bank’s own "
           "record at settlement), and STANDARD burned, token burns and ledger removals that are never minted. The line is circulating supply plus everything owed to bankers: "
           "ledger balances in banks and the stayers’ cut the bank holds before releasing it over the next epoch. The bars sum to the line’s daily change; the line reads on the "
@@ -43,16 +43,20 @@ SECTIONS = {
 "revenue": kpis("revenue") + '<div class="grid">' +
     panel(7, "Revenue by stream, daily", "STANDARD trading fees are the ETH tax the tax hook collects on every STANDARD trade and LP exit, dated by the block it was collected in. "
           "STANDARD pool LP fees are the 1% pool fee earned by the protocol’s own position in the STANDARD/ETH pool, replayed swap by swap at the share of active liquidity it held, "
-          "both sides valued at the day’s close; the POL manager sends both to the team wallet when it harvests. LP fees replay every swap in the reserve’s pools tick by tick and value each swap’s fee at the pool price of that swap. The launchpad line is the protocol’s 50% of the 1% base fee, "
-          "held in the launchpad fee Safe. Charter sales are recorded on the sale date. License sales are the STANDARD bankers pay for expansion licenses from their bank balances, "
+          "both sides valued at the day’s close; the POL manager sends both to the team wallet when it harvests. LP fees replay every swap in the reserve’s pools tick by tick and value each swap’s fee at the pool price of that swap. The launchpad line is the protocol’s 70% of the 1% base fee plus snipe fees, "
+          "received by the launchpad fee Safe, which sent its balance to the reserve Safe on 10 Nov 2026. Charter sales are recorded on the sale date. License sales are the STANDARD bankers pay for expansion licenses from their bank balances, "
           "burned on purchase, valued at the day’s closing price less the resolution fee in force that day, what the banker could have withdrawn instead<span id=\"lic_dep\"></span>.", chart("c_rev", "l"), "h_rev") +
     panel(5, "Revenue by destination, trailing 30 days", "Where revenue over the selected range went, the protocol’s own phrase being where fees land, followed to what it "
           "became. STANDARD trading fees and charter sales are routed at settlement: 70% to the reserve in expansion or the contraction vault in contraction, 15% to the POL "
           "buyback and 15% to the team. Each epoch’s routed ETH is then followed, first in, first out, through the chain: what the reserve paid for stock tokens, put into its "
-          "pools or still holds as ETH and USDG; STANDARD the contraction vault bought and burned; STANDARD the POL buyback bought for the Incentives vault, as the vault pays "
+          "pools or still holds as ETH and USDG, and ETH the reserve Safe sent to outside wallets with nothing back in the same transaction; STANDARD the contraction vault bought and burned; STANDARD the POL buyback bought for the Incentives vault, as the vault pays "
           "it to the S-Bill premium budget, to bankers through the per-branch claim and its top-ups, or to one other wallet, or still holds it; and routed ETH not yet spent "
-          "on buybacks. Each day’s fees take the shares of the epoch they were routed in. LP fees stay in the reserve’s pools. STANDARD pool LP fees go to the team wallet. "
-          "License sales are burned. The launchpad’s protocol share sits in the fee Safe. Fees of the current epoch are not yet routed. Stock tokens are at cost. The POL "
+          "on buybacks. Each UTC day’s fees take the shares of the epoch that starts at 01:00 UTC that day, so a settlement day’s first hour carries the next epoch’s shares. "
+          "LP fees are earned in the reserve’s pools; the Safe collected them for the first time on 10 Nov 2026, and tokens back from positions count as principal first. "
+          "STANDARD pool LP fees go to the team wallet. License sales are burned. The launchpad’s 70% and snipe fees arrive in the launchpad fee Safe; what the Safe has sent to "
+          "the reserve Safe, oldest receipts first, counts in the reserve. Fees of the current epoch are not yet routed. Stock tokens are at cost. Stock tokens sent out of the "
+          "reserve move to sent out: of each token’s purchase cost, the share of the reserve’s holding of that token (loose in the Safe and in its positions) that left, and "
+          "launchpad tokens in full when the Safe’s loose balance left (all of its loose BABA and SKHY on 10 Nov 2026). The POL "
           "buyback also holds <span id=\"ru_extra\"></span> that no settlement routed to it; no event log shows its source, so it is left out. ", '<div class="alloc" id="alloc"></div>', "h_alloc", "p_alloc") +
     panel(7, "Fee routing by epoch", "STANDARD trading fees and charter proceeds routed by the fee engine at each settlement, in ETH, for the epochs settled inside the selected range. "
           "Green bars are expansion epochs, red contraction.",
@@ -63,8 +67,10 @@ SECTIONS = {
 
 "liquidity": kpis("liquidity") + '<div class="grid">' +
     panel(12, "Protocol-owned liquidity by pool", "The reserve’s position in each pool and its standing among every pool for the same asset on Robinhood Chain on the last complete "
-          "day. Volume is the volume the reserve’s own liquidity served. APR is LP fees over the selected range, annualized over position value. The fee is the rate the pool charged on its latest fee-paying swap. Rank and venues count pools with "
-          "at least $100 of liquidity.", table("t_pools")) +
+          "day. Volume is the volume the reserve’s own liquidity served. APR is LP fees over the selected range, annualized over the average position value over the "
+          "range. The fee is the rate the hook charged on the latest fee-paying swap; for the fixed-tier ETH/USDG pool, the tier its providers earn (each swap also pays "
+          "Uniswap’s protocol fee, 0.0625% in all). Rank and venues count pools with at least $100 of liquidity; ETH/USDG’s chain standing is not shown (see the share of "
+          "chain volume). LP fees were collected from every position for the first time on 10 Nov 2026.", table("t_pools")) +
     panel(6, "Volume served by the reserve, by pool, daily", "Every swap is replayed tick by tick against every provider’s liquidity; the reserve’s part of each step’s input, the fee "
           "included, is the volume its liquidity served, valued at the swap’s price. Other providers hold part of the liquidity in some pools; the reserve’s "
           "share is in the pools table. The headline is the volume that paid the pool fee. The stock pools’ hook keeps a fee-exemption list (FeeExemptSet): "
@@ -79,9 +85,10 @@ SECTIONS = {
     panel(6, "Share of chain volume by pool, daily", "Volume served by the reserve’s liquidity as a share of all on-chain volume in the same asset, across every pool pairing "
           "the asset with USDG, ETH or WETH. Uniswap v4 pools are found on chain from the PoolManager’s Initialize events; those that held liquidity when the monitor read "
           "them, from 8 Nov 2026, are counted. Other pools are every pair DexScreener has listed. A v4 pool emptied before 8 Nov 2026 and never listed is left out, so "
-          "chain volume is a floor and the share a ceiling.", chart("c_vshare"), "h_vshare", "p_vshare") +
+          "chain volume is a floor and the share a ceiling. ETH/USDG is not shown: the venue list does not yet include the WETH/USDG pools, which are larger than the "
+          "reserve’s (a single one traded $196M on 11 Nov 2026).", chart("c_vshare"), "h_vshare", "p_vshare") +
     panel(6, "Share of chain liquidity by pool, daily", "The reserve’s position value as a share of all on-chain liquidity in pools pairing the same asset with USDG, ETH or WETH, "
-          "the same pools as the share of chain volume.",
+          "the same pools as the share of chain volume; ETH/USDG is not shown, for the same reason.",
           chart("c_lshare"), "h_lshare", "p_lshare") +
     panel(7, "Pool volume by counterparty, daily", "Fee-exempt swaps are summed exactly. The rest is estimated from 150 size-weighted trades per pool and day, read from receipts. "
           "Arbitrage trades the asset the other way on another pool in the same transaction. Organic users are wallets with fewer than 1,000 transactions trading through a "
@@ -95,37 +102,45 @@ SECTIONS = {
           "Hover a row for cost, value and holding.", table("t_pnl")) + '</div>',
 
 "launchpad": kpis("launchpad") + '<div class="grid">' +
+    panel(7, "Tokens launched and trades, daily", "Bars: tokens launched each UTC day, from the two launchpad factories’ launch events. Line: launchpad-token trades each "
+          "day, on the bonding curve or in the graduated pool, from the Trade event every curve and launch hook emits, dated by block. "
+          "Launchpad trading fell by about 99% after 4 Nov 18:00 UTC, when a trading competition the protocol ran on launchpad tokens, with a prize pool, ended; volume until then includes it. ", chart("c_llaunch"), "h_llaunch") +
+    panel(5, "Launched tokens by volume, trailing 30 days", "The ten launched tokens with the most trading volume over the selected range of complete UTC days, "
+          "from each token’s Trade events. Volume is the stock or WETH side of every trade. To creator is the creator’s part of each trade’s fee as the Trade event "
+          "reports it: 30% of the base fee, more where the token sets a creator tax. Both are valued at each day’s closing price of the pair asset. Launch date and "
+          "creator from the factory’s launch event; hover a row for the full symbol and the creator’s address.", table("t_ltok"), "h_ltok", "p_ltok") +
     panel(7, "Launchpad fees by recipient, daily", "Every launchpad-token trade, on the bonding curve or in the graduated pool, pays a 1% base fee on its stock or WETH side: "
-          "30% to the token’s creator, 20% to the King of the Markets reward pool and 50% to the protocol. The reward pool and protocol shares arrive together in one 2-of-4 "
-          "Safe signed by the reserve’s signers and are split here 2:5. Curve buys in the first seconds after a launch also pay a snipe fee, all of it the protocol’s, as the "
-          "protocol’s fee table states. Each trade’s split is read from the Trade event its curve or hook emits, dated by block. Creator receipts also include creator "
-          "taxes and optional hook-module fees. Launches pay a fixed 0.0005 ETH to the fee Safe, shown in its holdings and not counted here. Valued at each day’s closing prices.",
-          chart("c_lfee", "l"), "h_lfee") +
-    panel(5, "King of the Markets standings", "Season 1 points by team from the launchpad’s markets API. Launchpad-token trades score five points a dollar; stock trades through "
-          "reserve markets scored one point a dollar until 21 Oct 13:55 UTC. The reward pool opens with $1.1M from the Standard Reserve, as the protocol’s site states; "
-          "the fee Safe holds none of it. 65% is shared by points and 35% goes to the leading team.", table("t_kotm") + '<div class="kv2" id="kotm_pool"></div>', "h_kotm") +
-    panel(7, "LP fees from launchpad trades, daily", "Launchpad trades paid in USDG or ETH cross the reserve’s stock pools on the way in and out. Every swap in "
-          "the reserve’s pools executed by one of the launchpad’s two routers is counted exactly. Launchpad trades sent through Uniswap’s router or an aggregator are not "
-          "identifiable from the pool swap and fall under all other trades, so the launchpad figure is a floor.", chart("c_lroute"), "h_lroute") +
-    panel(5, "Launchpad fee Safe holdings", "Balances received by the fee Safe from launchpad trades, valued at current prices. Nothing has left the Safe since the launchpad opened.",
-          table("t_fsafe"), "h_fsafe") + '</div>',
+          "30% to the token’s creator and 70% to a 2-of-4 Safe signed by the reserve’s signers, the protocol’s launchpad revenue; on 10 Nov 2026 at 15:06 UTC the Safe "
+          "sent its whole balance to the reserve Safe. Curve buys in the first seconds after a launch also pay a snipe fee, all of it the protocol’s. Each trade’s split is read from "
+          "the Trade event its curve or hook emits, dated by block. Creator receipts also include creator taxes and optional hook-module fees. Launches pay a fixed "
+          "0.0005 ETH to the fee Safe, not counted here. Valued at each day’s closing prices. Launchpad trading fell by about 99% after 4 Nov 18:00 UTC, when a trading competition the protocol ran on launchpad tokens, with a prize pool, ended; volume until then includes it. ", chart("c_lfee", "l"), "h_lfee") +
+    panel(5, "Launchpad fee Safe, flows to date", "What the fee Safe received from launchpad trades (each trade’s Trade event, the same figure as launchpad revenue) and what it sent on (Transfer logs out of "
+          "the Safe, oldest receipts first), both valued at the closing price of the day each receipt arrived; what it holds now at current prices. The token table is "
+          "in token units, from Transfer logs.", '<div class="kv2" id="fsafe_kv"></div>' + table("t_fsafe"), "h_fsafe") +
+    panel(12, "LP fees from launchpad trades, daily", "Launchpad trades paid in USDG or ETH cross the reserve’s stock pools on the way in and out. Every swap in "
+          "the reserve’s pools executed by one of the launchpad’s two routers is counted exactly. Launchpad trades whose pool swap is sent by another contract (Uniswap’s "
+          "router, an aggregator or another executor) are not identifiable from the swap and fall under all other trades, so the launchpad figure is a floor.", chart("c_lroute"), "h_lroute") + '</div>',
 
 "reserve": kpis("reserve") + '<div class="grid">' +
     panel(7, "Reserve assets by component, daily", "ETH and USDG in the reserve Safe, ETH in the policy vaults, tokenized equities held outside pools and the Safe’s Uniswap v4 "
-          "positions, at each day’s close. Excludes ETH held by the POL buyback contract and the team wallet, and uncollected position fees.", chart("c_res", "l"), "h_res") +
+          "positions, at each day’s close; WETH in the Safe counts as ETH. Equities held before their pools opened (2 to 13 Oct) are valued at each pool’s first close on "
+          "14 Oct. Excludes ETH held by the POL buyback contract and the team wallet, and uncollected position fees. On 10 Nov 2026 the Safe collected its position fees, "
+          "closed its BABA positions and received the launchpad fee Safe’s balance, then sent 8,928 BABA and 1,221 SKHY to a deposit address built from the same contract "
+          "as the one it paid USDG into for its stock tokens in October, and 52.2 ETH to an outside wallet, which sent 0.42 ETH back.", chart("c_res", "l"), "h_res") +
     panel(5, "Price to backing, daily", "Market cap of the STANDARD in wallets divided by reserve assets. The protocol’s own liquidity and the Incentives vault are left out: "
           "the reserve backs the tokens holders own, not the protocol’s own STANDARD.", chart("c_pb", "l"), "h_pb") +
-    panel(12, "Reserve composition, daily change", "Each component today, read at the compile block, against the close one and seven days earlier.", table("t_resd")) + '</div>',
+    panel(12, "Reserve composition, daily change", "Each component today, read at the compile block, against the close one day earlier and the close at the start of the selected range.", table("t_resd")) + '</div>',
 
 "token": kpis("token") + '<div class="grid">' +
     panel(7, "Price and market capitalization, daily", "Daily close: the protocol STANDARD/ETH pool’s own price after its last trade of the UTC day, at Coinbase’s ETH close; today is live. Market cap is price times circulating supply, every STANDARD minted, as the protocol’s "
-          "site and DexScreener show it. In wallets leaves out the protocol’s own liquidity and the Incentives vault. Shaded days are contraction epochs.", chart("c_price", "l"), "h_price") +
+          "site and DexScreener show it. Shaded days are contraction epochs.", chart("c_price", "l"), "h_price") +
     panel(5, "Supply reconciliation", "From the genesis mint to circulating supply, the STANDARD in wallets and free float, at one block.", '<div class="bridge" id="bridge"></div>') +
     panel(7, "STANDARD supply, issued and burned, daily", "Bars: STANDARD issued to bankers each day, the base issuance times the multiplier of the epoch in force (each epoch ties to the central bank’s own "
           "record at settlement), and STANDARD burned, token burns and ledger removals that are never minted. The line is circulating supply plus everything owed to bankers: "
           "ledger balances in banks and the stayers’ cut the bank holds before releasing it over the next epoch. The bars sum to the line’s daily change; the line reads on the "
           "right-hand axis.", chart("c_supply"), "h_supply") +
-    panel(5, "STANDARD supply, 1B cap", "The protocol’s own split of the one-billion hard cap, at the compile block. Protocol liquidity (STANDARD in its own pool), in "
+    panel(5, "STANDARD supply, 1B cap", "The protocol’s own split of the one-billion hard cap, at the compile block. Protocol liquidity (STANDARD held by the Uniswap v4 PoolManager, the protocol’s own "
+          "definition; about 77,000 of it sits in other STANDARD pools, not the protocol’s), in "
           "wallets and the Incentives vault make up circulating supply. In banks is owed to bankers and minted on withdrawal. Burned is the cap the protocol has removed: "
           "token burns and ledger removals that are never minted. Unissued is the rest of the maximum supply.", '<div class="alloc" id="salloc"></div>', "h_salloc") +
     panel(7, "Net buying of STANDARD by holder group, daily", "STANDARD bought from the protocol’s STANDARD/ETH pool less STANDARD sold into it, by the group of the "
@@ -137,7 +152,7 @@ SECTIONS = {
     panel(6, "STANDARD supply composition, daily", "The protocol’s own split of circulating supply: in wallets, protocol liquidity and the Incentives vault, with "
           "the STANDARD in banks, ledger balances owed to bankers and minted only on withdrawal. The full height is every STANDARD that exists or is owed.", chart("c_mc"), "h_mc") +
     panel(6, "STANDARD in wallets, flows by source, daily", "Daily movements into and out of the STANDARD in wallets; the bars sum to the line.", chart("c_flows")) +
-    panel(7, "STANDARD/ETH market depth, daily", "ETH, in USD, that sellers receive taking STANDARD’s price down two and five percent, from every open liquidity range at the "
+    panel(7, "STANDARD/ETH market depth, daily", "ETH, in USD, the pool pays out to sellers taking STANDARD’s price down two and five percent (before the 3% sell tax), from every open liquidity range at the "
           "day’s closing price. Ask depth is in the tooltip.", chart("c_depth"), "h_depth") +
     panel(5, "STANDARD/ETH execution cost by size", "Each order simulated against the pool’s liquidity at the compile block. Cost adds the 1% pool fee and the hook’s tax.",
           table("t_slip") + '<div class="kv2" id="slip_s"></div>') +
@@ -153,16 +168,20 @@ SECTIONS = {
           chart("c_bank"), "h_bank") +
     panel(6, "Branches and active charters, daily", "A charter opens with one branch and licenses add up to nine more. Withdrawals and revocations destroy branches.",
           chart("c_policy"), "h_policy") +
-    panel(6, "Charter auction clearing prices", "One charter per 12-hour period in a Dutch auction that opens at three times the last clearing price and halves every two hours "
-          "toward a 1 ETH floor. Triangles are purchases made through a contract.", chart("c_charter"), "h_charter") +
-    panel(6, "License auction clearing prices and volume", "Twenty-five expansion licenses per 12-hour period, paid in STANDARD and burned, opening at twice the last clearing "
-          "price with a floor of about two days of one branch’s issuance.", chart("c_license"), "h_license") +
+    panel(6, "Charter auction clearing prices", "Charters are sold in 12-hour periods, in a Dutch auction that opens at three times the last clearing price (three times the floor after a "
+          "period with no sale) and halves every two hours toward a 1 ETH floor. One charter a period until 11 Nov 2026, when the owner set the number to zero from "
+          "the 23:25 UTC period. Triangles are purchases made through a contract.", chart("c_charter"), "h_charter") +
+    panel(6, "License auction clearing prices and volume", "Expansion licenses are sold in 12-hour periods, paid in STANDARD and burned, opening at twice the last clearing price with a floor of "
+          "about two days of one branch’s issuance. The owner sets the number a period and has changed it several times; 15 a period "
+          "since 11 Nov 2026.", chart("c_license"), "h_license") +
     panel(6, "S-Bill principal and term rate, daily", "STANDARD locked in 15-day S-Bills and the term rate at each day’s close.", chart("c_sb"), "h_sb") +
     panel(6, "Issuance multiplier and resolution fee, daily", "The multiplier scales daily issuance of 700,000 STANDARD and moves at each epoch settlement within 0.20 to 1.25. "
           "The resolution fee, the exit fee on withdrawals, rises from 2% to 60% with seven-day exit pressure.", chart("c_mult"), "h_mult") +
     panel(12, "Top bankers", "Ranked as the protocol’s own leaderboard ranks, by branches, which set each banker’s share of issuance, then by this epoch’s emissions. Share of "
-          "emissions is the banker’s part of everything streamed to bankers this epoch, issuance and the stayers’ cut. Names are the owners’ primary ENS names on Ethereum mainnet. Rank change compares with "
-          "the previous epoch.", table("t_lead") + '<button class="btn" id="lead_more"></button>', "h_lead") + '</div>',
+          "emissions is the banker’s part of what this epoch has streamed to today’s bankers, issuance and the stayers’ cut; charters closed during the epoch are left out. "
+          "Read from the protocol’s leaderboard right after the compile block. Names are the owners’ primary ENS names on Ethereum mainnet that resolve back to the "
+          "owner. Rank change compares with the previous epoch’s close: the protocol records that rank with equal branch counts in address order, so the change "
+          "orders today’s counts the same way and moves only when branch counts change.", table("t_lead") + '<button class="btn" id="lead_more"></button>', "h_lead") + '</div>',
 
 "data": '<div class="grid">' +
     panel(12, "Daily data log", "One observation per UTC day since genesis, every field reconstructed from protocol events and transfer logs. The current day is partial.",
@@ -175,7 +194,7 @@ SECTIONS = {
 }
 
 SUB = {"revenue": "Fees and revenue from the token economy, the reserve’s pools and the launchpad.", "liquidity": "The reserve as market maker for stock tokens and ETH.",
-       "launchpad": "Fees from tokens launched against reserve markets, and King of the Markets.", "reserve": "The assets behind STANDARD, rebuilt daily from on-chain events.",
+       "launchpad": "Tokens launched against reserve markets, their trading and fees.", "reserve": "The assets behind STANDARD, rebuilt daily from on-chain events.",
        "token": "Price, supply, burns, and who is buying and selling.", "banks": "Bank charters and branches, issuance, the Auction House and S-Bills.", "data": "Every daily observation since genesis."}
 def hero(k, n):
     if k == "overview": return '<div class="hero big"><div class="hero-in" id="ov_hero"></div></div>'
@@ -438,11 +457,11 @@ const sum = (a)=>a.reduce((x,y)=>x+(y||0),0);
 const ethOf = (r)=>r.eth||L.ethusd;
 // revenue streams
 const tr = (r)=>(r.tradingFeeEth||0)*ethOf(r), chs = (r)=>(r.charterEth||0)*ethOf(r);
-const lpp = (r)=>r.lpadSafeBase!=null ? r.lpadSafeBase*5/7+(r.lpadSnipe||0) : (r.lpadSafe||0)*5/7, lpot = (r)=>r.lpadSafeBase!=null ? r.lpadSafeBase*2/7 : (r.lpadSafe||0)*2/7, lcr = (r)=>r.lpadEsc||0;   // from every trade's Trade event: the fee Safe's 0.7% base part splits 5:2 between the protocol and the reward pool; snipe fees are all the protocol's; creators' escrows also receive creator taxes and module fees
+const lpp = (r)=>r.lpadSafeBase!=null ? r.lpadSafeBase+(r.lpadSnipe||0) : (r.lpadSafe||0), lcr = (r)=>r.lpadEsc||0;   // from every trade's Trade event: the fee Safe's 0.7% base part and the snipe fees are the protocol's (owner decision 12 Nov 2026: nothing in the Safe went to traders); creators' escrows also receive creator taxes and module fees
 const lvol = (r)=>r.lpadVol!=null ? r.lpadVol : (r.lpadSafe||0)/0.007;                               // launchpad trading volume, the stock or WETH side of every trade
 const slp = (r)=>r.stdLpFee||0;                                                                    // the protocol position's 1% fee in the STANDARD/ETH pool, both sides, to the team wallet
 const lic = (r)=>(r.licBurn||0)*(r.price||L.price)*(1-(r.exitFee||0));                            // license sales: ledger STANDARD paid for expansion licenses (burned), at the day's close less the day's resolution fee
-const rec = (r)=>tr(r)+(r.spFee||0)+slp(r)+lpp(r);                                                 // trading fees, LP fees, STANDARD pool LP fees and the launchpad's 50%; inc adds charter and license sales, which are revenue
+const rec = (r)=>tr(r)+(r.spFee||0)+slp(r)+lpp(r);                                                 // trading fees, LP fees, STANDARD pool LP fees and the launchpad's 70%; inc adds charter and license sales, which are revenue
 const inc = (r)=>rec(r)+chs(r)+lic(r);
 const burnLedger = (r)=>(r.licBurn||0)+(r.exitFeeBurn||0)+(r.revokeFeeBurn||0), burnTokens = (r)=>(r.burnBuyback||0)+(r.burnFees||0)+(r.burnOther||0), burnAll = (r)=>burnLedger(r)+burnTokens(r);
 const pbOf = (r)=>r&&r.reserveUsd&&r.mcFloat ? r.mcFloat/r.reserveUsd : null;
@@ -515,7 +534,7 @@ function renderKpis(){ derive();
   const lvl = (f)=>(W ? last(Sh, W+1) : Sh).map(f);
   const rev7 = S_(inc), revP = P_(inc), lv7 = S_(lvol), lvP = P_(lvol), lfee = r=>(r.lpadSafe||0)+(r.lpadEsc||0), lf7 = S_(lfee), lfP = P_(lfee);
   const pf7 = S_(r=>r.spFee||0), pfP = P_(r=>r.spFee||0), lpDays = sw.filter(r=>r.date>=LP0).length || 1;
-  const poolLiq = sum(pools.map(p=>L.lp[p].valueUSD));
+  const poolLiq = sum(pools.map(p=>L.lp[p].valueUSD)), capAvg = capAvgOf(sw);
   const eqShare = (rows)=>{const d=sum(rows.map(r=>sum(stockPools.map(p=>r['chainVol_'+p]||0)))); return d?sum(rows.map(r=>sum(stockPools.map(p=>r['spVolMine_'+p]??r['spVol_'+p]??0))))/d:null;};
   const orgS = (rows)=>{const t=sum(rows.map(r=>sum(CPK.map(k=>ck(r,k))))); return t?sum(rows.map(r=>ck(r,'Org')))/t:null;};
   const zf = (rows)=>{const t=sum(rows.map(served)); return t?1-sum(rows.map(r=>r.spVolZeroFee||0))/t:null;};
@@ -524,7 +543,7 @@ function renderKpis(){ derive();
       {l:'STANDARD price', v:fmt.px(L.price), c:chg(L.price, W0&&W0.price, {pol:1}), s:wl, sp:lvl(r=>r.price), tip:'Live price of the protocol’s STANDARD/ETH pool, from DexScreener. Past days use the pool’s own price after its last trade of the day.'},
       {l:'Market cap', v:fmt.usd(mcTotal), c:chg(mcTotal, W0&&W0.mcTotal, {pol:1}), s:`in wallets ${fmt.usd(mcFloat)}`, sp:lvl(r=>r.mcTotal), tip:'Price times circulating supply, every STANDARD minted, the figure the protocol’s site and DexScreener show. In wallets leaves out the protocol’s own liquidity and the Incentives vault.'},
       {l:'Reserve assets', v:fmt.usd(L.reserve.totalUsd), c:chg(L.reserve.totalUsd, W0&&W0.reserveUsd, {pol:1}), s:`${fmt.x(pbNow)} P/B`, sp:lvl(r=>r.reserveUsd), col:C.blue, tip:'ETH and USDG in the reserve Safe, ETH in the policy vaults, equities held outside pools and the Safe’s Uniswap v4 positions, read at the compile block.'},
-      {l:`Revenue, ${wl}`, v:fmt.usd(rev7), c:chg(rev7, revP, {pol:1}), s:`license sales ${fmt.usd(S_(lic))}`, sp:rollW(inc), col:C.gold, tip:`What the protocol kept over the ${W?W+' complete days':'days since launch'} to ${yd}: STANDARD trading fees, LP fees, STANDARD pool LP fees, the launchpad’s 50%, charter sales and license sales.`},
+      {l:`Revenue, ${wl}`, v:fmt.usd(rev7), c:chg(rev7, revP, {pol:1}), s:`license sales ${fmt.usd(S_(lic))}`, sp:rollW(inc), col:C.gold, tip:`What the protocol kept over the ${W?W+' complete days':'days since launch'} to ${yd}: STANDARD trading fees, LP fees, STANDARD pool LP fees, the launchpad’s 70% and snipe fees, charter sales and license sales.`},
       {l:'Branches', v:fmt.int(L.branches), c:chg(L.branches, W0&&W0.branches, {pol:1}), s:`${fmt.int(L.activeCharters)} charters`, sp:lvl(r=>r.branches), col:C.violet, tip:'Branches open now, from the indexer census.'},
       {l:`Epoch ${L.epoch} net flow`, v:fmt.sx(L.epochNetFlow,1)+' ETH', c:{t:`${L.epochNetFlow>=0?'expansion':'contraction'}`, c:L.epochNetFlow>=0?'up':'dn'}, s:`${Math.floor(epLeft/86400)}d ${Math.floor(epLeft%86400/3600)}h left`,
         sp:E.slice(-12).map(e=>e.netFlow), col:L.epochNetFlow>=0?C.green:C.red, tip:`ETH bought less ETH sold through the STANDARD/ETH pool this epoch; its sign at settlement sets the regime. Multiplier ${fmt.x(L.multiplier)}. The line shows settled epochs.`},
@@ -533,26 +552,25 @@ function renderKpis(){ derive();
       {l:`Revenue, ${wl}`, v:fmt.usd(rev7), c:chg(rev7, revP, {pol:1}), s:`license sales ${fmt.usd(S_(lic))}`, sp:rollW(inc), col:C.teal},
       {l:`STANDARD trading fees, ${wl}`, v:fmt.usd(S_(tr)), c:chg(S_(tr), P_(tr), {pol:1}), sp:rollW(tr), col:STREAM.tr},
       {l:`LP fees, ${wl}`, v:fmt.usd(pf7), c:chg(pf7, pfP, {pol:1}), sp:rollW(r=>r.spFee||0), col:STREAM.pool},
-      {l:`Launchpad revenue, ${wl}`, v:fmt.usd(S_(lpp)), c:chg(S_(lpp), P_(lpp), {pol:1}), sp:rollW(lpp), col:STREAM.lpad, tip:'The protocol’s 50% of the 1% launchpad base fee plus snipe fees, held in the launchpad fee Safe.'},
+      {l:`Launchpad revenue, ${wl}`, v:fmt.usd(S_(lpp)), c:chg(S_(lpp), P_(lpp), {pol:1}), sp:rollW(lpp), col:STREAM.lpad, tip:'The protocol’s 70% of the 1% launchpad base fee plus snipe fees, received by the launchpad fee Safe.'},
       {l:`Charter sales, ${wl}`, v:fmt.usd(S_(chs)), c:chg(S_(chs), P_(chs), {pol:1}), sp:rollW(chs), col:STREAM.ch},
       {l:'Price to revenue', v:fmt.x(prrOf(Y),1), c:chg(prrOf(Y), W&&Sp.length>W?prrOf(Sp[Sp.length-1-W]):null, {pol:-1, abs:true, f:v=>v.toFixed(1)+'×'}), s:`${prrK()}d revenue`, sp:sw.map(prrOf), col:C.fg2},
     ],
     liquidity:[
       {l:'Capital in pools', v:fmt.usd(poolLiq), c:{t:fmt.pct(poolLiq/L.reserve.totalUsd,0)+' of reserve', c:'nt'}, sp:lvl(r=>{const q=(r.reserveParts||{}).lp; return q?sum(Object.values(q)):null;}), col:C.blue},
       {l:`LP fees, ${wl}`, v:fmt.usd(pf7), c:chg(pf7, pfP, {pol:1}), sp:rollW(r=>r.spFee||0), col:C.blue},
-      {l:'LP fee APR', v:fmt.pct(poolLiq?pf7*365/lpDays/poolLiq:null,0), s:wl, sp:rollW(r=>r.spFee||0), col:C.blue, tip:'LP fees over the selected window, annualized, over the capital in the reserve’s pools.'},
+      {l:'LP fee APR', v:fmt.pct(capAvg?pf7*365/lpDays/capAvg:null,0), s:wl, sp:rollW(r=>r.spFee||0), col:C.blue, tip:'LP fees over the selected window, annualized, over the average capital in the reserve’s pools over the window.'},
       {l:`Volume served, ${wl}`, v:fmt.usd(S_(served)), c:chg(S_(served), P_(served), {pol:1}), s:S_(served)?`${fmt.pct(S_(r=>r.spVolExempt||0)/S_(served),0)} fee-exempt`:'', sp:rollW(served), col:C.blue},
       {l:'Share of chain equity volume', v:fmt.pct(eqShare(sw),0), c:chg(eqShare(sw), pw?eqShare(pw):null, {pp:true, pol:1}), s:wl, sp:rollR(r=>sum(stockPools.map(p=>r['spVolMine_'+p]??r['spVol_'+p]??0)), r=>sum(stockPools.map(p=>r['chainVol_'+p]||0))), col:C.teal},
       {l:'Organic share of volume', v:(cpShares(sw)||{}).Org!=null?cpShares(sw).Org+'%':'–', c:chg(orgS(sw), pw?orgS(pw):null, {pp:true, pol:1}), s:wl, sp:rollR(r=>ck(r,'Org'), r=>sum(CPK.map(k=>ck(r,k)))), col:C.green},
     ],
     launchpad:[
-      {l:`Launchpad volume, ${wl}`, v:fmt.usd(lv7), c:chg(lv7, lvP, {pol:1}), sp:rollW(lvol), col:C.teal, tip:'Trading volume implied by the 0.7% of every launchpad trade that reaches the fee Safe.'},
+      {l:`Launchpad volume, ${wl}`, v:fmt.usd(lv7), c:chg(lv7, lvP, {pol:1}), sp:rollW(lvol), col:C.teal, tip:'The stock or WETH side of every launchpad-token trade, from each trade’s Trade event, at the day’s closing price.'},
       {l:`Launchpad fees, ${wl}`, v:fmt.usd(lf7), c:chg(lf7, lfP, {pol:1}), sp:rollW(lfee), col:C.teal},
       {l:`Launchpad revenue, ${wl}`, v:fmt.usd(S_(lpp)), c:chg(S_(lpp), P_(lpp), {pol:1}), sp:rollW(lpp), col:C.teal},
       {l:'Launchpad revenue, to date', v:fmt.usd(sum(Sh.map(lpp))), c:{t:`of ${fmt.usd(sum(Sh.map(r=>(r.lpadSafe||0)+(r.lpadEsc||0))))} fees`, c:'nt'}, sp:(()=>{let c=0; return last(Sh.map(r=>c+=lpp(r)),30);})(), col:C.teal},
-      {l:'Reward pool', v:fmt.usd((LPD.seedUsd||0)+sum(Sh.map(lpot))), c:{t:`${fmt.usd(sum(Sh.map(lpot)))} from fees`, c:'nt'}, sp:(()=>{let c=LPD.seedUsd||0; return last(Sh.map(r=>c+=lpot(r)),30);})(), col:C.gold,
-        tip:'The $1.1M opening pot the protocol’s site attributes to the Standard Reserve, plus 20% of every base fee. The fee Safe holds only the fee part.'},
-      {l:'Season 1 closes', v:LPD.season?dm(fmt.dt(LPD.season.endsAt)):'–', c:{t:LPD.season?`${Math.max(0,Math.floor((LPD.season.endsAt-NOWTS)/86400))}d ${Math.max(0,Math.floor((LPD.season.endsAt-NOWTS)%86400/3600))}h left`:'', c:'nt'}, s:LPD.season?fmt.hm(LPD.season.endsAt)+' UTC':'', sp:[], col:C.gold},
+      {l:`Tokens launched, ${wl}`, v:fmt.int(S_(r=>r.lpadLaunches||0)), c:chg(S_(r=>r.lpadLaunches||0), P_(r=>r.lpadLaunches||0), {pol:1}), sp:rollW(r=>r.lpadLaunches||0), col:C.teal},
+      {l:`Launchpad trades, ${wl}`, v:fmt.int(S_(r=>r.lpadTrades||0)), c:chg(S_(r=>r.lpadTrades||0), P_(r=>r.lpadTrades||0), {pol:1}), sp:rollW(r=>r.lpadTrades||0), col:C.teal},
     ],
     reserve:[
       {l:'Reserve assets', v:fmt.usd(L.reserve.totalUsd), c:chg(L.reserve.totalUsd, W0&&W0.reserveUsd, {pol:1}), s:wl, sp:lvl(r=>r.reserveUsd), col:C.blue},
@@ -560,7 +578,7 @@ function renderKpis(){ derive();
       {l:'Price to backing', v:fmt.x(pbNow), c:chg(pbNow, pbOf(W0), {abs:true, f:v=>v.toFixed(2)+'×'}), s:wl, sp:lvl(pbOf), col:C.fg2},
       {l:'In pools', v:fmt.usd(L.reserve.lpUsd), c:{t:fmt.pct(L.reserve.lpUsd/L.reserve.totalUsd,0)+' of reserve', c:'nt'}, sp:lvl(r=>{const q=(r.reserveParts||{}).lp; return q?sum(Object.values(q)):null;}), col:C.blue},
       {l:'USDG', v:fmt.usd(L.reserve.safeUsdg), c:{t:fmt.pct(L.reserve.safeUsdg/L.reserve.totalUsd,0)+' of reserve', c:'nt'}, sp:lvl(r=>(r.reserveParts||{}).usdg), col:C.teal},
-      {l:'ETH, Safe and vaults', v:fmt.usd((L.reserve.safeEth+L.reserve.contractionEth+L.reserve.expansionEth)*L.ethusd), c:{t:fmt.eth(L.reserve.safeEth+L.reserve.contractionEth+L.reserve.expansionEth,0), c:'nt'}, sp:lvl(r=>(r.reserveParts||{}).eth), col:C.violet},
+      {l:'ETH, Safe and vaults', v:fmt.usd((L.reserve.safeEth+(L.reserve.safeWeth||0)+L.reserve.contractionEth+L.reserve.expansionEth)*L.ethusd), c:{t:fmt.eth(L.reserve.safeEth+(L.reserve.safeWeth||0)+L.reserve.contractionEth+L.reserve.expansionEth,0), c:'nt'}, sp:lvl(r=>(r.reserveParts||{}).eth), col:C.violet},
     ],
     token:[
       {l:'STANDARD price', v:fmt.px(L.price), c:chg(L.price, W0&&W0.price, {pol:1}), s:wl, sp:lvl(r=>r.price)},
@@ -597,7 +615,7 @@ const MEDAL = {SPCX:'linear-gradient(90deg,#ebecef 0%,#c9cacd 50%,#83868c 100%)'
   BABA:'linear-gradient(90deg,#deb553 0%,#ffdd8a 37%,#bc973e 67%,#ab8834 100%)', ETH:'linear-gradient(90deg,#c9d3fa 0%,#8fa2f0 50%,#4a5fb8 100%)'};
 function renderHero(){
   const el = document.getElementById('ov_hero'); if (!el) return;
-  const R_ = L.reserve, ethU = (R_.safeEth+R_.contractionEth+R_.expansionEth)*L.ethusd;
+  const R_ = L.reserve, ethU = (R_.safeEth+(R_.safeWeth||0)+R_.contractionEth+R_.expansionEth)*L.ethusd;
   const parts = [...pools.map(p=>[pname(p), L.lp[p].valueUSD, MEDAL[p]||C.sand]), ['USDG', R_.safeUsdg, '#e8e3d9'], ['ETH', ethU, '#77776c'], ['Equities outside pools', R_.safeStockUsd, C.bronze]].filter(x=>x[1]>1);
   const tot = sum(parts.map(x=>x[1])), left = `${Math.floor(epLeft/86400)}d ${Math.floor(epLeft%86400/3600)}h`;
   const {W, sw, pw, wl} = win(), S_ = f=>sum(sw.map(f)), P_ = f=>pw?sum(pw.map(f)):null, tk = r=>tr(r)+slp(r)+chs(r)+lic(r);
@@ -694,25 +712,28 @@ function renderStatic(){
     const pc = v=>v==null?'–':fmt.pct(v,1);
     document.getElementById('t_slip').innerHTML = '<tr><th>Size</th><th>Buy impact</th><th>Buy cost</th><th>Sell impact</th><th>Sell cost</th></tr>' +
       DP.slip.map(x=>`<tr><td>${fmt.usd(x.usd,0)}</td><td>${pc(x.buyImpact)}</td><td>${pc(x.buyAllIn)}</td><td>${pc(x.sellImpact)}</td><td>${pc(x.sellAllIn)}</td></tr>`).join('');
-    document.getElementById('slip_s').innerHTML = [['Pool fee and tax', `${fmt.pct(DP.fee,0)} · ${fmt.pct(DP.taxBuy,0)} buy, ${fmt.pct(DP.taxSell,0)} sell`], ['Depth within 5%', `${fmt.usd(DP.bid5)} bid · ${fmt.usd(DP.ask5)} ask`], ['Protocol share of in-range liquidity', fmt.pct(DP.protocolShare,0)]].map(x=>`<div>${x[0]}</div><div>${x[1]}</div>`).join('');
+    document.getElementById('slip_s').innerHTML = [['Pool fee and tax', `${fmt.pct(DP.fee,0)} · ${fmt.pct(DP.taxBuy,0)} buy, ${fmt.pct(DP.taxSell,0)} sell`], ['Depth within 5%', `${fmt.usd(DP.bid5)} bid · ${fmt.usd(DP.ask5)} ask`], ['Protocol share of in-range liquidity', fmt.pct(DP.protocolShare,1)]].map(x=>`<div>${x[0]}</div><div>${x[1]}</div>`).join('');
   }
-  // launchpad: standings and the fee Safe
-  const TEAM = {US:['United States','SPCX'], CN:['China','BABA'], KR:['South Korea','SKHY'], ETH:['ETH','ETH']}, TCOL = {US:C.silver, CN:C.gold, KR:C.celadon, ETH:C.sapphire};
-  const tm = (LPD.teams||[]).slice().sort((a,b)=>b.points-a.points), tp = sum(tm.map(t=>t.points));
-  document.getElementById('t_kotm').innerHTML = '<tr><th>Team</th><th>Points</th><th>Share</th><th>API volume</th></tr>' +
-    tm.map((t,i)=>`<tr class="${i===0?'today':''}" title="${fmt.int(t.traders)} traders"><td><i style="display:inline-block;width:6px;height:6px;margin-right:.5rem;background:${TCOL[t.country]||C.sand}"></i>${(TEAM[t.country]||[t.country])[0]} <span style="color:var(--dis);font-size:.75rem">$${(TEAM[t.country]||[])[1]||''}</span></td><td>${fmt.n(t.points,1)}</td><td>${fmt.pct(tp?t.points/tp:null,0)}</td><td>${fmt.usd(t.volumeUsd,1)}</td></tr>`).join('');
-  const potFees = sum(Sh.map(lpot)), pot = (LPD.seedUsd||0)+potFees;
-  document.getElementById('kotm_pool').innerHTML = [['Opening pot, per the protocol’s site', fmt.usd(LPD.seedUsd||0)], ['Reward pool share of fees, 20%', fmt.usd(potFees)], ['Incentives, 65%, by points', fmt.usd(pot*.65)], ['Jackpot, 35%, leading team', fmt.usd(pot*.35)]].map(x=>`<div>${x[0]}</div><div>${x[1]}</div>`).join('');
-  document.getElementById('h_kotm').innerHTML = LPD.season ? `closes <em>${dm(fmt.dt(LPD.season.endsAt))} ${fmt.hm(LPD.season.endsAt)} UTC</em>` : '';
+  // launchpad: the fee Safe's flows to date
   const HP = {USDG:1, WETH:L.ethusd}; pools.forEach(p=>{HP[p]=L.lp[p].price;});
-  const held = Object.entries(LPD.held||{}).filter(([s,a])=>a>1e-9).sort((a,b)=>b[1]*(HP[b[0]]||0)-a[1]*(HP[a[0]]||0));
-  const hTot = sum(held.map(([s,a])=>a*(HP[s]||0)));
-  document.getElementById('t_fsafe').innerHTML = '<tr><th>Token</th><th>Balance</th><th>Value</th></tr>' +
-    held.map(([s,a])=>`<tr title="at ${pxf(HP[s]||0)}"><td>${s}</td><td>${a.toFixed(2)}</td><td>${fmt.usd(a*(HP[s]||0))}</td></tr>`).join('') +
-    (LPD.feeSafeEth ? `<tr title="launch fees, 0.0005 ETH a launch"><td>ETH</td><td>${LPD.feeSafeEth.toFixed(4)}</td><td>${fmt.usd(LPD.feeSafeEth*L.ethusd)}</td></tr>` : '') +
-    `<tr class="tot"><td>Total</td><td></td><td>${fmt.usd(hTot+(LPD.feeSafeEth||0)*L.ethusd)}</td></tr>` +
-    `<tr><td>Withdrawn since launch</td><td></td><td>${fmt.usd(sum(S.map(r=>r.lpadSafeOut||0)))}</td></tr>`;
+  const held = LPD.held||{}, got = LPD.got||{}, outTo = LPD.outTo||{}, rs = ((DATA.addrs||{}).reserveSafe||'').toLowerCase();
+  const sent = {}; Object.values(outTo).forEach(o=>Object.entries(o).forEach(([s,a])=>{sent[s]=(sent[s]||0)+a;}));
+  const toRes = Object.keys(outTo).length>0 && Object.keys(outTo).every(a=>a.toLowerCase()===rs), sentL = toRes ? 'Sent to the reserve Safe' : 'Sent out of the Safe';
+  const toks = Object.keys(got).filter(s=>got[s]>1e-9).sort((a,b)=>got[b]*(HP[b]||0)-got[a]*(HP[a]||0));
+  const hTot = sum(Object.entries(held).map(([s,a])=>Math.max(0,a)*(HP[s]||0))) + (LPD.feeSafeEth||0)*L.ethusd;
+  document.getElementById('fsafe_kv').innerHTML = [['Received from launchpad trades, at each day’s close', fmt.usd(sum(Sh.map(lpp)))],
+    [`${sentL}, at each receipt day’s close`, fmt.usd(sum(Sh.map(r=>lpp(r)*(r.lpadSentFrac||0))))], ...(LPD.ethToReserve ? [['Launch fees sent to the reserve Safe, ETH', fmt.eth(LPD.ethToReserve,4)]] : []), ['Held now, tokens and launch-fee ETH, at current prices', fmt.usd(hTot)]].map(x=>`<div>${x[0]}</div><div>${x[1]}</div>`).join('');
+  document.getElementById('t_fsafe').innerHTML = `<tr><th>Token</th><th>Received</th><th>${toRes?'To the reserve':'Sent'}</th><th>Held</th></tr>` +
+    toks.map(s=>`<tr title="at ${pxf(HP[s]||0)} now"><td>${s}</td><td>${fmt.n(got[s],2)}</td><td>${fmt.n(sent[s]||0,2)}</td><td>${fmt.n(Math.max(0,held[s]||0),2)}</td></tr>`).join('');
   document.getElementById('h_fsafe').innerHTML = `<a href="https://robin.etherscan.io/address/${LPD.feeSafe||''}" target="_blank" rel="noopener" style="text-decoration:none">${(LPD.feeSafe||'').slice(0,6)}…${(LPD.feeSafe||'').slice(-4)}</a> · 2-of-4`;
+}
+const escH = (v)=>String(v==null?'':v).replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));   // token symbols are set by whoever launched the token
+function renderLtok(){
+  const rows = (((LPD.top||{})[String(N)]) || []).slice(0, 10), tv = sum(rows.map(t=>t.vol));
+  document.querySelector('#p_ltok .pt').textContent = `Launched tokens by volume, ${winName()}`;
+  document.getElementById('h_ltok').innerHTML = rows.length ? `top 10 <em>${fmt.usd(tv)}</em>` : '';
+  document.getElementById('t_ltok').innerHTML = '<tr><th>Token</th><th>Launched</th><th>Volume</th><th>Trades</th><th>To creator</th></tr>' +
+    rows.map(t=>`<tr title="${escH(t.sym)} · creator ${t.creator}"><td><a href="https://robin.etherscan.io/address/${t.t}" target="_blank" rel="noopener" style="text-decoration:none">${t.sym ? escH(t.sym.length>8 ? t.sym.slice(0,8)+'…' : t.sym) : t.t.slice(0,6)+'…'+t.t.slice(-4)}</a> <span style="color:var(--dis);font-size:.75rem">${t.pair==='WETH'?'ETH':t.pair}</span></td><td>${dm(t.launched)}</td><td>${fmt.usd(t.vol)}</td><td>${fmt.int(t.trades)}</td><td>${fmt.usd(t.cre)}</td></tr>`).join('');
 }
 function renderBridge(){
   const wdAll = sum(S.map(r=>r.wdNet||0)), rvAll = sum(S.map(r=>r.revokePaid||0)), bbAll = sum(S.map(r=>r.burnBuyback||0)), bfAll = sum(S.map(r=>r.burnFees||0)), depAll = sum(S.map(r=>r.depositBurn||0)), othAll = sum(S.map(r=>r.burnOther||0));
@@ -725,12 +746,13 @@ function renderBridge(){
 }
 
 // ---------- tables that follow the range, drawn with their tab ----------
+const capAvgOf = (rows, p)=>{ const xs = rows.filter(r=>r.date>=LP0 && r.reserveParts).map(r=>{const l=r.reserveParts.lp||{}; return p ? (l[p]||0) : sum(Object.values(l));}); return xs.length ? sum(xs)/xs.length : 0; };   // average position value over the window
 function renderPools(){ const {sw, wl} = win(), lpDays = sw.filter(r=>r.date>=LP0).length || 1;
   const prow = pools.map(p=>{const v=L.lp[p], c=ctx[p]||{}; return {p, v, f7:sum(sw.map(r=>r['spFee_'+p]||0)), v1:pvm(Y,p), v7:sum(sw.map(r=>pvm(r,p)))};});
   const pt = {val:sum(prow.map(x=>x.v.valueUSD||0)), f7:sum(prow.map(x=>x.f7)), v1:sum(prow.map(x=>x.v1)), v7:sum(prow.map(x=>x.v7))};
   document.getElementById('t_pools').innerHTML = `<tr><th>Pool</th><th>Position value</th><th>Price</th><th>Fee</th><th>Volume, ${wl}</th><th>LP fees, ${wl}</th><th>APR, ${wl}</th><th>Share of in-range liquidity</th><th>Share of chain volume</th><th>Share of chain liquidity</th><th>Rank on chain</th><th>Venues</th></tr>` +
-    prow.map(({p,v,f7,v7})=>`<tr title="${Y['otherTvl_'+p]?'largest other venue '+fmt.usd(Y['otherTvl_'+p],1)+' '+Y['otherDex_'+p]:''}"><td><i style="display:inline-block;width:6px;height:6px;background:${PCOL[p]||C.muted};margin-right:.5rem"></i>${shortP(p)}</td><td>${fmt.usd(v.valueUSD)}</td><td>${pxf(v.price)}</td><td>${v.feeNow!=null?fmt.pct(v.feeNow/1e6,3):(v.feeTier>=8388608?'set by hook':(v.feeTier/1e4).toFixed(2)+'%')}</td><td>${fmt.usd(v7)}</td><td>${fmt.usd(f7,1)}</td><td>${v.valueUSD?fmt.pct(f7*365/lpDays/v.valueUSD,0):'–'}</td><td>${v.share!=null?fmt.pct(v.share,0):'–'}</td><td>${Y['volShare_'+p]!=null?fmt.pct(Y['volShare_'+p],0):'–'}</td><td>${Y['liqShare_'+p]!=null?fmt.pct(Y['liqShare_'+p],0):'–'}</td><td>${Y['rank_'+p]?'#'+Y['rank_'+p]:'–'}</td><td>${Y['venues_'+p]??'–'}</td></tr>`).join('') +
-    `<tr class="tot"><td>Total</td><td>${fmt.usd(pt.val)}</td><td></td><td></td><td>${fmt.usd(pt.v7)}</td><td>${fmt.usd(pt.f7,1)}</td><td>${pt.val?fmt.pct(pt.f7*365/lpDays/pt.val,0):'–'}</td><td></td><td></td><td></td><td></td><td></td></tr>`;
+    prow.map(({p,v,f7,v7})=>`<tr title="${Y['otherTvl_'+p]?'largest other venue '+fmt.usd(Y['otherTvl_'+p],1)+' '+Y['otherDex_'+p]:''}"><td><i style="display:inline-block;width:6px;height:6px;background:${PCOL[p]||C.muted};margin-right:.5rem"></i>${shortP(p)}</td><td>${fmt.usd(v.valueUSD)}</td><td>${pxf(v.price)}</td><td>${v.feeNow!=null?fmt.pct(v.feeNow/1e6,3):(v.feeTier>=8388608?'set by hook':(v.feeTier/1e4).toFixed(2)+'%')}</td><td>${fmt.usd(v7)}</td><td>${fmt.usd(f7,1)}</td><td>${capAvgOf(sw,p)?fmt.pct(f7*365/lpDays/capAvgOf(sw,p),0):'–'}</td><td>${v.share!=null?fmt.pct(v.share,0):'–'}</td><td>${Y['volShare_'+p]!=null?fmt.pct(Y['volShare_'+p],0):'–'}</td><td>${Y['liqShare_'+p]!=null?fmt.pct(Y['liqShare_'+p],0):'–'}</td><td>${Y['rank_'+p]?'#'+Y['rank_'+p]:'–'}</td><td>${Y['venues_'+p]??'–'}</td></tr>`).join('') +
+    `<tr class="tot"><td>Total</td><td>${fmt.usd(pt.val)}</td><td></td><td></td><td>${fmt.usd(pt.v7)}</td><td>${fmt.usd(pt.f7,1)}</td><td>${capAvgOf(sw)?fmt.pct(pt.f7*365/lpDays/capAvgOf(sw),0):'–'}</td><td></td><td></td><td></td><td></td><td></td></tr>`;
 }
 function renderResd(){ const {W, B0} = win();
   const comp = (r)=>{const q=r&&r.reserveParts; if(!q) return null; const o={}; Object.entries(q.lp||{}).forEach(([k,v])=>o[pname(k)]=v); o['USDG']=q.usdg; o['ETH, Safe and vaults']=q.eth; o['Equities outside pools']=q.stocks; o['Total']=q.total; return o;};
@@ -791,12 +813,12 @@ reg('revenue', ({Rf, lf, df})=>{ const {sw, wl} = win(), r7 = sum(sw.map(inc)), 
 const winName = ()=>N===0 ? 'since launch' : `trailing ${N} days`;   // tables and blocks that follow the range name it in their title
 const EPD = {}; E.forEach(e=>{for(let t=e.start+3600;t<e.end;t+=86400) EPD[fmt.dt(t)] = e;});
 reg('revenue', ({Rf})=>{ document.querySelector('#p_alloc .pt').textContent = `Revenue by destination, ${winName()}`;
-  const U = ['stocks','pools','cash','burned','sbills','claims','otherPay','held','unbought','team'], al = {open:0, lpad:0, lic:0, slp:0};
+  const U = ['stocks','pools','cash','sentOut','burned','sbills','claims','otherPay','held','unbought','team'], al = {open:0, lpad:0, lpadRes:0, lpadOut:0, lic:0, slp:0};
   U.forEach(k=>al[k]=0);
   Rf.forEach(r=>{const tok=((r.tradingFeeEth||0)+(r.charterEth||0))*ethOf(r), e=EPD[r.date], u=e&&e.use, t=u?sum(U.map(k=>u[k]||0)):0;   // each day's routed fees take its epoch's uses
-    al.pools += r.spFee||0; al.lpad += lpp(r); al.slp += slp(r); al.lic += lic(r);
+    al.pools += r.spFee||0; al.lpad += lpp(r)*(1-(r.lpadSentFrac||0)); al.lpadRes += lpp(r)*((r.lpadSentFrac||0)-(r.lpadOutFrac||0)); al.lpadOut += lpp(r)*(r.lpadOutFrac||0); al.slp += slp(r); al.lic += lic(r);
     if (t>0) U.forEach(k=>al[k] += tok*(u[k]||0)/t); else al.open += tok; });
-  const G = [['Reserve', [['Stock tokens', al.stocks, C.celadon], ['Pools, with LP fees', al.pools, alpha(C.celadon,.6)], ['ETH and USDG held', al.cash, alpha(C.celadon,.32)]]],
+  const G = [['Reserve', [['Stock tokens', al.stocks, C.celadon], ['Pools, with LP fees', al.pools, alpha(C.celadon,.6)], ['ETH and USDG held', al.cash, alpha(C.celadon,.32)], ['Launchpad revenue, from the fee Safe', al.lpadRes, alpha(C.sapphire,.6)]]], ['Sent out of the reserve', [['Sent out of the reserve', al.sentOut+al.lpadOut, C.silver]]],
     ['Buybacks', [['Burned', al.burned, C.bronze], ['S-Bill premiums', al.sbills, C.gold], ['Branch claims for bankers', al.claims, alpha(C.gold,.62)], ['Other payouts', al.otherPay, alpha(C.gold,.38)],
       ['Held in the Incentives vault', al.held, C.sand], ['Not yet bought', al.unbought, C.grey]]],
     ['Team', [['Team', al.team+al.slp, C.rose]]], ['License sales, burned', [['License sales, burned', al.lic, C.violet]]],
@@ -835,9 +857,9 @@ reg('liquidity', ({Rf})=>{ { const {sw, wl} = win(); document.getElementById('h_
   return mk(c_pfee, Rf.map(r=>dm(r.date)), pools.map(p=>bar(shortP(p), Rf.map(r=>r['spFee_'+p]||0), PCOL[p])), {stacked:true, y:usd0, tf:usd1, footer:i=>`total ${fmt.usd(Rf[i[0].dataIndex].spFee||0,1)}`}); });
 const LP0 = '2026-10-14';
 const shareChart = (el, key, num, den, what)=>({Rf})=>{ const Rq = Rf.filter(r=>r.date>=LP0);
-  return mk(el, Rq.map(r=>dm(r.date)), pools.map(p=>line(shortP(p), Rq.map(r=>r[key+p]??null), PCOL[p], {gaps:true})), {y:pct0, tf:v=>fmt.pct(v,1), ymin:0, ymax:1}); };
-reg('liquidity', (x)=>{ document.getElementById('h_vshare').innerHTML = pools.map(p=>`${shortP(p)} <em>${fmt.pct(Y['volShare_'+p],0)}</em>`).join(' · '); return shareChart(c_vshare, 'volShare_', (r,p)=>r['spVolMine_'+p]??r['poolVolChain_'+p], 'chainVol_', 'served')(x); });
-reg('liquidity', (x)=>{ document.getElementById('h_lshare').innerHTML = pools.map(p=>`${shortP(p)} <em>${fmt.pct(Y['liqShare_'+p],0)}</em>`).join(' · '); return shareChart(c_lshare, 'liqShare_', (r,p)=>((r.reserveParts||{}).lp||{})[p], 'chainTvl_', 'position')(x); });
+  return mk(el, Rq.map(r=>dm(r.date)), pools.filter(p=>Rq.some(r=>r[key+p]!=null)).map(p=>line(shortP(p), Rq.map(r=>r[key+p]??null), PCOL[p], {gaps:true})), {y:pct0, tf:v=>fmt.pct(v,1), ymin:0, ymax:1}); };
+reg('liquidity', (x)=>{ document.getElementById('h_vshare').innerHTML = pools.filter(p=>Y['volShare_'+p]!=null).map(p=>`${shortP(p)} <em>${fmt.pct(Y['volShare_'+p],0)}</em>`).join(' · '); return shareChart(c_vshare, 'volShare_', (r,p)=>r['spVolMine_'+p]??r['poolVolChain_'+p], 'chainVol_', 'served')(x); });
+reg('liquidity', (x)=>{ document.getElementById('h_lshare').innerHTML = pools.filter(p=>Y['liqShare_'+p]!=null).map(p=>`${shortP(p)} <em>${fmt.pct(Y['liqShare_'+p],0)}</em>`).join(' · '); return shareChart(c_lshare, 'liqShare_', (r,p)=>((r.reserveParts||{}).lp||{})[p], 'chainTvl_', 'position')(x); });
 reg('liquidity', ({Rf})=>{ const Rc = Rf.filter(r=>r.date>=LP0 && pools.some(p=>r['cpN_'+p]!=null));
   const {sw, wl} = win(), c7 = Object.fromEntries(CPK.map(k=>[k, sum(sw.map(r=>ck(r,k)))])), t7 = sum(CPK.map(k=>c7[k]));
   document.getElementById('h_cpty').innerHTML = t7 ? `organic <em>${cpShares(sw).Org}%</em> ${wl}` : '';
@@ -856,8 +878,13 @@ reg('liquidity', ({Rf})=>{ const Rq = Rf.filter(r=>r.date>=LP0), pnl = (r,p)=>r[
 // launchpad
 reg('launchpad', ({Rf})=>{ const Rq = Rf.filter(r=>r.date>=LP0);
   document.getElementById('h_lfee').innerHTML = `<em>${fmt.usd(sum(Sh.map(r=>(r.lpadSafe||0)+(r.lpadEsc||0))))}</em> since 14 Oct · protocol ${fmt.usd(sum(Sh.map(lpp)))}`;
-  return mk(c_lfee, Rq.map(r=>dm(r.date)), [bar('Protocol, 50% and snipe fees', Rq.map(lpp), C.sapphire), bar('Reward pool, 20%', Rq.map(lpot), C.gold), bar('Creators, 30%, creator taxes and module fees', Rq.map(lcr), C.silver)],
+  return mk(c_lfee, Rq.map(r=>dm(r.date)), [bar('Protocol fee Safe, 70% and snipe fees', Rq.map(lpp), C.sapphire), bar('Creators, 30%, creator taxes and module fees', Rq.map(lcr), C.silver)],
     {stacked:true, y:usd0, tf:usd1}); });
+reg('launchpad', ({Rf})=>{ const Rq = Rf.filter(r=>r.date>=LP0), {sw, wl} = win();
+  document.getElementById('h_llaunch').innerHTML = `<em>${fmt.int(sum(sw.map(r=>r.lpadLaunches||0)))}</em> launched · ${fmt.int(sum(sw.map(r=>r.lpadTrades||0)))} trades, ${wl}`;
+  return mk(c_llaunch, Rq.map(r=>dm(r.date)), [bar('Tokens launched', Rq.map(r=>r.lpadLaunches||0), C.sapphire), line('Trades', Rq.map(r=>r.lpadTrades||0), C.gold, {ax:'y1'})],
+    {y:v=>fmt.int(v), y1:v=>fmt.int(v), tf:v=>fmt.int(v)}); });
+reg('launchpad', ()=>{ renderLtok(); return null; });
 reg('launchpad', ({Rf})=>{ const Rc = Rf.filter(r=>r.date>=LP0), lf_ = r=>r.spFeeLpad||0, all_ = r=>r.spFee||0;
   const {sw, wl} = win(), a = sum(sw.map(lf_)), b = sum(sw.map(all_));
   document.getElementById('h_lroute').innerHTML = b ? `<em>${fmt.usd(a)}</em>, ${fmt.pct(a/b,1)} of LP fees · ${wl}` : '';
@@ -925,12 +952,12 @@ reg('banks', ({Rl, ll, dl})=>{ document.getElementById('h_policy').innerHTML = `
 const CH = DATA.charters, LP = DATA.licensePeriods, CHall = CH, LPall = LP;
 const inRange = (ts)=>!N || ts >= NOWTS - N*86400;   // event charts (epochs, auctions) show the events inside the selected range
 reg('banks', ()=>{ const open = (L.charterRemaining||0)>0, CH = CHall.filter(c=>inRange(c.ts));
-  document.getElementById('h_charter').innerHTML = `last <em>${L.charterLastSale.toFixed(2)} ETH</em> · ${open?'quote '+L.charterPriceNow.toFixed(2)+' ETH':'next '+fmt.hm(L.charterNextOpen)+' UTC at '+L.charterNextStart.toFixed(2)+' ETH'}`;
+  document.getElementById('h_charter').innerHTML = `last <em>${L.charterLastSale.toFixed(2)} ETH</em> · ${open?'quote '+L.charterPriceNow.toFixed(2)+' ETH':L.chartersPerPeriod===0?'none offered per period':'next '+fmt.hm(L.charterNextOpen)+' UTC at '+L.charterNextStart.toFixed(2)+' ETH'}`;
   return mk(c_charter, CH.map(c=>dm(fmt.dt(c.ts))), [line('Clearing price', CH.map(c=>c.eth), C.violet, {fill:true, pts:CH.map(c=>c.viaContract?3.5:1.8), ps:CH.map(c=>c.viaContract?'triangle':'circle')}),
     ...(open?[{type:'line', label:'Current quote', data:CH.map((c,i)=>i===CH.length-1?L.charterPriceNow:null), borderColor:C.gold, backgroundColor:C.gold, pointRadius:4, pointStyle:'rectRot', showLine:false}]:[])],
     {y:v=>v+' ETH', tf:v=>v.toFixed(2)+' ETH', title:i=>{const c=CH[i[0].dataIndex]; return 'charter #'+c.id+' · '+fmt.dt(c.ts)+(c.viaContract?' · via contract':'');}}); });
 reg('banks', ()=>{ const open = (L.licenseRemaining||0)>0, LP = LPall.filter(p=>inRange(p.start));
-  document.getElementById('h_license').innerHTML = `last <em>${fmt.int(L.licenseLastSale)}</em> · ${open?'quote '+fmt.int(L.licensePriceNow)+', '+L.licenseRemaining+' left':'next '+fmt.hm(L.licenseNextOpen)+' UTC at '+fmt.int(L.licenseNextStart)}`;
+  document.getElementById('h_license').innerHTML = `last <em>${fmt.int(L.licenseLastSale)}</em> · ${open?'quote '+fmt.int(L.licensePriceNow)+', '+L.licenseRemaining+' left':L.licensesPerPeriod===0?'none offered per period':'next '+fmt.hm(L.licenseNextOpen)+' UTC at '+fmt.int(L.licenseNextStart)}`;
   return mk(c_license, LP.map(p=>dm(fmt.dt(p.start))+(new Date(p.start*1000).getUTCHours()<12?' am':' pm')), [bar('Licenses sold', LP.map(p=>p.sold), alpha(C.violet,.45), {ax:'y1'}), line('Period close price, STANDARD', LP.map(p=>p.close), C.gold)],
     {y:v=>fmt.n(v,1), y1:n0, tf:v=>fmt.int(v)}); });
 reg('banks', ({Rl, ll, dl})=>{ document.getElementById('h_sb').innerHTML = `<em>${fmt.n(L.sbills.locked,2)}</em> · ${(L.sbills.rate*100).toFixed(2)}% per term`;
@@ -942,7 +969,7 @@ reg('banks', ({Rl, ll, dl})=>{ document.getElementById('h_mult').innerHTML = `<e
 // ---------- top bankers, daily log, reconciliation ----------
 let LD = DATA.leaders || {rows:[]}, leadOpen = false;
 const who = (l)=>`<a href="https://robin.etherscan.io/address/${l.owner}" target="_blank" rel="noopener" style="text-decoration:none">${l.ens ? l.ens : l.owner.slice(0,6)+'…'+l.owner.slice(-4)}</a>`;
-const rkc = (l)=>l.prevRank==null ? '<td class="mut">–</td>' : (l.prevRank-l.rank===0 ? '<td class="mut">0</td>' : `<td class="${l.prevRank-l.rank>0?'pos':'neg'}">${l.prevRank-l.rank>0?'▲':'▼'} ${Math.abs(l.prevRank-l.rank)}</td>`);
+const rkc = (l)=>{ const cur = l.rankByAddr||l.rank; return l.prevRank==null ? '<td class="mut">–</td>' : (l.prevRank-cur===0 ? '<td class="mut">0</td>' : `<td class="${l.prevRank-cur>0?'pos':'neg'}">${l.prevRank-cur>0?'▲':'▼'} ${Math.abs(l.prevRank-cur)}</td>`); };
 function renderLeaders(){
   document.getElementById('h_lead').innerHTML = `<em>${fmt.int(LD.bankers)}</em> bankers · ${fmt.int(LD.banks)} banks · ${fmt.int(LD.branches)} branches`;
   document.getElementById('t_lead').innerHTML = '<tr><th>Rank</th><th class="l">Banker</th><th>Banks</th><th>Branches</th><th>Share of branches</th><th>Share of emissions, this epoch</th><th>Emissions, this epoch</th><th>Emissions, lifetime</th><th>Rank change</th></tr>' +
@@ -963,7 +990,7 @@ const cols = [
   ['LP fees', r=>fmt.usd(r.spFee||0,1), r=>r.spFee||0],
   ['STANDARD pool LP fees', r=>fmt.usd(slp(r),1), r=>slp(r)],
   ['Launchpad revenue', r=>fmt.usd(lpp(r),1), r=>lpp(r)],
-  ['Launchpad, reward pool', r=>fmt.usd(lpot(r),1), r=>lpot(r)],
+  ['Tokens launched', r=>r.lpadLaunches!=null?fmt.int(r.lpadLaunches):'–', r=>r.lpadLaunches||0],
   ['Launchpad, creators', r=>fmt.usd(lcr(r),1), r=>lcr(r)],
   ['Launchpad volume', r=>fmt.usd(lvol(r),1), r=>lvol(r)],
   ['Charter sales', r=>fmt.usd(chs(r),1), r=>chs(r)],
@@ -1033,14 +1060,14 @@ const API_FIELDS = [
   ['reserveUsd', 'Reserve assets at the day’s close, USD', r=>r.reserveUsd],
   ['backingPerToken', 'Reserve assets per STANDARD in wallets, USD', bkOf],
   ['priceToBacking', 'Market cap in wallets over reserve assets', pbOf],
-  ['revenueUsd', 'Revenue: STANDARD trading fees, LP fees, STANDARD pool LP fees, the launchpad’s 50%, charter sales and license sales, USD', inc],
+  ['revenueUsd', 'Revenue: STANDARD trading fees, LP fees, STANDARD pool LP fees, the launchpad’s 70% and snipe fees, charter sales and license sales, USD', inc],
   ['standardTradingFeesUsd', 'STANDARD trading fees, the ETH tax the tax hook collects on STANDARD trades and LP exits, USD', tr],
   ['standardPoolLpFeesUsd', 'The 1% pool fee earned by the protocol’s own position in the STANDARD/ETH pool, both sides, USD', slp],
   ['lpFeesUsd', 'LP fees earned by the reserve’s pool positions, USD', r=>r.spFee||0],
-  ['launchpadRevenueUsd', 'The protocol’s 50% of the 1% launchpad base fee, USD', lpp],
-  ['launchpadRewardPoolUsd', 'The King of the Markets reward pool’s 20%, USD', lpot],
-  ['launchpadCreatorsUsd', 'Creators’ 30% plus hook-module fees, USD', lcr],
-  ['launchpadVolumeUsd', 'Launchpad trading volume implied by the fee Safe’s 0.7%, USD', lvol],
+  ['launchpadRevenueUsd', 'The protocol’s 70% of the 1% launchpad base fee plus snipe fees, USD', lpp],
+  ['launchpadLaunches', 'Tokens launched', r=>r.lpadLaunches||0],
+  ['launchpadCreatorsUsd', 'Creators’ 30% plus creator taxes and hook-module fees, received by the creator fee escrows, USD', lcr],
+  ['launchpadVolumeUsd', 'Launchpad trading volume, the stock or WETH side of every trade from its Trade event, USD', lvol],
   ['charterSalesUsd', 'Charter auction proceeds, USD', chs],
   ['licenseSalesUsd', 'Ledger STANDARD paid for expansion licenses (burned), at the day’s close less the day’s resolution fee, USD', lic],
   ['volumeServedUsd', 'Volume served by the reserve’s own liquidity, USD', served],
@@ -1059,7 +1086,7 @@ const API_FIELDS = [
   ['netBuying', 'STANDARD bought from the protocol pool less STANDARD sold into it; negative is net selling', r=>r.mktNet!=null?-r.mktNet:null],
   ['depositedByBankers', 'STANDARD bankers deposited into their banks from their wallets', r=>r.deposits||0],
   ['withdrawnByClosingBranches', 'STANDARD withdrawn from banks by closing branches, before the exit fee', r=>r.wdGross||0],
-  ['bidDepth2pctUsd', 'ETH, in USD, that sellers receive taking the price down 2% at the close', r=>r.bid2],
+  ['bidDepth2pctUsd', 'ETH, in USD, the pool pays out to sellers taking the price down 2% at the close, before the sell tax', r=>r.bid2],
   ['regime', 'Epoch regime: expansion or contraction', r=>regime[r.date]===undefined?null:regime[r.date]?'expansion':'contraction'],
 ];
 const r6 = v=>typeof v==='number' ? (isFinite(v) ? +v.toPrecision(10) : null) : v ?? null;
@@ -1190,9 +1217,9 @@ async function goLive(){
       licenseSoldToday:I(la.soldToday), licenseCap:I(la.dayCap), licenseRemaining:I(la.remainingToday||'0')});
     if (ca) Object.assign(L, {charterPriceNow:W(ca.currentPrice), charterLastSale:W(ca.lastSalePrice), charterFloor:W(ca.dayFloorPrice), charterDayStart:W(ca.dayStartPrice),
       charterSoldToday:I(ca.soldToday), charterCap:I(ca.dayCap), charterRemaining:I(ca.remainingToday||'0')});
-    const nxt = a=>{const anchor=I(a.auctionAnchor), per=I(a.AUCTION_DAY), k=Math.floor((now-anchor)/per); return [anchor+(k+1)*per, I(a.startMultiplier)*W(a.lastSalePrice)];};
-    if (la) { const n=nxt(la); L.licenseNextOpen=n[0]; L.licenseNextStart=n[1]; }
-    if (ca) { const n=nxt(ca); L.charterNextOpen=n[0]; L.charterNextStart=n[1]; }
+    const nxt = a=>{const anchor=I(a.auctionAnchor), per=I(a.AUCTION_DAY), k=Math.floor((now-anchor)/per); return [anchor+(k+1)*per, I(a.startMultiplier)*W(I(a.lastSaleDay)===I(a.currentDay)?a.lastSalePrice:a.dayFloorPrice)];};
+    if (la) { const n=nxt(la); L.licenseNextOpen=n[0]; L.licenseNextStart=n[1]; if (la.licensesPerDay!=null) L.licensesPerPeriod=I(la.licensesPerDay); }
+    if (ca) { const n=nxt(ca); L.charterNextOpen=n[0]; L.charterNextStart=n[1]; if (ca.chartersPerDay!=null) L.chartersPerPeriod=I(ca.chartersPerDay); }
     if (Array.isArray(s.withdrawnByDay)) { const w7=sum(s.withdrawnByDay.map(W)); const P=w7/Math.max(L.pending+w7,1e7); L.w7=w7; L.exitPressure7d=P; L.exitFeeNow=0.02+0.58*Math.pow(Math.min(P/0.10,1),2); }
     if (sb && sb.current) { const q=sb.current, dps=q.drifting?W(q.driftPerSecond||'0'):0, cap=q.ceiling?W(q.ceiling):1;
       L.sbills.rate=Math.min(cap, W(q.rate)+dps*Math.max(0, I(s.blockTimestamp)-(q.rateUpdatedAt||I(s.blockTimestamp)))); L.sbills.locked=W(q.locked); L.sbills.principal=W(q.principal||q.locked);
@@ -1202,9 +1229,10 @@ async function goLive(){
     if (lb && Array.isArray(lb.bankers)) {
       const ens = {}; (BASE.ld.rows||[]).forEach(r=>{ens[r.owner]=r.ens;});
       const B_ = x=>BigInt(x||'0'), bk = lb.bankers.slice().sort((a,b)=>(+b.branches||0)-(+a.branches||0) || Number(B_(b.epochEmissions)-B_(a.epochEmissions)) || Number(B_(b.lifetimeEmissions)-B_(a.lifetimeEmissions)));
-      const tb = sum(bk.map(r=>+r.branches||0)) || 1, te = sum(bk.map(r=>W(r.epochEmissions||'0'))) || 1;
+      const tb = sum(bk.map(r=>+r.branches||0)) || 1, te = sum(bk.map(r=>W(r.epochEmissions||'0'))) || 1, ra = {};
+      bk.slice().sort((a,b)=>(+b.branches||0)-(+a.branches||0) || (a.owner.toLowerCase()<b.owner.toLowerCase()?-1:1)).forEach((r,i)=>{ra[r.owner.toLowerCase()]=i+1;});
       LD = {bankers:bk.length, banks:sum(bk.map(r=>+r.banks||0)), branches:tb, rows:bk.slice(0,25).map((r,i)=>({rank:i+1, owner:r.owner.toLowerCase(), ens:ens[r.owner.toLowerCase()]||'',
-        banks:+r.banks||0, branches:+r.branches||0, branchShare:(+r.branches||0)/tb, epochShare:W(r.epochEmissions||'0')/te, epochEmissions:W(r.epochEmissions||'0'), lifetimeEmissions:W(r.lifetimeEmissions||'0'), prevRank:(r.previousRank||{}).epoch}))};
+        banks:+r.banks||0, branches:+r.branches||0, branchShare:(+r.branches||0)/tb, epochShare:W(r.epochEmissions||'0')/te, epochEmissions:W(r.epochEmissions||'0'), lifetimeEmissions:W(r.lifetimeEmissions||'0'), prevRank:(r.previousRank||{}).epoch, rankByAddr:ra[r.owner.toLowerCase()]}))};
     }
     NOWTS = now; LIVE = true; LIVEHM = new Date(I(s.blockTimestamp)*1000).toISOString().slice(11,16); LIVEB = I(s.blockNumber);
     renderAll(); redrawAll();
@@ -1213,7 +1241,7 @@ async function goLive(){
 function restoreRows(){
   const keep = {}; ['branches','multiplier','epoch','epochStart','epochEnd','epochNetFlow','previousEpochFlow','positiveStreak','pending','cumulativeIssued','cumulativeRecycled',
     'activeCharters','burnedCharters','chartersMinted','licensePriceNow','licenseLastSale','licenseFloor','licenseDayStart','licenseSoldToday','licenseCap','licenseRemaining',
-    'charterPriceNow','charterLastSale','charterFloor','charterDayStart','charterSoldToday','charterCap','charterRemaining','licenseNextOpen','licenseNextStart','charterNextOpen',
+    'charterPriceNow','charterLastSale','charterFloor','charterDayStart','charterSoldToday','charterCap','charterRemaining','chartersPerPeriod','licensesPerPeriod','licenseNextOpen','licenseNextStart','charterNextOpen',
     'charterNextStart','w7','exitPressure7d','exitFeeNow','price','priceChange24h','vol24','poolLiqUsd'].forEach(k=>{keep[k]=L[k];});
   const sbk = clone(L.sbills); restore(); Object.assign(L, keep); L.sbills = sbk;
 }

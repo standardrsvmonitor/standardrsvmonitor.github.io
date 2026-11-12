@@ -1,7 +1,7 @@
 # Standard Reserve Monitor
 
 An independent on-chain monitor of the Standard Reserve protocol on Robinhood Chain: reserve assets and backing, revenue by stream, the
-liquidity business in the reserve's own pools, the launchpad and King of the Markets, STANDARD supply, burns and holder flows, banks,
+liquidity business in the reserve's own pools, the launchpad, STANDARD supply, burns and holder flows, banks,
 branches, the Auction House and S-Bills. Live at https://standardrsvmonitor.github.io/.
 
 ## Sources and method

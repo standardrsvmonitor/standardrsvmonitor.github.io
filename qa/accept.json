@@ -149,5 +149,42 @@
   "to": "2026-11-08",
   "until": "2026-11-15",
   "why": "Venue scan keeps every pool DexScreener ever listed for an asset, and finds every Uniswap v4 pool pairing it with USDG, ETH or WETH on chain (PoolManager Initialize events) instead of DexScreener's 30-pair list, which rotates; venue counts on settled days rise (ETH 15-17 to 38-42, SPCX 16-24 to 32-41, SKHY 3 to 11, BABA 5 to 12-13); chain liquidity and the reserve's shares within 2.6%; 8-9 Nov 2026"
+ },
+ {
+  "fields": [
+   ".*"
+  ],
+  "from": "2026-11-08",
+  "to": "2026-11-08",
+  "until": "2026-11-19",
+  "why": "8 Nov was a partial day in the last published compile (8 Nov 21:36 UTC); the page was then held until 12 Nov, so the whole day's figures replace the partial ones"
+ },
+ {
+  "fields": [
+   "chainTvl_ETH",
+   "chainVol_ETH",
+   "liqShare_ETH",
+   "volShare_ETH",
+   "rank_ETH",
+   "venues_ETH",
+   "otherTvl_ETH",
+   "otherDex_ETH",
+   "rank_BABA"
+  ],
+  "from": "2026-09-01",
+  "to": "2026-11-12",
+  "until": "2026-11-19",
+  "why": "ETH/USDG chain standing withheld (the venue list never included WETH/USDG pools, which are larger); rank now counts only pools with at least $100, as the venue count does (12 Nov 2026 audit)"
+ },
+ {
+  "fields": [
+   "lpadSafe",
+   "lpadEsc",
+   "lpadSafeOut"
+  ],
+  "from": "2026-10-14",
+  "to": "2026-11-09",
+  "until": "2026-11-19",
+  "why": "launchpad fee Safe and creator escrow transfers re-dated with the exact UTC midnight blocks; the cache was built before the 2 Nov 2026 midnight fix (12 Nov 2026 audit)"
  }
 ]

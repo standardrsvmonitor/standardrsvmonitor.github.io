@@ -77,8 +77,8 @@ try:
     eq("LP fee APR", kv("liquidity", "LP fee APR"), row("liquidity", "t_pools", "Total")[6])
     eq("launchpad revenue, to date", kv("launchpad", "Launchpad revenue, to date"), rx(r"protocol (\S+)", head("launchpad", "Launchpad fees by recipient, daily")))
     eq("launchpad fees, to date", rx(r"of (\S+) fees", (kpi("launchpad", "Launchpad revenue, to date") or [""] * 3)[2]), em("launchpad", "Launchpad fees by recipient, daily"))
-    kp = T["launchpad"]["blocks"].get("kotm_pool", [])
-    eq("reward pool fees", rx(r"(\S+) from fees", (kpi("launchpad", "Reward pool") or [""] * 3)[2]), kp[kp.index("Reward pool share of fees, 20%") + 1] if "Reward pool share of fees, 20%" in kp else None)
+    fk = T["launchpad"]["blocks"].get("fsafe_kv", [])
+    eq("fee Safe receipts, to date", kv("launchpad", "Launchpad revenue, to date"), fk[1] if len(fk) > 1 else None)
     eq("capital in pools", kv("liquidity", "Capital in pools"), kv("reserve", "In pools"), row("liquidity", "t_pools", "Total")[1])
     eq("branches", kv("overview", "Branches"), kv("banks", "Branches"), gm("Branches")[1], em("overview", "Branches and active charters, daily"), em("banks", "Branches and active charters, daily"),
        rx(r"([\d,]+) branches", head("banks", "Top bankers")))
@@ -130,7 +130,7 @@ try:   # the supply chart: issued less burned equals the change in circulating s
 except Exception as e:
     add("recompute", "supply and routed-use recompute ran", False, f"{type(e).__name__}: {e}")
 eth = lambda r: r.get("eth") or L["ethusd"]
-lpr = lambda r: (r["lpadSafeBase"] * 5 / 7 + (r.get("lpadSnipe") or 0)) if r.get("lpadSafeBase") is not None else (r.get("lpadSafe") or 0) * 5 / 7   # launchpad revenue, as build.py
+lpr = lambda r: (r["lpadSafeBase"] + (r.get("lpadSnipe") or 0)) if r.get("lpadSafeBase") is not None else (r.get("lpadSafe") or 0)   # launchpad revenue, the fee Safe's 70% plus snipe fees, as build.py
 lvl = lambda r: r["lpadVol"] if r.get("lpadVol") is not None else (r.get("lpadSafe") or 0) / 0.007
 lic = lambda r: (r.get("licBurn") or 0) * (r.get("price") or L["price"]) * (1 - (r.get("exitFee") or 0))   # license sales, as build.py values them
 try:

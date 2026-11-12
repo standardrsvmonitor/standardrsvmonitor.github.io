@@ -56,9 +56,9 @@ jobs:
         uses: actions/cache/restore@v4
         with:
           path: data/cache
-          key: sr-cache-evolve-${{ github.run_id }}
+          key: sr2-cache-evolve-${{ github.run_id }}
           restore-keys: |
-            sr-cache-
+            sr2-cache-
       - name: Gather evidence for the agent
         if: steps.auth.outputs.ok == '1'
         run: |

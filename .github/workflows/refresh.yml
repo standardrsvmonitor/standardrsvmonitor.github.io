@@ -51,15 +51,22 @@ jobs:
           python-version: "3.12"
       - name: Restore incremental caches
         if: steps.chk.outputs.run == '1'
-        uses: actions/cache@v4
+        uses: actions/cache/restore@v4
         with:
           path: data/cache
-          key: sr-cache-${{ github.run_id }}
+          key: sr2-cache-${{ github.run_id }}
           restore-keys: |
-            sr-cache-
+            sr2-cache-
       - name: Pull on-chain and indexer data
+        id: pull
         if: steps.chk.outputs.run == '1'
         run: python -I pull.py
+      - name: Save incremental caches (after every pull, so a held page or a failed pull does not make the next run rescan the same days)
+        if: always() && (steps.pull.outcome == 'success' || steps.pull.outcome == 'failure')
+        uses: actions/cache/save@v4
+        with:
+          path: data/cache
+          key: sr2-cache-${{ github.run_id }}
       - name: Build page
         if: steps.chk.outputs.run == '1'
         run: python -I build.py

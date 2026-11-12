@@ -137,7 +137,7 @@ def reserve_history(x, lp_pools, closes, eth_day, epochs, dates, today_parts):
     for _, k, v in ev: fwd[k] += v
     checks = {"eth_" + k: round(fwd[k] - now_eth[k], 6) for k in now_eth}   # forward from zero against the balance at the compile block
     # ERC-20 balances of the Safe: USDG and the equities
-    toks = {"USDG": (x.USDG, 6)}
+    toks = {"USDG": (x.USDG, 6), "WETH": (LPAD["tokens"]["WETH"][0], 18)}   # WETH counts as ETH (7.1 from the launchpad fee Safe, 10 Nov 2026)
     for s, p in lp_pools.items():
         if not p["isEth"]: toks[s] = (p["stockAddr"], 18)
     tev = []; x.log("reserve: token transfers", list(toks)); x.safe_logs = sl; x.safe_tok = []
@@ -185,15 +185,58 @@ def reserve_history(x, lp_pools, closes, eth_day, epochs, dates, today_parts):
             a0, a1 = lp_amounts(L, tl, tu, c / 2 ** 96)
             usdg, stock = (a0 / 1e6, a1 / 1e18) if p["usdg0"] else (a1 / 1e6, a0 / 1e18)
             v = stock * (px[s] or 0) + usdg; lp_usd += v; lp_by[s] += v
-        stock_usd = sum(tok_units[s] * (px.get(s) or 0) for s in toks if s != "USDG")
+        stock_usd = sum(tok_units[s] * (px.get(s) or 0) for s in toks if s not in ("USDG", "WETH"))
         e_px = eth_day.get(d)
         if e_px is None: continue
+        eth_units += tok_units["WETH"]
         out[d] = {"total": eth_units * e_px + tok_units["USDG"] + stock_usd + lp_usd, "eth": eth_units * e_px, "usdg": tok_units["USDG"], "stocks": stock_usd,
                   "lp": {s: lp_by.get(s, 0.0) for s in lp_pools}}
     if dates and today_parts is not None:       # today is the reserve read at the compile block, the same figures as the tile
         if dates[-1] in out: checks["today_rebuilt_vs_read"] = round(out[dates[-1]]["total"] / today_parts["total"] - 1, 6)
         out[dates[-1]] = today_parts
     return out, checks
+
+
+def stock_exits(x, lp_pools, closes):
+    """Stock tokens leaving the reserve. The Safe's loose balance of each stock token is followed in two parts, bought (purchases and
+    whatever comes back from its pools) and launchpad (from the launchpad fee Safe); a deposit into a pool or a send to an outside address
+    takes from both in proportion. At a send, the share of the token's bought holding that left is units sent from the bought part over the
+    bought part plus the units in the reserve's positions (positions as of that block, valued at the day's close). Returns (events
+    [(ts, block, {token: share of the bought holding that left})], weights {token: share of purchase value, units bought at the pool's first
+    close}, {token: share of launchpad units that left})."""
+    safe, pm, posm = x.H["reserveSafe"].lower(), x.PM.lower(), x.POSM.lower(); fsafe = LPAD["feeSafe"]
+    syms = [s for s, p in lp_pools.items() if not p["isEth"]]
+    ids = {"0x" + format(i, "064x") for i in set(x.pos_ids) | set(x.jl("positions.json", {"ids": []})["ids"])}
+    rows = [r for r in x.jl("lp_mods.json", {"rows": []})["rows"] if r[5] in ids]
+    pid_sym = {p["pool"]: s for s, p in lp_pools.items()}
+    tr = sorted(((int(l["blockNumber"], 16), int(l["logIndex"], 16), s, d, l) for s, d, l in x.safe_tok if s in syms), key=lambda r: r[:2])
+    lb = collections.Counter(); ll = collections.Counter(); bought = collections.Counter(); lout = collections.Counter(); lin = collections.Counter()
+    ev = []
+    for b, _, s, d, l in tr:
+        amt = int(l["data"], 16) / 1e18; cp = "0x" + (l["topics"][1] if d == 1 else l["topics"][2])[-40:]
+        if d == 1:
+            if cp == fsafe: ll[s] += amt; lin[s] += amt
+            else:
+                lb[s] += amt
+                if cp not in (pm, posm): bought[s] += amt
+            continue
+        tot = lb[s] + ll[s]; fb = lb[s] / tot if tot else 1.0
+        sb, sl = amt * fb, amt * (1 - fb)
+        if cp not in (pm, posm):   # a send out of the reserve: the share of the bought holding (loose plus in positions) that left
+            p = lp_pools[s]; c = close_on(closes.get(p["pool"], {}), day(x.T(b)), first=True); pooled = 0.0
+            if c:
+                rng = collections.Counter()
+                for rb, pid, tl, tu, dl, salt in rows:
+                    if rb < b and pid_sym.get(pid) == s: rng[(tl, tu)] += int(dl)
+                for (tl, tu), L in rng.items():
+                    if L > 0: a0, a1 = lp_amounts(L, tl, tu, c / 2 ** 96); pooled += (a1 if p["usdg0"] else a0) / 1e18
+            ev.append((x.T(b), b, {s: min(1.0, sb / (lb[s] + pooled)) if lb[s] + pooled else 0.0}))
+            lout[s] += sl
+        lb[s] = max(0.0, lb[s] - sb); ll[s] = max(0.0, ll[s] - sl)
+    first = {s: close_on(closes.get(lp_pools[s]["pool"], {}), "0000-00-00", first=True) for s in syms}
+    val = {s: bought[s] * ((1e12 / ((first[s] / 2 ** 96) ** 2)) if lp_pools[s]["usdg0"] else ((first[s] / 2 ** 96) ** 2) * 1e12) for s in syms if first.get(s)}
+    tv = sum(val.values()) or 1.0
+    return ev, {s: v / tv for s, v in val.items()}, {s: min(1.0, lout[s] / lin[s]) for s in lin if lin[s]}
 
 
 def _safe_items(l):
@@ -218,11 +261,11 @@ def _take(q, amt):
     return out, max(0.0, amt)
 
 
-def routed_use(x, epochs):
+def routed_use(x, epochs, exits=(), weights=None):
     """What each epoch's routed ETH became, first in, first out, in ETH. Cohorts are the genesis seed (0) and each settled epoch. The
     team's share is paid at settlement. The expansion share joins the reserve's cash; the reserve Safe's transactions then sell ETH for
     USDG (the USDG carries the cohorts and ETH cost of what was sold), pay USDG to the seller of stock tokens, put ETH and USDG into its
-    pools (less what comes back) and swap USDG back to ETH. The contraction share is spent by the contraction vault's buybacks, all
+    pools (less what comes back), swap USDG back to ETH and send ETH out of the reserve (sentOut). The contraction share is spent by the contraction vault's buybacks, all
     burned. The POL share is spent by the POL buyback, whose STANDARD goes to the Incentives vault and leaves it as S-Bill premium budget,
     branch claims and top-ups, or other payouts. Whatever is left is cash, routed ETH not yet spent on buybacks, or buyback STANDARD still
     in the vault. Returns ({cohort: {use: ETH}}, checks, totals)."""
@@ -258,8 +301,11 @@ def routed_use(x, epochs):
         inc_in["pol" if "0x" + l["topics"][1][-40:] == H["polBuyback"].lower() else "other"] += int(l["data"], 16) / 1e18
     for l in x.getlogs({"address": x.STD, "topics": [x.TR, x.pad(inc)]}, G, tip, 4000000):
         b = int(l["blockNumber"], 16); ev.append((x.T(b), 2, b, "pay", ("0x" + l["topics"][2][-40:], int(l["data"], 16) / 1e18)))
+    ev += [(ts_, 1, b_, "stockout", f_) for ts_, b_, f_ in exits]   # stock tokens sent out of the reserve (8,928 BABA and 1,221 SKHY, 10 Nov 2026)
+    W_ = weights or {"": 1.0}
     D = collections.deque
     cashQ, usdgQ, conQ, polQ, incQ, poolQ = D(), D(), D(), D(), D(), D()
+    sentQ = collections.defaultdict(D); outside_in = collections.Counter()   # ETH sent out, by recipient (a refund takes it back); outside ETH received
     fate = collections.defaultdict(collections.Counter); other = 0.0; last_k = 0
     for ts, _, _, kind, p in sorted(ev, key=lambda r: r[:3]):
         if kind == "seed": cashQ.append([0, seed_x, seed_x]); conQ.append([0, seed_c, seed_c]); continue
@@ -274,6 +320,12 @@ def routed_use(x, epochs):
             e_, s_ = p; got, short = _take(polQ, e_); other += short
             for k, a, c in got: incQ.append([k, s_ * a / e_, c])
             continue
+        if kind == "stockout":                                             # that share of each token's purchase cost moves to sent out
+            for k in list(fate):
+                for s_, f_ in p.items():
+                    m_ = fate[k].get("stocks_" + s_, 0.0) * f_
+                    if m_: fate[k]["stocks_" + s_] -= m_; fate[k]["sentOut"] += m_
+            continue
         if kind == "pay":
             to, a_ = p; got, short = _take(incQ, a_); other += short
             use = "sbills" if to == H["sbills"].lower() else "claims" if to in claims else "otherPay"
@@ -282,7 +334,7 @@ def routed_use(x, epochs):
         t = p                                                              # a reserve Safe transaction
         u_in = sum(v for cp, v in t["u"].items() if v > 0 and cp not in (pm, posm)); u_out = -sum(v for cp, v in t["u"].items() if v < 0 and cp not in (pm, posm))
         u_pos = sum(v for cp, v in t["u"].items() if cp in (pm, posm))
-        e_out = sum(v for to, v in t["eo"].items() if to != posm); e_back = sum(v for fr, v in t["ei"].items() if fr != posm)
+        e_out = sum(v for to, v in t["eo"].items() if to not in (posm, pm)); e_back = sum(v for fr, v in t["ei"].items() if fr not in (posm, pm))
         # inflows first (a transaction can swap USDG back to ETH and then add that ETH to a position)
         if u_in:
             if e_out:                                                      # ETH sold for USDG: the USDG carries the cohorts it was bought with
@@ -294,7 +346,14 @@ def routed_use(x, epochs):
             got, short = _take(usdgQ, u_out); other += short / 1e3; cost = sum(c for _, _, c in got)
             for k, a, c in got: cashQ.append([k, e_back * c / cost, e_back * c / cost])
             u_out = e_back = 0.0
-        e_pos = t["eo"][posm] - t["ei"][posm]                              # one transaction's ETH into positions, net of what came back
+        if e_back:                                                         # ETH back from a wallet the reserve sent ETH to (0.4195 of the 52.2, 10 Nov 2026),
+            for fr, v in t["ei"].items():                                  # and the launchpad fee Safe's launch fees (1.565, 10 Nov), carried at no routed cost;
+                if v <= 0 or not (sentQ.get(fr) or fr == LPAD["feeSafe"]): continue   # other ETH in is routed ETH arriving by another path (expansion forwards)
+                got, rest = _take(sentQ[fr], v) if sentQ.get(fr) else ([], v)
+                for k, a, c in got: fate[k]["sentOut"] -= c; cashQ.append([k, a, c])
+                if rest > 1e-12: cashQ.append([last_k, rest, 0.0]); outside_in[fr] += rest
+        e_pos = t["eo"][posm] + t["eo"][pm] - t["ei"][posm] - t["ei"][pm]  # one transaction's ETH into positions, net of what came back (a fee
+                                                                           # collection pays native ETH straight from the PoolManager)
         if e_pos < 0:                                                      # ETH back from positions: principal first, anything beyond is fees
             got, extra = _take(poolQ, -e_pos)
             for k, a, c in got: fate[k]["pools"] -= c; cashQ.append([k, a, a])
@@ -313,14 +372,24 @@ def routed_use(x, epochs):
             for k, a, c in got: fate[k]["pools"] += c; poolQ.append([k, c, c])
         if u_out:                                                          # USDG paid to the seller of stock tokens
             got, short = _take(usdgQ, u_out); other += short / 1e3
-            for k, a, c in got: fate[k]["stocks"] += c
-        if e_out: other += e_out                                           # ETH sent anywhere else: unclassified
+            for k, a, c in got:
+                for s_, w_ in W_.items(): fate[k]["stocks_" + s_] += c * w_  # by token, in proportion to the value bought
+        if e_out:                                                          # ETH sent out of the reserve with nothing back in the same transaction
+            for to, v in t["eo"].items():                                  # (52.2 ETH to 0x4e5a…60b6 on 10 Nov 2026)
+                if to in (posm, pm) or v <= 0: continue
+                got, short = _take(cashQ, v); other += short
+                for k, a, c in got: fate[k]["sentOut"] += c; sentQ[to].append([k, a, c])
     for q, use in ((cashQ, "cash"), (usdgQ, "cash"), (conQ, "unbought"), (polQ, "unbought"), (incQ, "held")):
         for k, a, c in q: fate[k][use] += c
+    for k in fate:   # the stock tokens still held, summed over tokens
+        st_ = sum(v for u, v in fate[k].items() if u.startswith("stocks_"))
+        for u in [u for u in fate[k] if u.startswith("stocks_")]: del fate[k][u]
+        if st_: fate[k]["stocks"] += st_
     b_ = x.bal
     checks = {"cashEth": (sum(l[1] for l in cashQ), b_["reserveSafe"]["ETH"] + b_["expansionVault"]["ETH"]), "usdg": (sum(l[1] for l in usdgQ), b_["reserveSafe"].get("USDG", 0.0)),
               "contraction": (sum(l[1] for l in conQ), b_["contractionVault"]["ETH"]), "incentives": (sum(l[1] for l in incQ), b_["incentivesVault"].get("STANDARD", 0.0)),
               "incIn": (inc_in["pol"], pol_std), "pol": (sum(l[1] for l in polQ), b_["polBuyback"]["ETH"]), "unclassified": other + inc_in["other"],
+              "outsideIn": dict(outside_in),
               "seed": seed_x + seed_c}
     totals = collections.Counter()
     for v in fate.values(): totals.update(v)
@@ -812,8 +881,8 @@ def chain_shares(x, reg, keys, sw, lq, cu, lp_pools, closes, eth_day, dates, res
                     vol[vid] = int(e.get("sw_" + stok, "0")) / 10 ** dec.get(stok, 18) * (usd_of(stok, sym, d) or 0)
             tv, vv = sum(tvl.values()), sum(vol.values())
             pos = ((res_hist.get(d) or {}).get("lp") or {}).get(sym)
-            ranked = sorted(tvl.items(), key=lambda kv: -kv[1])
-            rk = next((i + 1 for i, (vid, _) in enumerate(ranked) if vid == mine), None)
+            ranked = sorted(((vid, v) for vid, v in tvl.items() if v >= 100), key=lambda kv: -kv[1])   # pools with at least $100, as the venue count
+            rk = next((i + 1 for i, (vid, _) in enumerate(ranked) if vid == mine), None)                  # (a closed position has no rank)
             other = next(((vid, v) for vid, v in ranked if vid != mine), (None, 0))
             out[d].update({f"chainTvl_{sym}": tv, f"chainVol_{sym}": vv, f"poolTvl_{sym}": tvl.get(mine), f"poolVolChain_{sym}": vol.get(mine),
                            f"liqShare_{sym}": (pos / tv if pos is not None and tv else None), f"volShare_{sym}": (vol.get(mine, 0) / vv if vv else None),
@@ -1101,7 +1170,7 @@ def counterparties(x, reg, lp_pools, first_day, last_day, max_days=3):
 
 # ---------- launchpad fees ----------
 LPAD = {"start": 88_360_200,   # first launchpad block (14 Oct 2026)
-        "feeSafe": "0x047829087f9ac81fdb05f7b750458afe3d72415f",   # 2-of-4 Safe, same signers as the reserve Safe: KOTM reward pool (20% of the base fee) plus the protocol (50%)
+        "feeSafe": "0x047829087f9ac81fdb05f7b750458afe3d72415f",   # 2-of-4 Safe, same signers as the reserve Safe: 70% of the base fee; sent its whole balance to the reserve Safe on 10 Nov 2026
         "escrows": ["0xcbc8f65ef158c829379472dee771cf3e7741440e", "0x479b2997a7283f7d3baacc984558fe4e1d7467af"],   # creator fee escrows, first and second launchpad
         "routers": ["0x190b452d16e12e3beedd76a030ea991fe3856c33", "0x3c7476e8be0efd5b9667421448a99e217b806e80"],
         "tokens": {"USDG": ("0x5fc5360d0400a0fd4f2af552add042d716f1d168", 6), "SPCX": ("0x4a0e65a3eccec6dbe60ae065f2e7bb85fae35eea", 18),
@@ -1109,9 +1178,9 @@ LPAD = {"start": 88_360_200,   # first launchpad block (14 Oct 2026)
                    "WETH": ("0x0bd7d308f8e1639fab988df18a8011f41eacad73", 18)}}
 
 
-def launchpad(x, lp_pools, closes, eth_day):
-    """Launchpad base fee by UTC day. Every launchpad-token trade pays 1% of its stock or WETH side: 30% to the creator (fee escrow), 20% to
-    the King of the Markets reward pool and 50% to the protocol, the last two into one fee Safe. Transfers into the Safe and the escrows are
+def launchpad(x, lp_pools, closes, eth_day, left=None):
+    """Launchpad base fee by UTC day. Every launchpad-token trade pays 1% of its stock or WETH side: 30% to the creator (fee escrow) and 70%
+    to the protocol's fee Safe (the split names 20% of it a reward pool; none of the Safe's receipts was paid to traders). Transfers into the Safe and the escrows are
     summed per day and token from Transfer logs (incremental), and valued at the day's closing pool price (WETH at the day's ETH close).
     Returns {date: {lpadSafe, lpadEsc, lpadSafeOut}} in USD."""
     c = x.jl("launchpad.json", {"last": LPAD["start"] - 1, "days": {}})
@@ -1126,7 +1195,14 @@ def launchpad(x, lp_pools, closes, eth_day):
                 s = by_tok[l["address"].lower()]; b = int(l["blockNumber"], 16); d = day(int(l.get("blockTimestamp") or "0x0", 16) or x.T(b))
                 k = (who["0x" + l["topics"][2][-40:]] if side == "in" else "safeOut")
                 o = c["days"].setdefault(d, {}).setdefault(k, {}); o[s] = o.get(s, 0.0) + int(l["data"], 16) / 10 ** dec[s]
+        for l in outs:
+            o = c.setdefault("outTo", {}).setdefault("0x" + l["topics"][2][-40:], {}); s = by_tok[l["address"].lower()]; o[s] = o.get(s, 0.0) + int(l["data"], 16) / 10 ** dec[s]
         c["last"] = x.tip; x.js("launchpad.json", c)
+    if "outTo" not in c:   # who the Safe paid, by token: read once from the start (added 12 Nov 2026), then kept by the incremental scan above
+        c["outTo"] = {}
+        for l in x.getlogs({"address": [a for a, _ in LPAD["tokens"].values()], "topics": [x.TR, x.pad(LPAD["feeSafe"])]}, LPAD["start"], c["last"], 100000):
+            o = c["outTo"].setdefault("0x" + l["topics"][2][-40:], {}); s = by_tok[l["address"].lower()]; o[s] = o.get(s, 0.0) + int(l["data"], 16) / 10 ** dec[s]
+        x.js("launchpad.json", c)
     pid = {s: p["pool"] for s, p in lp_pools.items()}
     def px(s, d):
         if s == "USDG": return 1.0
@@ -1140,16 +1216,29 @@ def launchpad(x, lp_pools, closes, eth_day):
         o = out.setdefault(d, {})
         for k, key in (("safe", "lpadSafe"), ("esc", "lpadEsc"), ("safeOut", "lpadSafeOut")):
             o[key] = round(sum(a * (px(s, d) or 0) for s, a in (v.get(k) or {}).items()), 2)
-    held = collections.Counter()
+    q = collections.defaultdict(collections.deque); sent = collections.defaultdict(collections.Counter)   # which days' receipts each payout took, oldest first
+    for d in sorted(c["days"]):
+        v = c["days"][d]
+        for s, a in (v.get("safe") or {}).items(): q[s].append([d, a])
+        for s, a in (v.get("safeOut") or {}).items():
+            while a > 1e-12 and q[s]:
+                t = min(a, q[s][0][1]); sent[q[s][0][0]][s] += t; q[s][0][1] -= t; a -= t
+                if q[s][0][1] <= 1e-12: q[s].popleft()
+    for d, v in c["days"].items():   # share of the day's fee Safe receipts that have since left the Safe, by value at the day's close
+        r_ = sum(a * (px(s, d) or 0) for s, a in (v.get("safe") or {}).items())
+        if r_:
+            out[d]["lpadSentFrac"] = round(min(1.0, sum(a * (px(s, d) or 0) for s, a in sent[d].items()) / r_), 6)
+            out[d]["lpadOutFrac"] = round(min(1.0, sum(a * (px(s, d) or 0) * (left or {}).get(s, 0.0) for s, a in sent[d].items()) / r_), 6)   # then sent out of the reserve
+    held = collections.Counter(); got = collections.Counter()   # held = received less paid out; got = received (the fee Safe pays out, from 10 Nov 2026)
     for v in c["days"].values():
-        for s, a in (v.get("safe") or {}).items(): held[s] += a
+        for s, a in (v.get("safe") or {}).items(): held[s] += a; got[s] += a
         for s, a in (v.get("safeOut") or {}).items(): held[s] -= a
-    return out, dict(held)
+    return out, dict(held), dict(got), c["outTo"]
 
 
 LTRADE = "0xaca20dddb264298fd1f9f05d1dc1e0847e30f73956ee42aaf896b91eb73628b6"   # Trade, from every bonding curve and launch hook; topic 1 the launched token
 LAUNCH = ["0xa0354dae199953f2dbde6be8415166a744e7f92b7328671692196d8fdbb6bd9d", "0x93e9aed10a0259070dbc9cbe242cfd7dfde85172011e531fff069983bfeb470f"]
-LFACT = ["0x3d69104da2518f4833d71444d6611310f2d685f2", "0x3d6ea4e97b8ab9e1a1b4943febffe22d8c920091"]   # launchpad factories, current and earlier
+LFACT = ["0x3d69104da2518f4833d71444d6611310f2d685f2", "0x3d6ea4e97b8ab9e1a1b4943febffe22d8c920091"]   # launchpad factories: 0x3d69 ran 19 Oct to 4 Nov 2026 (923 launches), 0x3d6e from 14 Oct and still in use
 
 
 def launchpad_trades(x, lp_pools, closes, eth_day):
@@ -1188,6 +1277,56 @@ def launchpad_trades(x, lp_pools, closes, eth_day):
             safe_tok[s] += r[3]
         for k in ("lpadVol", "lpadSafeBase", "lpadSnipe", "lpadCre"): o[k] = round(o[k], 2)
     return out, dict(safe_tok)
+
+
+def launchpad_tokens(x, lp_pools, closes, eth_day):
+    """Every launched token: pair asset, launch block and creator from the factories' launch events (topic 1 the token, topic 3 the creator),
+    and per UTC day its volume (the stock or WETH side), trades and creator fees from the Trade events, in pair-asset units (all 18 dp).
+    Returns ({date: tokens launched}, {date: trades}, {date: volume USD}, {"7"|"30"|"0": the 25 tokens with the most volume over the last 7
+    or 30 complete UTC days or since launch}), volume and creator fees valued at each day's closing pair price."""
+    c = x.jl("lpad_tokens.json", {"last": LPAD["start"] - 1, "tok": {}, "days": {}, "sym": {}})
+    pairs = {a: s for s, (a, _) in LPAD["tokens"].items() if s != "USDG"}
+    if c["last"] < x.tip:
+        lo = c["last"] + 1
+        for f in LFACT:            # one factory and one event per query: single values span 4M blocks, lists only 100k
+            for t in LAUNCH:
+                for l in x.getlogs({"address": f, "topics": [t]}, lo, x.tip, 4000000):
+                    ws = words(l["data"]); p = next((pairs["0x" + w[-40:]] for w in ws if "0x" + w[-40:] in pairs), None)
+                    if p: c["tok"]["0x" + l["topics"][1][-40:]] = [p, int(l["blockNumber"], 16), "0x" + l["topics"][3][-40:]]
+        for l in x.getlogs({"topics": [LTRADE]}, lo, x.tip, 30000):
+            tk = "0x" + l["topics"][1][-40:] if len(l["topics"]) > 1 else None
+            if tk not in c["tok"]: continue
+            w = words(l["data"]); d = day(x.T(int(l["blockNumber"], 16)))
+            r = c["days"].setdefault(d, {}).setdefault(tk, [0.0, 0, 0.0])
+            r[0] = round(r[0] + int(w[4], 16) / 1e18, 9); r[1] += 1; r[2] = round(r[2] + int(w[6], 16) / 1e18, 9)
+        c["last"] = x.tip; x.js("lpad_tokens.json", c)
+    pid = {s: p["pool"] for s, p in lp_pools.items()}
+    def px(s, d):
+        if s == "WETH":
+            ks = sorted(k for k in eth_day if k <= d); return eth_day[ks[-1]] if ks else None
+        sp = close_on(closes.get(pid.get(s), {}), d, first=True)
+        if not sp: return None
+        P = (sp / 2 ** 96) ** 2; return 1e12 / P if lp_pools[s]["usdg0"] else P * 1e12
+    launched = collections.Counter(day(x.T(b)) for _, b, _ in c["tok"].values())
+    trades = {d: sum(r[1] for r in v.values()) for d, v in c["days"].items()}
+    vol = {d: round(sum(r[0] * (px(c["tok"][tk][0], d) or 0.0) for tk, r in v.items()), 2) for d, v in c["days"].items()}
+    today = day(x.tip_ts); done = sorted(d for d in c["days"] if d < today); top = {}
+    for key, n in (("7", 7), ("30", 30), ("0", 0)):
+        ds = done[-n:] if n else done; agg = {}
+        for d in ds:
+            for tk, r in c["days"][d].items():
+                q = px(c["tok"][tk][0], d) or 0.0; a = agg.setdefault(tk, [0.0, 0, 0.0])
+                a[0] += r[0] * q; a[1] += r[1]; a[2] += r[2] * q
+        rows = sorted(agg.items(), key=lambda kv: -kv[1][0])[:25]
+        for tk, _ in rows:
+            if tk not in c["sym"]:
+                r_ = x.rpc("eth_call", [{"to": tk, "data": "0x95d89b41"}, "latest"]).get("result") or ""
+                try: b_ = bytes.fromhex(r_[2:]); n_ = int.from_bytes(b_[32:64], "big"); c["sym"][tk] = b_[64:64 + n_].decode("utf-8", "replace")[:24]
+                except Exception: c["sym"][tk] = ""
+        top[key] = [{"t": tk, "sym": c["sym"].get(tk, ""), "pair": c["tok"][tk][0], "launched": day(x.T(c["tok"][tk][1])), "creator": c["tok"][tk][2],
+                     "vol": round(a[0], 2), "trades": a[1], "cre": round(a[2], 2)} for tk, a in rows]
+    x.js("lpad_tokens.json", c)
+    return dict(launched), trades, vol, top
 
 
 def cpty_classes(c, tiers=None, hf=1000, routers=()):

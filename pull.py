@@ -25,6 +25,7 @@ H = {"reserveSafe": "0x9a6F75AE9E8bdB68e1d12a9AdcCd0bB2958E3C22", "expansionVaul
      "polManager": "0x242F3e67BEf43470C2434d95E7D618E19f87c8f8",
      "branchClaim": "0x6FfC470fB99e3626289B5DC08DDA20B6e146Cfe3", "branchTopUp": "0x4a97f28A285eF48c4bB6bD1940d5aa39170A3a0a"}   # teamWallet is read from feeSplitter.teamWallet() at runtime; the claim contracts are named in the site bundle
 ZERO = "0x0000000000000000000000000000000000000000"
+WETH = "0x0bd7d308f8e1639fab988df18a8011f41eacad73"
 TR = "0x" + keccak(b"Transfer(address,address,uint256)").hex()
 SW = "0x" + keccak(b"Swap(bytes32,address,int128,int128,uint160,uint128,int24,uint24)").hex()
 ML = "0x" + keccak(b"ModifyLiquidity(bytes32,address,int24,int24,int256,bytes32)").hex()
@@ -60,6 +61,11 @@ def rpcb(calls, tries=6):   # batched JSON-RPC, results in call order
     raise RuntimeError(f"rpc batch failed: {err}")
 def ecall(to, data, block="latest"):
     r = rpc("eth_call", [{"to": to, "data": data}, block]); return r.get("result")
+def round_d(d): return {k: round(v, 4) for k, v in d.items()}
+def ecall_late(to, data, block):   # a read late in a long run: the RPC keeps state ~10 minutes, so fall back to the newest block, and say so
+    r = ecall(to, data, block)
+    if r is None: log("state at", int(block, 16), "is gone; read", to[:10], data[:10], "at latest"); r = ecall(to, data)
+    return r
 def get(url, tries=4, backoff=3):
     for i in range(tries):
         try: return json.load(urllib.request.urlopen(urllib.request.Request(url, headers=UA), timeout=60))
@@ -67,8 +73,8 @@ def get(url, tries=4, backoff=3):
             err = e; time.sleep(backoff * (i + 1))
     return {"_error": str(err)}
 
-def getlogs(q, lo, hi, step=400000):   # step halves when a range fails; it grows back after too many logs, not after a timeout
-    out = []; b = lo; cap = step; waits = 0
+def getlogs(q, lo, hi, step=400000):   # step halves when a range fails; it grows back after too many logs at once, after a timeout only slowly
+    out = []; b = lo; cap = step; waits = 0; step0 = step; clean = 0   # (a timeout once kept a 49M-block scan at 2,000 blocks a query for two hours)
     while b <= hi:
         e = min(b + step - 1, hi); qq = dict(q, fromBlock=hex(b), toBlock=hex(e))
         r = rpc("eth_getLogs", [qq], tries=2, timeout=45)   # a range too large for a busy pool times out; halving it sooner is faster than waiting
@@ -77,9 +83,10 @@ def getlogs(q, lo, hi, step=400000):   # step halves when a range fails; it grow
         if "error" in r:
             if step <= 2000: raise RuntimeError(r["error"])
             step //= 2                         # too many logs: halve, then grow back; a timeout keeps the smaller size for the rest of this scan
-            if "exceeds" not in str(r["error"].get("message", "")): cap = step
+            if "exceeds" not in str(r["error"].get("message", "")): cap = step; clean = 0
             continue
-        out += r["result"]; b = e + 1
+        out += r["result"]; b = e + 1; clean += 1
+        if clean >= 20 and cap < step0: cap = min(step0, cap * 2); clean = 0   # twenty clean reads in a row: the timeout was the RPC, not the range
         if step < cap: step = min(cap, step * 2)
     return out
 
@@ -163,7 +170,7 @@ def main():
     # (balances read at "latest" after a minutes-long log scan picked up transfers the scan never saw, and the supply
     #  history, rebuilt backwards from these balances, carried the gap: 4,600 STANDARD on 26 Oct 2026)
     tip = int(rpc("eth_blockNumber", [])["result"], 16); out["tip"] = tip; BT = hex(tip)
-    toks = {"STANDARD": (STD, 18), "USDG": (USDG, 6)}
+    toks = {"STANDARD": (STD, 18), "USDG": (USDG, 6), "WETH": (WETH, 18)}   # WETH: the reserve Safe holds 7.1 from the launchpad fee Safe (10 Nov 2026)
     bal = {}
     for n, a in H.items():
         row = {"ETH": int(rpc("eth_getBalance", [a, BT])["result"], 16) / 1e18}
@@ -171,6 +178,7 @@ def main():
             r = ecall(ta, "0x70a08231" + pad(a)[2:], BT); v = int(r, 16) / 10 ** dec if r and r != "0x" else 0
             if v: row[t] = v
         bal[n] = row
+    fee_safe_eth = int(rpc("eth_getBalance", [extra.LPAD["feeSafe"], BT])["result"], 16) / 1e18   # the launchpad fee Safe's launch fees, read with the other balances
     bal["poolManager"] = {"STANDARD": int(ecall(STD, "0x70a08231" + pad(PM)[2:], BT), 16) / 1e18}
     total_supply = int(ecall(STD, "0x18160ddd", BT), 16) / 1e18
     # S-Bill history: the full endpoint now stalls for minutes, so fetch the last seven days and merge into the cached points
@@ -250,6 +258,21 @@ def main():
             pools[pid] = {"id": pid, "stock": symbol(stock), "stockAddr": stock, "usdg0": usdg0, "fee": int(w[2], 16), "spacing": int(w[3], 16), "liq": 0, "positions": 0}
         pools[pid]["positions"] += 1; pools[pid].setdefault("ranges", []).append([tl, tu, liq])
         pos.append({"id": i, "pool": pid, "liq": liq, "tl": tl, "tu": tu})
+    # a pool the reserve has left (every position closed and burned, as BABA on 10 Nov 2026) stays in with no positions, so its history,
+    # fees and tokens do not vanish; a burned position no longer reads from the PositionManager, so its pool key comes from Initialize
+    rpools = jload(os.path.join(C, "reserve_pools.json"), {})
+    for pid, p in pools.items(): rpools[pid] = {k: p[k] for k in ("stock", "stockAddr", "usdg0", "fee", "spacing")}
+    held_ids = {"0x" + format(i, "064x") for i in pm["ids"]}
+    INIT_ = "0x" + keccak(b"Initialize(bytes32,address,address,uint24,int24,address,uint160,int24)").hex()
+    for pid in {r[1] for r in jload(os.path.join(C, "lp_mods.json"), {"rows": []})["rows"] if r[5] in held_ids} - set(rpools):
+        il = getlogs({"address": PM, "topics": [INIT_, pid]}, G, tip, 4000000)
+        if not il: raise RuntimeError(f"no Initialize event for the reserve's pool {pid}")
+        c0, c1 = "0x" + il[0]["topics"][2][-40:], "0x" + il[0]["topics"][3][-40:]; w = il[0]["data"][2:]
+        usdg0 = c0.lower() == USDG.lower(); stock = c1 if usdg0 else c0
+        rpools[pid] = {"stock": symbol(stock), "stockAddr": stock, "usdg0": usdg0, "fee": int(w[:64], 16), "spacing": int(w[64:128], 16)}
+    for pid, p in rpools.items():
+        if pid not in pools: pools[pid] = dict(p, id=pid, liq=0, positions=0, ranges=[]); log("reserve pool with no positions left:", p["stock"], pid)
+    jsave(os.path.join(C, "reserve_pools.json"), rpools)
     jsave(os.path.join(C, "symbols.json"), symcache)
     lp = {}
     for pid, p in pools.items():
@@ -295,6 +318,13 @@ def main():
     for r in sw["rows"]:
         if r[1] == "": r[1] = "ETH"   # rows cached before the native-ETH pool got its symbol
     pids = list(pools.keys())
+    lmr = jload(os.path.join(C, "lp_mods.json"), {"last": 0, "rows": []}); ids_h = {"0x" + format(i, "064x") for i in pm["ids"]}
+    hist_r = collections.defaultdict(list)   # the reserve's own liquidity changes per pool, so a swap's share uses the positions held at its block
+    for b_, pid_, tl_, tu_, dl_, salt_ in lmr["rows"]:
+        if salt_ in ids_h: hist_r[pid_].append((b_, tl_, tu_, int(dl_)))
+    def mine_at(p, b, tick):   # positions read now are right only after the last cached liquidity change (a closed pool's swaps scanned late read 0)
+        if b > lmr["last"]: return sum(l_ for tl_, tu_, l_ in p.get("ranges", []) if tl_ <= tick < tu_)
+        return sum(dl_ for b_, tl_, tu_, dl_ in hist_r.get(p["id"], ()) if b_ < b and tl_ <= tick < tu_)
     if pids and sw["last"] < tip:
         byid = {p["id"]: p for p in pools.values()}
         for l in getlogs({"address": PM, "topics": [SW, pids]}, sw["last"] + 1, tip, 100000):   # OR-list in a topic: 100k-block ranges
@@ -302,7 +332,7 @@ def main():
             usdg = abs(s128(l["data"][2 + 64 * idx:2 + 64 * (idx + 1)])) / 1e6
             fee = int(l["data"][2 + 64 * 5:2 + 64 * 6], 16); snd = "0x" + l["topics"][2][-40:]
             ev_liq = int(l["data"][2 + 64 * 3:2 + 64 * 4], 16); ev_tick = s128(l["data"][2 + 64 * 4:2 + 64 * 5])
-            mine = sum(l_ for tl_, tu_, l_ in p.get("ranges", []) if tl_ <= ev_tick < tu_)   # the reserve's in-range liquidity at this swap
+            mine = mine_at(p, int(l["blockNumber"], 16), ev_tick)                                  # the reserve's in-range liquidity at this swap
             share = min(1.0, mine / ev_liq) if ev_liq else 0.0                                    # its share of the fee
             sw["rows"].append([int(l["blockNumber"], 16), p["stock"], round(usdg, 2), fee, snd[:10], round(share, 4)])
         sw["last"] = tip; jsave(os.path.join(C, "swaps.json"), sw)
@@ -614,10 +644,10 @@ def main():
                        "nextLiq": others[0]["liq"] if others else 0, "nextDex": (others[0]["dex"] + " " + others[0]["label"]).strip() if others else "", "rank": (rows.index(srrow) + 1) if srrow else None}
     # reserve composition
     safe = bal["reserveSafe"]; stock_held = sum(safe.get(s, 0) * lp[s]["price"] for s in lp if not lp[s]["isEth"])
-    reserve = {"safeEth": safe["ETH"], "safeUsdg": safe.get("USDG", 0), "safeStockUsd": stock_held, "lpUsd": sum(v["valueUSD"] for v in lp.values()),
+    reserve = {"safeEth": safe["ETH"], "safeWeth": safe.get("WETH", 0.0), "safeUsdg": safe.get("USDG", 0), "safeStockUsd": stock_held, "lpUsd": sum(v["valueUSD"] for v in lp.values()),
                "contractionEth": bal["contractionVault"]["ETH"], "expansionEth": bal["expansionVault"]["ETH"], "polBuybackEth": bal["polBuyback"]["ETH"],
                "feeSplitterEth": bal["feeSplitter"]["ETH"], "incentivesStd": inc_now, "teamEth": bal["teamWallet"]["ETH"]}
-    reserve["totalUsd"] = (safe["ETH"] + reserve["contractionEth"] + reserve["expansionEth"]) * ethusd + reserve["safeUsdg"] + stock_held + reserve["lpUsd"]
+    reserve["totalUsd"] = (safe["ETH"] + reserve["safeWeth"] + reserve["contractionEth"] + reserve["expansionEth"]) * ethusd + reserve["safeUsdg"] + stock_held + reserve["lpUsd"]
     # sbills
     sbc = sb.get("current", {})
     sb_drift = int(sbc.get("driftPerSecond", 0)) / 1e18 if sbc.get("drifting") else 0.0   # the term rate drifts up between deposits; the indexer reports it as of the last update
@@ -632,9 +662,10 @@ def main():
     else: w7 = sum(int(e["values"]["gross"]) for e in act["withdrawn"] if (int(e["timestamp"]) - genesis_ts) // 86400 >= (now - genesis_ts) // 86400 - 6) / 1e18
     held = int(snap["bank"].get("totalPendingLive", 0)) / 1e18
     P_ = w7 / max(held + w7, 10_000_000); exit_fee = 0.02 + 0.58 * min(P_ / 0.10, 1) ** 2
-    def nxt(a):   # next auction period opening time and price
-        anchor = int(a["auctionAnchor"]); per = int(a["AUCTION_DAY"]); k = (now - anchor) // per
-        return anchor + (k + 1) * per, int(a["startMultiplier"]) * int(a["lastSalePrice"]) / 1e18
+    def nxt(a):   # next auction period: opening time and price (start multiple of the last clearing price if this period sold, else of the floor, as
+        anchor = int(a["auctionAnchor"]); per = int(a["AUCTION_DAY"]); k = (now - anchor) // per   # the charter period after the 11 Nov no-sale period opened at 3 x 1 ETH)
+        ref = int(a["lastSalePrice"]) if int(a.get("lastSaleDay", -1)) == int(a.get("currentDay", -2)) else int(a["dayFloorPrice"])
+        return anchor + (k + 1) * per, int(a["startMultiplier"]) * ref / 1e18
     ch_next, lic_next = nxt(snap["charterAuction"]), nxt(snap["licenseAuction"])
     live = {"date": today, "price": px, "priceChange24h": (dstd.get("priceChange") or {}).get("h24"), "vol24": (dstd.get("volume") or {}).get("h24"),
             "poolLiqUsd": (dstd.get("liquidity") or {}).get("usd"), "ethusd": ethusd, "totalSupply": total_supply, "poolStd": pool_now, "incentivesStd": inc_now,
@@ -654,6 +685,8 @@ def main():
             "charterDayStart": int(snap["charterAuction"]["dayStartPrice"]) / 1e18, "licenseDayStart": int(snap["licenseAuction"]["dayStartPrice"]) / 1e18,
             "charterRemaining": int(snap["charterAuction"].get("remainingToday", 0)), "licenseRemaining": int(snap["licenseAuction"].get("remainingToday", 0)),
             "charterNextOpen": ch_next[0], "charterNextStart": ch_next[1], "licenseNextOpen": lic_next[0], "licenseNextStart": lic_next[1],
+            "chartersPerPeriod": int(snap["charterAuction"].get("chartersPerDay", snap["charterAuction"]["dayCap"])),   # the owner set charters to 0 a period on 11 Nov 2026
+            "licensesPerPeriod": int(snap["licenseAuction"].get("licensesPerDay", snap["licenseAuction"]["dayCap"])),
             "charterHalfLife": int(snap["charterAuction"].get("decayHalfLife", 7200)) / 3600, "licenseHalfLife": int(snap["licenseAuction"].get("decayHalfLife", 7200)) / 3600,
             "accruedEth": live_acc, "taxHookEth": bal.get("taxHook", {}).get("ETH", 0), "mStepUp": int(snap["bank"]["M_STEP_UP_WAD"]) / 1e18, "mStepDown": int(snap["bank"]["M_STEP_DOWN_WAD"]) / 1e18, "mMin": int(snap["bank"]["M_MIN_WAD"]) / 1e18, "mMax": int(snap["bank"]["M_MAX_WAD"]) / 1e18}
     # ---------- top bankers (indexer leaderboard) with ENS primary names from Ethereum mainnet ----------
@@ -676,17 +709,25 @@ def main():
         if not res or int(res, 16) == 0: return ""
         out = erpc("eth_call", [{"to": "0x" + res[-40:], "data": "0x691f3431" + node.hex()}, "latest"])
         if not out or len(out) < 130: return ""
-        n = int(out[66:130], 16); return bytes.fromhex(out[130:130 + 2 * n]).decode(errors="ignore")
+        n = int(out[66:130], 16); name = bytes.fromhex(out[130:130 + 2 * n]).decode(errors="ignore")
+        if not name: return ""
+        fn = namehash(name)   # a primary name counts only if it resolves back to the address (an expired name keeps its reverse record)
+        rr = erpc("eth_call", [{"to": "0x00000000000C2E074eC69A0dFb2997BA6C7d2e1e", "data": "0x0178b8bf" + fn.hex()}, "latest"])
+        if not rr or int(rr, 16) == 0: return ""
+        fa = erpc("eth_call", [{"to": "0x" + rr[-40:], "data": "0x3b3b57de" + fn.hex()}, "latest"])
+        return name if fa and len(fa) >= 66 and int(fa, 16) == int(addr, 16) else ""
     leaders = []
     tot_br = sum(int(r.get("branches", 0)) for r in bankers) or 1
+    # the indexer's previous rank orders equal branch counts by owner address, so the change is taken against the same ordering of today's counts
+    addr_rank = {r["owner"].lower(): i for i, r in enumerate(sorted(bankers, key=lambda r: (-int(r.get("branches", 0)), r["owner"].lower())), 1)}
     for i, r in enumerate(bankers[:25], 1):
         a = r["owner"].lower(); e = ensc.get(a)
-        if not e or now - e.get("t", 0) > 7 * 86400:
-            try: ensc[a] = {"name": ens_name(a), "t": now}
+        if not e or now - e.get("t", 0) > 7 * 86400 or not e.get("fwd"):
+            try: ensc[a] = {"name": ens_name(a), "t": now, "fwd": 1}
             except Exception: ensc.setdefault(a, {"name": "", "t": 0})
         leaders.append({"rank": i, "owner": a, "ens": ensc[a]["name"], "banks": int(r.get("banks", 0)), "branches": int(r.get("branches", 0)),
                         "branchShare": int(r.get("branches", 0)) / tot_br, "epochShare": int(r.get("epochEmissions", 0)) / tot_ep, "epochEmissions": int(r.get("epochEmissions", 0)) / 1e18,
-                        "lifetimeEmissions": int(r.get("lifetimeEmissions", 0)) / 1e18, "topBank": r.get("topBank"), "prevRank": (r.get("previousRank") or {}).get("epoch")})
+                        "lifetimeEmissions": int(r.get("lifetimeEmissions", 0)) / 1e18, "topBank": r.get("topBank"), "prevRank": (r.get("previousRank") or {}).get("epoch"), "rankByAddr": addr_rank.get(a)})
     jsave(os.path.join(C, "ens.json"), ensc)
     out["leaders"] = {"rows": leaders, "bankers": len(bankers), "banks": sum(int(r.get("banks", 0)) for r in bankers), "branches": tot_br}
     # branches replayed per charter, summed by the wallet that created it, against the leaderboard's per-banker counts
@@ -743,8 +784,8 @@ def main():
     hv0, hv1 = sum(int(l_["data"][2:66], 16) for l_ in hv_) / 1e18, sum(int(l_["data"][66:130], 16) for l_ in hv_) / 1e18
     I24_ = lambda v: format(v % (1 << 256), "064x"); u0_ = u1_ = 0
     for (tl_, tu_, salt_), _ in spos.items():
-        fg = ecall(SV, sel("getFeeGrowthInside(bytes32,int24,int24)") + STD_POOL[2:] + I24_(tl_) + I24_(tu_), BT)
-        pi = ecall(SV, sel("getPositionInfo(bytes32,address,int24,int24,bytes32)") + STD_POOL[2:] + pad(H["polManager"])[2:] + I24_(tl_) + I24_(tu_) + salt_[2:], BT)
+        fg = ecall_late(SV, sel("getFeeGrowthInside(bytes32,int24,int24)") + STD_POOL[2:] + I24_(tl_) + I24_(tu_), BT)
+        pi = ecall_late(SV, sel("getPositionInfo(bytes32,address,int24,int24,bytes32)") + STD_POOL[2:] + pad(H["polManager"])[2:] + I24_(tl_) + I24_(tu_) + salt_[2:], BT)
         L_ = int(pi[2:66], 16)
         u0_ += L_ * ((int(fg[2:66], 16) - int(pi[66:130], 16)) % (1 << 256)) >> 128; u1_ += L_ * ((int(fg[66:130], 16) - int(pi[130:194], 16)) % (1 << 256)) >> 128
     a0_, a1_ = sum(v_[0] for v_ in sfees.values()), sum(v_[1] for v_ in sfees.values())
@@ -754,7 +795,7 @@ def main():
               "the protocol position’s harvests plus fees uncollected at the compile block", 0.001, unit="ETH")
     reconcile("stdlp_std", "STANDARD pool LP fees to date, STANDARD side, replayed swap by swap", a1_, hv1 + u1_ / 1e18,
               "the protocol position’s harvests plus fees uncollected at the compile block", 0.001, unit="STANDARD")
-    today_parts = {"total": reserve["totalUsd"], "eth": (reserve["safeEth"] + reserve["contractionEth"] + reserve["expansionEth"]) * ethusd, "usdg": reserve["safeUsdg"],
+    today_parts = {"total": reserve["totalUsd"], "eth": (reserve["safeEth"] + reserve["safeWeth"] + reserve["contractionEth"] + reserve["expansionEth"]) * ethusd, "usdg": reserve["safeUsdg"],
                    "stocks": reserve["safeStockUsd"], "lp": {s_: v_["valueUSD"] for s_, v_ in lp.items()}}
     res_hist, res_chk = extra.reserve_history(x, lp_pools, closes, eth_day, epochs, dl, today_parts)
     log("reserve history", len(res_hist), "days; forward-from-zero checks (0 = ties):", res_chk)
@@ -766,9 +807,11 @@ def main():
     reconcile("reserve_lp", "Reserve position liquidity, summed from events", 1 + res_chk.get("lp_liquidity", 0), 1.0, "positions read at the compile block", 1e-6)
     reconcile("reserve_today", "Reserve assets today, rebuilt from events", 1 + res_chk.get("today_rebuilt_vs_read", 0), 1.0, "balances and positions read at the compile block", 0.005)
     # what each epoch's routed ETH became, first in, first out: stock tokens, pools, cash, buybacks (burned, S-Bills, claims), team
-    ru_fate, ru_chk, ru_tot = extra.routed_use(x, epochs)
+    st_ev, st_w, st_left = extra.stock_exits(x, lp_pools, closes)   # stock tokens sent out of the reserve: the share of each token's bought holding
+    log("stock exits:", [(day(t_), round_d(f_)) for t_, b_, f_ in st_ev], "| purchase weights", {k_: round(v_, 4) for k_, v_ in st_w.items()}, "| launchpad units left", st_left)
+    ru_fate, ru_chk, ru_tot = extra.routed_use(x, epochs, st_ev, st_w)
     for e in epochs: e["use"] = ru_fate.get(e["epoch"], {})
-    log("routed use:", {k_: (round(v_[0], 4), round(v_[1], 4)) if isinstance(v_, tuple) else round(v_, 4) for k_, v_ in ru_chk.items()},
+    log("routed use:", {k_: (round(v_[0], 4), round(v_[1], 4)) if isinstance(v_, tuple) else {a_[:10]: round(b_, 4) for a_, b_ in v_.items()} if isinstance(v_, dict) else round(v_, 4) for k_, v_ in ru_chk.items()},
         {k_: round(v_, 2) for k_, v_ in ru_tot.items()})
     reconcile("routed_cash", "Reserve ETH, routed and seeded less what the reserve Safe spent", ru_chk["cashEth"][0], ru_chk["cashEth"][1],
               "Safe and expansion vault ETH read at the compile block", 1e-4, absolute=True, unit="ETH")
@@ -793,7 +836,7 @@ def main():
     names = dict(wl); names[PM.lower()] = "pool"; names.update({H["feeSplitter"].lower(): "feeSplitter", H["taxHook"].lower(): "taxHook", H["expansionVault"].lower(): "expansion"})
     grp, sellers, grp_stats = extra.flows_by_group(x, pf, names, bankers, sbh, H["teamWallet"].lower(), genesis_ts, dl)
     log("pool flows", len(pf["rows"]), "rows;", grp_stats, "| bankers", len(bankers), "S-Bill holders", len(sbh))
-    fee_lp = 0.01; s0 = ecall(SV, sel("getSlot0(bytes32)") + STD_POOL[2:], BT); sp_now = int(s0[2:66], 16) / 2 ** 96
+    fee_lp = 0.01; s0 = ecall_late(SV, sel("getSlot0(bytes32)") + STD_POOL[2:], BT); sp_now = int(s0[2:66], 16) / 2 ** 96
     depth = extra.std_depth(x, STD_POOL, sp_now, ethusd, closes, eth_day, dl, fee_lp, int(snap["tax"]["buyTaxNowBps"]) / 1e4, int(snap["tax"]["sellTaxNowBps"]) / 1e4, H["polManager"].lower())
     log("depth", {k_: (round(v_) if isinstance(v_, float) else v_) for k_, v_ in depth.items() if k_ in ("bid2", "ask2", "bid5", "ask5", "protocolShare", "positions")})
     # STANDARD price: DexScreener and GeckoTerminal against the pool's own price on chain, valued at Coinbase's ETH price
@@ -828,6 +871,8 @@ def main():
     # every venue for each reserve asset; the reserve's position against holding; who executes swaps in the reserve's pools
     reg, keys, vsw, vlq, vcu = extra.venue_scan(x, venue_pairs, {p_["pool"] for p_ in lp_pools.values()}, lp_pools)
     shares = extra.chain_shares(x, reg, keys, vsw, vlq, vcu, lp_pools, closes, eth_day, dl, res_hist)
+    for v_ in shares.values():   # ETH/USDG chain standing withheld: DexScreener's native-ETH list has no WETH/USDG pools, and those are larger (12 Nov 2026 audit)
+        for k_ in [k_ for k_ in v_ if k_.endswith("_ETH") and k_.split("_")[0] in ("chainTvl", "chainVol", "liqShare", "volShare", "rank", "venues", "otherTvl", "otherDex")]: del v_[k_]
     fee_tok = collections.defaultdict(dict)   # fees earned per day in token units, so the P&L marks them at each day's close
     for s_ in lp_pools:
         for d_, v_ in pfees[s_]["days"].items(): fee_tok[d_][s_] = (v_[0], v_[1])
@@ -850,14 +895,21 @@ def main():
     yday = (dt.datetime.fromtimestamp(x.tip_ts, dt.timezone.utc).date() - dt.timedelta(1)).isoformat()   # complete days only
     cp = extra.counterparties(x, reg, lp_pools, "2026-10-14", yday)
     cls = extra.cpty_classes(cp, {s_: p_["tier"] for s_, p_ in lp_pools.items()}, routers=set(extra.LPAD["routers"]))
-    lpad, lpad_held = extra.launchpad(x, lp_pools, closes, eth_day)
+    lpad, lpad_held, lpad_got, lpad_out = extra.launchpad(x, lp_pools, closes, eth_day, st_left)
     ltr, ltr_safe = extra.launchpad_trades(x, lp_pools, closes, eth_day)   # every trade's own fee split: exact volume, base fee, snipe fee, dated by block
-    tot_ = sum(lpad_held.get(s_, 0) for s_ in ltr_safe) or None
+    lt_launch, lt_trades, lt_vol, lt_top = extra.launchpad_tokens(x, lp_pools, closes, eth_day)   # per launched token: launches, trades, volume
+    log("launchpad tokens:", sum(lt_launch.values()), "launched |", sum(lt_trades.values()), "trades")
+    reconcile("lpad_tok_trades", "Launchpad trades to date, summed token by token", float(sum(lt_trades.values())), float(sum(r_.get("lpadTrades", 0) for r_ in ltr.values())),
+              "the same Trade events summed by pair asset", 0, unit="trades")
+    reconcile("lpad_tok_vol", "Launchpad volume to date, summed token by token", sum(lt_vol.values()), sum(r_.get("lpadVol", 0) for r_ in ltr.values()),
+              "the same Trade events summed by pair asset", 1e-6, unit="USD")
+    tot_ = sum(lpad_got.get(s_, 0) for s_ in ltr_safe) or None
     reconcile("lpad_trades", "Launchpad fee Safe receipts to date, summed from every trade’s Trade event (token units, all assets)", sum(ltr_safe.values()), tot_,
-              "transfers into the fee Safe, Transfer logs", 1e-6, unit="tokens", note="; ".join(f"{s_} {ltr_safe[s_] - lpad_held.get(s_, 0):+.6f}" for s_ in sorted(ltr_safe)))
+              "transfers into the fee Safe, Transfer logs", 1e-6, unit="tokens", note="; ".join(f"{s_} {ltr_safe[s_] - lpad_got.get(s_, 0):+.6f}" for s_ in sorted(ltr_safe)))
     fx_raw = []   # (date, fee-exempt volume from the counterparty pass, the replay's), per pool and day
     for row in series:
         d_ = row["date"]; row.update({k_: v_ for k_, v_ in (shares.get(d_) or {}).items()}); row.update(cls.get(d_, {})); row.update(lpad.get(d_, {})); row.update(ltr.get(d_, {}))
+        if d_ >= "2026-10-14": row["lpadLaunches"] = lt_launch.get(d_, 0)
         for s_ in lp_pools:   # counterparty classes sum to the exact volume served: fee-exempt is the replay's own figure, the sampled classes keep their shares of the rest
             t_ = sum(row.get(f"vol{k_}_{s_}") or 0 for k_ in ("Org", "Arb", "Bot", "Fx"))
             if t_ and row.get("spVolMine_" + s_) is not None:
@@ -880,14 +932,14 @@ def main():
               "every swap's volume at the reserve's share of liquidity at the swap's final tick (the counterparty pass)", 0.05, gate=False, unit="USD")
     reconcile("exempt_served", "Fee-exempt volume served, last 7 days, from the swap replay", e7_, a_ if a_ else None,
               "zero-fee swaps summed in the counterparty pass at each swap's final-tick share", 0.05, gate=False, unit="USD")
-    # King of the Markets standings and the indexer's own launchpad fee total (the markets API allows only standardreserve.xyz in the browser)
+    # the launchpad markets API's own fee total, a cross-check (the API allows only standardreserve.xyz in the browser)
     MK = "https://markets.standardreserve.xyz/v1/"
-    ks_, kp_ = get(MK + "pilot/summary", tries=2), get(MK + "pilot/pool?limit=1", tries=2)
+    kp_ = get(MK + "pilot/pool?limit=1", tries=2)
     lp_px = {s_: v_["price"] for s_, v_ in lp.items()}; lp_px.update({"USDG": 1.0, "WETH": ethusd})
     out["launchpad"] = {"feeSafe": extra.LPAD["feeSafe"], "held": lpad_held, "heldUsd": sum(a_ * (lp_px.get(s_) or 0) for s_, a_ in lpad_held.items()),
-                        "feeSafeEth": int(rpc("eth_getBalance", [extra.LPAD["feeSafe"], BT]).get("result") or "0x0", 16) / 1e18,   # launch fees, 0.0005 ETH a launch
-                        "indexerFeesUsd": kp_.get("feesUsd"), "indexerAsOf": kp_.get("asOfTime"),
-                        "season": ks_.get("season"), "teams": ks_.get("countries"), "seedUsd": 1_100_000}
+                        "feeSafeEth": fee_safe_eth,   # launch fees, 0.0005 ETH a launch
+                        "indexerFeesUsd": kp_.get("feesUsd"), "indexerAsOf": kp_.get("asOfTime"), "got": lpad_got, "outTo": lpad_out, "top": lt_top,
+                        "ethToReserve": ru_chk["outsideIn"].get(extra.LPAD["feeSafe"], 0.0)}   # launch fees the Safe sent to the reserve Safe in ETH
     log("launchpad: fee Safe", {k_: round(v_, 3) for k_, v_ in lpad_held.items()}, "| received, all days", round(sum(v_.get("lpadSafe", 0) for v_ in lpad.values())),
         "| indexer", kp_.get("feesUsd"))
     reconcile("launchpad_fees", "Launchpad fees received by the fee Safe, at daily closes", sum(v_.get("lpadSafe", 0) for v_ in lpad.values()), kp_.get("feesUsd"),

@@ -237,7 +237,7 @@ def routed_use(x, epochs):
     ok = {l["transactionHash"] for l in x.safe_logs if l["topics"][0] == SAFE_OK}
     txs = collections.defaultdict(lambda: {"b": 0, "eo": collections.Counter(), "ei": collections.Counter(), "u": collections.Counter()})
     for l in x.safe_logs:
-        t = txs[l["transactionHash"]]; t["b"] = int(l["blockNumber"], 16)
+        t = txs[l["transactionHash"]]; t["b"] = int(l["blockNumber"], 16); t["h"] = l["transactionHash"]
         if l["topics"][0] == SAFE_RECEIVED: t["ei"]["0x" + l["topics"][1][-40:]] += int(l["data"], 16) / 1e18
         elif l["topics"][0] == SAFE_TX and l["transactionHash"] in ok:
             for to, v in _safe_items(l):
@@ -259,8 +259,11 @@ def routed_use(x, epochs):
     for l in x.getlogs({"address": x.STD, "topics": [x.TR, x.pad(inc)]}, G, tip, 4000000):
         b = int(l["blockNumber"], 16); ev.append((x.T(b), 2, b, "pay", ("0x" + l["topics"][2][-40:], int(l["data"], 16) / 1e18)))
     D = collections.deque
-    cashQ, usdgQ, conQ, polQ, incQ, poolQ = D(), D(), D(), D(), D(), D()
+    cashQ, usdgQ, conQ, polQ, incQ, poolQ, outQ = D(), D(), D(), D(), D(), D(), D()
     fate = collections.defaultdict(collections.Counter); other = 0.0; last_k = 0
+    routing = {H["feeSplitter"].lower(), H["expansionVault"].lower()}   # routed ETH arrives at settlement; it joins the cash with its epoch
+    fwd_tx = {l["transactionHash"] for l in x.getlogs({"address": H["expansionVault"], "topics": [EV_FWD]}, G, tip, 4000000)}   # forwards, also through the owner Safe
+    sent_to, inflow = set(), collections.Counter()
     for ts, _, _, kind, p in sorted(ev, key=lambda r: r[:3]):
         if kind == "seed": cashQ.append([0, seed_x, seed_x]); conQ.append([0, seed_c, seed_c]); continue
         if kind == "settle":
@@ -282,7 +285,7 @@ def routed_use(x, epochs):
         t = p                                                              # a reserve Safe transaction
         u_in = sum(v for cp, v in t["u"].items() if v > 0 and cp not in (pm, posm)); u_out = -sum(v for cp, v in t["u"].items() if v < 0 and cp not in (pm, posm))
         u_pos = sum(v for cp, v in t["u"].items() if cp in (pm, posm))
-        e_out = sum(v for to, v in t["eo"].items() if to != posm); e_back = sum(v for fr, v in t["ei"].items() if fr != posm)
+        e_out = sum(v for to, v in t["eo"].items() if to not in (pm, posm)); e_back = sum(v for fr, v in t["ei"].items() if fr not in (pm, posm) and fr not in routing) if t.get("h") not in fwd_tx else 0.0
         # inflows first (a transaction can swap USDG back to ETH and then add that ETH to a position)
         if u_in:
             if e_out:                                                      # ETH sold for USDG: the USDG carries the cohorts it was bought with
@@ -294,7 +297,7 @@ def routed_use(x, epochs):
             got, short = _take(usdgQ, u_out); other += short / 1e3; cost = sum(c for _, _, c in got)
             for k, a, c in got: cashQ.append([k, e_back * c / cost, e_back * c / cost])
             u_out = e_back = 0.0
-        e_pos = t["eo"][posm] - t["ei"][posm]                              # one transaction's ETH into positions, net of what came back
+        e_pos = t["eo"][posm] + t["eo"][pm] - t["ei"][posm] - t["ei"][pm]  # one transaction's ETH into positions, net of what came back (taken from the PoolManager directly too)
         if e_pos < 0:                                                      # ETH back from positions: principal first, anything beyond is fees
             got, extra = _take(poolQ, -e_pos)
             for k, a, c in got: fate[k]["pools"] -= c; cashQ.append([k, a, a])
@@ -314,14 +317,23 @@ def routed_use(x, epochs):
         if u_out:                                                          # USDG paid to the seller of stock tokens
             got, short = _take(usdgQ, u_out); other += short / 1e3
             for k, a, c in got: fate[k]["stocks"] += c
-        if e_out: other += e_out                                           # ETH sent anywhere else: unclassified
+        if e_out:                                                          # ETH sent to any other address leaves the reserve (52.2 ETH to a wallet, 10 Nov 2026)
+            got, short = _take(cashQ, e_out); other += short; sent_to.update(to for to, v in t["eo"].items() if v and to not in (pm, posm))
+            for k, a, c in got: fate[k]["sentOut"] += c; outQ.append([k, a, c])
+        if e_back:                                                         # ETH received from anywhere else joins the cash: from a wallet the reserve
+            ret = sum(v for fr, v in t["ei"].items() if fr in sent_to)     # sent ETH to, it is returned (first in, first out); otherwise, such as the
+            got, extra = _take(outQ, ret)                                  # launchpad fee Safe's sweep on 10 Nov 2026, it is new to the reserve
+            for k, a, c in got: fate[k]["sentOut"] -= c; cashQ.append([k, a, c])
+            if e_back - ret + extra > 1e-12: cashQ.append(["in", e_back - ret + extra, e_back - ret + extra])   # its own cohort: not any epoch's routed ETH
+            for fr, v in t["ei"].items():
+                if v and fr not in (pm, posm) and fr not in routing: inflow["returned" if fr in sent_to else fr] += v
     for q, use in ((cashQ, "cash"), (usdgQ, "cash"), (conQ, "unbought"), (polQ, "unbought"), (incQ, "held")):
         for k, a, c in q: fate[k][use] += c
     b_ = x.bal
     checks = {"cashEth": (sum(l[1] for l in cashQ), b_["reserveSafe"]["ETH"] + b_["expansionVault"]["ETH"]), "usdg": (sum(l[1] for l in usdgQ), b_["reserveSafe"].get("USDG", 0.0)),
               "contraction": (sum(l[1] for l in conQ), b_["contractionVault"]["ETH"]), "incentives": (sum(l[1] for l in incQ), b_["incentivesVault"].get("STANDARD", 0.0)),
               "incIn": (inc_in["pol"], pol_std), "pol": (sum(l[1] for l in polQ), b_["polBuyback"]["ETH"]), "unclassified": other + inc_in["other"],
-              "seed": seed_x + seed_c}
+              "seed": seed_x + seed_c, "inflow": dict(inflow), "sentTo": sorted(sent_to)}
     totals = collections.Counter()
     for v in fate.values(): totals.update(v)
     return {k: {u: round(a, 9) for u, a in v.items()} for k, v in fate.items()}, checks, dict(totals)
@@ -1113,7 +1125,7 @@ def launchpad(x, lp_pools, closes, eth_day):
     """Launchpad base fee by UTC day. Every launchpad-token trade pays 1% of its stock or WETH side: 30% to the creator (fee escrow), 20% to
     the King of the Markets reward pool and 50% to the protocol, the last two into one fee Safe. Transfers into the Safe and the escrows are
     summed per day and token from Transfer logs (incremental), and valued at the day's closing pool price (WETH at the day's ETH close).
-    Returns {date: {lpadSafe, lpadEsc, lpadSafeOut}} in USD."""
+    Returns ({date: {lpadSafe, lpadEsc, lpadSafeOut}} in USD, {token: held now}, {token: received to date})."""
     c = x.jl("launchpad.json", {"last": LPAD["start"] - 1, "days": {}})
     by_tok = {a: s for s, (a, _) in LPAD["tokens"].items()}; dec = {s: d for s, (_, d) in LPAD["tokens"].items()}
     who = {LPAD["feeSafe"]: "safe", **{e: "esc" for e in LPAD["escrows"]}}
@@ -1140,11 +1152,11 @@ def launchpad(x, lp_pools, closes, eth_day):
         o = out.setdefault(d, {})
         for k, key in (("safe", "lpadSafe"), ("esc", "lpadEsc"), ("safeOut", "lpadSafeOut")):
             o[key] = round(sum(a * (px(s, d) or 0) for s, a in (v.get(k) or {}).items()), 2)
-    held = collections.Counter()
+    held, rcvd = collections.Counter(), collections.Counter()
     for v in c["days"].values():
-        for s, a in (v.get("safe") or {}).items(): held[s] += a
+        for s, a in (v.get("safe") or {}).items(): held[s] += a; rcvd[s] += a
         for s, a in (v.get("safeOut") or {}).items(): held[s] -= a
-    return out, dict(held)
+    return out, dict(held), dict(rcvd)
 
 
 LTRADE = "0xaca20dddb264298fd1f9f05d1dc1e0847e30f73956ee42aaf896b91eb73628b6"   # Trade, from every bonding curve and launch hook; topic 1 the launched token

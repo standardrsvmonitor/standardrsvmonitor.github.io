@@ -250,7 +250,35 @@ def main():
             pools[pid] = {"id": pid, "stock": symbol(stock), "stockAddr": stock, "usdg0": usdg0, "fee": int(w[2], 16), "spacing": int(w[3], 16), "liq": 0, "positions": 0}
         pools[pid]["positions"] += 1; pools[pid].setdefault("ranges", []).append([tl, tu, liq])
         pos.append({"id": i, "pool": pid, "liq": liq, "tl": tl, "tu": tu})
+    # pools the reserve held a position in and has since closed stay in its history: the Safe burned its BABA positions on 10 Nov 2026
+    # (tx 0x289da451…), and dropping the pool had erased the BABA holdings and pool figures from every day back to 14 Oct. A burned position
+    # keeps no key on chain, so a closed pool's key is read from the PoolManager's Initialize event and kept in reserve_pools.json.
+    rpool = jload(os.path.join(C, "reserve_pools.json"), {}); known_ = set(rpool)
+    for pid, p in pools.items(): rpool[pid] = {k: p[k] for k in ("stock", "stockAddr", "usdg0", "fee", "spacing")}
+    held_ = {"0x" + format(i, "064x") for i in pm["ids"]}
+    lmods = jload(os.path.join(C, "lp_mods.json"), {"last": SEED_BLOCK - 1, "rows": []})
+    INIT_T = "0x" + keccak(b"Initialize(bytes32,address,address,uint24,int24,address,uint160,int24)").hex()
+    for pid in sorted({r[1] for r in lmods["rows"] if r[5] in held_} - set(rpool)):
+        lg = getlogs({"address": PM, "topics": [INIT_T, pid]}, SEED_BLOCK - 4_000_000, SEED_BLOCK, 4_000_000)
+        if not lg: raise SystemExit(f"closed reserve pool {pid}: no Initialize event")
+        c0, c1 = "0x" + lg[0]["topics"][2][-40:], "0x" + lg[0]["topics"][3][-40:]; usdg0 = c0.lower() == USDG.lower()
+        rpool[pid] = {"stock": symbol(c1 if usdg0 else c0), "stockAddr": c1 if usdg0 else c0, "usdg0": usdg0, "fee": int(lg[0]["data"][2:66], 16), "spacing": s128(lg[0]["data"][66:130])}
+    closed_, reopened_ = [], []
+    for pid, q in rpool.items():
+        if pid in pools: continue
+        if any(p["stock"] == q["stock"] for p in pools.values()): raise SystemExit(f"closed reserve pool {pid} shares {q['stock']} with a live one")
+        pools[pid] = {"id": pid, **q, "liq": 0, "positions": 0, "closed": True}; closed_.append(q["stock"])
+        if pid not in known_:   # first seen closed: its liquidity changes (and swaps, below) after the run that dropped it are read again
+            reopened_.append(pid); b1 = max((r[0] for r in lmods["rows"] if r[1] == pid), default=SEED_BLOCK - 1)
+            for l in getlogs({"address": PM, "topics": [ML, pid, pad(POSM)]}, b1 + 1, lmods["last"], 4_000_000):
+                w_ = [l["data"][2 + 64 * k:2 + 64 * (k + 1)] for k in range(4)]
+                lmods["rows"].append([int(l["blockNumber"], 16), pid, s128(w_[0]), s128(w_[1]), str(s128(w_[2])), "0x" + w_[3]])
+            lmods["rows"].sort(key=lambda r: r[0]); jsave(os.path.join(C, "lp_mods.json"), lmods)
+            log("closed reserve pool", q["stock"], pid[:10], "liquidity changes read again from", b1 + 1)
+    for p in pools.values():
+        if p.get("closed"): p["mods"] = [(r[0], r[2], r[3], int(r[4])) for r in lmods["rows"] if r[1] == p["id"] and r[5] in held_]
     jsave(os.path.join(C, "symbols.json"), symcache)
+    if closed_: log("closed reserve pools kept for history:", closed_)
     lp = {}
     for pid, p in pools.items():
         r = ecall(SV, sel("getSlot0(bytes32)") + pid[2:], BT); sp = int(r[2:66], 16) / 2 ** 96; P = sp * sp
@@ -279,7 +307,7 @@ def main():
             for back_ in (50000, 500000, 4000000):
                 lg_ = [l for l in getlogs({"address": PM, "topics": [SW, pid]}, max(SEED_BLOCK, tip - back_), tip, 500000) if int(l["data"][2 + 64 * 5:2 + 64 * 6], 16)]
                 if lg_: fee_now = int(lg_[-1]["data"][2 + 64 * 5:2 + 64 * 6], 16); break
-        lp[p["stock"]] = {"pool": pid, "stock": stock, "usdg": usdg, "price": px, "valueUSD": stock * px + usdg, "positions": p["positions"], "feeTier": p["fee"], "feeNow": fee_now, "isEth": p["stockAddr"].lower() == ZERO,
+        lp[p["stock"]] = {"pool": pid, "stock": stock, "usdg": usdg, "price": px, "valueUSD": stock * px + usdg, "positions": p["positions"], "feeTier": p["fee"], "feeNow": fee_now, "isEth": p["stockAddr"].lower() == ZERO, "closed": bool(p.get("closed")),
                           "share": (min(1.0, mine_liq / pool_liq) if pool_liq else 0.0), "poolLiqUsd": None,
                           "feesOwed": {"stock": os_, "usdg": ou, "usd": os_ * px + ou}}
         if p["stockAddr"].lower() != ZERO: toks[p["stock"]] = (p["stockAddr"], 18)
@@ -294,17 +322,26 @@ def main():
     sw = jload(os.path.join(C, "swaps.json"), {"last": SEED_BLOCK - 1, "rows": []})
     for r in sw["rows"]:
         if r[1] == "": r[1] = "ETH"   # rows cached before the native-ETH pool got its symbol
+    def swap_row(p, l):
+        idx = 0 if p["usdg0"] else 1
+        usdg = abs(s128(l["data"][2 + 64 * idx:2 + 64 * (idx + 1)])) / 1e6
+        fee = int(l["data"][2 + 64 * 5:2 + 64 * 6], 16); snd = "0x" + l["topics"][2][-40:]
+        ev_liq = int(l["data"][2 + 64 * 3:2 + 64 * 4], 16); ev_tick = s128(l["data"][2 + 64 * 4:2 + 64 * 5])
+        mine = sum(l_ for tl_, tu_, l_ in p.get("ranges", []) if tl_ <= ev_tick < tu_)   # the reserve's in-range liquidity at this swap
+        if p.get("closed"):   # a closed pool: the reserve's liquidity as it stood at the swap's block, from its own liquidity changes
+            mine = sum(dl_ for b_, tl_, tu_, dl_ in p["mods"] if b_ < int(l["blockNumber"], 16) and tl_ <= ev_tick < tu_)
+        share = min(1.0, mine / ev_liq) if ev_liq else 0.0                                    # its share of the fee
+        return [int(l["blockNumber"], 16), p["stock"], round(usdg, 2), fee, snd[:10], round(share, 4)]
+    for pid in reopened_:   # a closed pool first seen closed: its swaps after the run that dropped it, up to where the cache stands
+        p = pools[pid]; b0 = max((r[0] for r in sw["rows"] if r[1] == p["stock"]), default=SEED_BLOCK - 1)
+        sw["rows"] += [swap_row(p, l) for l in getlogs({"address": PM, "topics": [SW, pid]}, b0 + 1, sw["last"], 400000)]
+        sw["rows"].sort(key=lambda r: r[0]); jsave(os.path.join(C, "swaps.json"), sw); log("closed reserve pool", p["stock"], "swaps read again from", b0 + 1)
+    jsave(os.path.join(C, "reserve_pools.json"), rpool)
     pids = list(pools.keys())
     if pids and sw["last"] < tip:
         byid = {p["id"]: p for p in pools.values()}
         for l in getlogs({"address": PM, "topics": [SW, pids]}, sw["last"] + 1, tip, 100000):   # OR-list in a topic: 100k-block ranges
-            p = byid[l["topics"][1]]; idx = 0 if p["usdg0"] else 1
-            usdg = abs(s128(l["data"][2 + 64 * idx:2 + 64 * (idx + 1)])) / 1e6
-            fee = int(l["data"][2 + 64 * 5:2 + 64 * 6], 16); snd = "0x" + l["topics"][2][-40:]
-            ev_liq = int(l["data"][2 + 64 * 3:2 + 64 * 4], 16); ev_tick = s128(l["data"][2 + 64 * 4:2 + 64 * 5])
-            mine = sum(l_ for tl_, tu_, l_ in p.get("ranges", []) if tl_ <= ev_tick < tu_)   # the reserve's in-range liquidity at this swap
-            share = min(1.0, mine / ev_liq) if ev_liq else 0.0                                    # its share of the fee
-            sw["rows"].append([int(l["blockNumber"], 16), p["stock"], round(usdg, 2), fee, snd[:10], round(share, 4)])
+            sw["rows"].append(swap_row(byid[l["topics"][1]], l))
         sw["last"] = tip; jsave(os.path.join(C, "swaps.json"), sw)
     log("swap rows", len(sw["rows"]))
 
@@ -348,7 +385,7 @@ def main():
     ed[today] = ethusd; jsave(os.path.join(C, "eth_daily.json"), ed)
     stock_ds = {}
     for s, (a, _) in list(toks.items()) + [("ETH", (ZERO, 18))]:
-        if s in ("STANDARD", "USDG") or s not in lp: continue
+        if s in ("STANDARD", "USDG") or (s not in lp and s not in closed_): continue   # a closed reserve pool keeps its venues in the chain shares
         stock_ds[s] = get(f"https://api.dexscreener.com/token-pairs/v1/robinhood/{a}")
     jsave(os.path.join(C, "stock_pairs.json"), stock_ds)
     # every venue ever listed stays in the chain-share scan: DexScreener's list drops pools as their liquidity falls, and a dropped pool's
@@ -602,7 +639,7 @@ def main():
     # stock pool market context
     pool_ctx = {}
     for s, pairs in stock_ds.items():
-        if not isinstance(pairs, list): continue
+        if not isinstance(pairs, list) or s not in lp: continue
         mine = lp[s]["pool"]; rows = []
         for pr in pairs:
             rows.append({"dex": pr.get("dexId"), "label": (pr.get("labels") or [""])[0], "quote": pr.get("quoteToken", {}).get("symbol"),
@@ -768,8 +805,8 @@ def main():
     # what each epoch's routed ETH became, first in, first out: stock tokens, pools, cash, buybacks (burned, S-Bills, claims), team
     ru_fate, ru_chk, ru_tot = extra.routed_use(x, epochs)
     for e in epochs: e["use"] = ru_fate.get(e["epoch"], {})
-    log("routed use:", {k_: (round(v_[0], 4), round(v_[1], 4)) if isinstance(v_, tuple) else round(v_, 4) for k_, v_ in ru_chk.items()},
-        {k_: round(v_, 2) for k_, v_ in ru_tot.items()})
+    log("routed use:", {k_: (round(v_[0], 4), round(v_[1], 4)) if isinstance(v_, tuple) else round(v_, 4) for k_, v_ in ru_chk.items() if k_ not in ("inflow", "sentTo")},
+        {k_: round(v_, 2) for k_, v_ in ru_tot.items()}, "| ETH received from outside routing:", {k_: round(v_, 6) for k_, v_ in ru_chk["inflow"].items()}, "| sent to:", ru_chk["sentTo"])
     reconcile("routed_cash", "Reserve ETH, routed and seeded less what the reserve Safe spent", ru_chk["cashEth"][0], ru_chk["cashEth"][1],
               "Safe and expansion vault ETH read at the compile block", 1e-4, absolute=True, unit="ETH")
     reconcile("routed_usdg", "Reserve Safe USDG, followed through its transactions", ru_chk["usdg"][0], ru_chk["usdg"][1], "balance at the compile block", 0.01, absolute=True, unit="USDG")
@@ -781,7 +818,7 @@ def main():
               0.01, absolute=True, unit="STANDARD")
     reconcile("routed_unclassified", "Routed ETH, USDG and STANDARD with no use assigned", ru_chk["unclassified"], 0.0, "every flow assigned a use", 0.01, absolute=True)
     reconcile("routed_total", "Routed ETH followed to its uses, summed", sum(ru_tot.values()), sum(e["toVault"] + e["toPol"] + e["team"] for e in epochs) + ru_chk["seed"],
-              "routed at every settlement plus the genesis seed (uses add the reserve’s swap gains and returned position fees)", 0.001)
+              "routed at every settlement plus the genesis seed (uses add the reserve’s swap gains, returned position fees and ETH received from outside routing)", 0.001)
     reconcile("routed_pol", "POL buyback ETH, routed less buybacks", ru_chk["pol"][0], ru_chk["pol"][1], "balance at the compile block", 1e-4, gate=False, absolute=True, unit="ETH",
               note="the contract holds ETH that no settlement routed to it; no event log shows its source (open, see ROADMAP)")
     for k_ in sorted(hist_prev := jload(os.path.join(D, "history.json"), {})):
@@ -850,11 +887,11 @@ def main():
     yday = (dt.datetime.fromtimestamp(x.tip_ts, dt.timezone.utc).date() - dt.timedelta(1)).isoformat()   # complete days only
     cp = extra.counterparties(x, reg, lp_pools, "2026-10-14", yday)
     cls = extra.cpty_classes(cp, {s_: p_["tier"] for s_, p_ in lp_pools.items()}, routers=set(extra.LPAD["routers"]))
-    lpad, lpad_held = extra.launchpad(x, lp_pools, closes, eth_day)
+    lpad, lpad_held, lpad_rcvd = extra.launchpad(x, lp_pools, closes, eth_day)   # the fee Safe sent its holdings to the reserve Safe on 10 Nov 2026
     ltr, ltr_safe = extra.launchpad_trades(x, lp_pools, closes, eth_day)   # every trade's own fee split: exact volume, base fee, snipe fee, dated by block
-    tot_ = sum(lpad_held.get(s_, 0) for s_ in ltr_safe) or None
+    tot_ = sum(lpad_rcvd.get(s_, 0) for s_ in ltr_safe) or None
     reconcile("lpad_trades", "Launchpad fee Safe receipts to date, summed from every trade’s Trade event (token units, all assets)", sum(ltr_safe.values()), tot_,
-              "transfers into the fee Safe, Transfer logs", 1e-6, unit="tokens", note="; ".join(f"{s_} {ltr_safe[s_] - lpad_held.get(s_, 0):+.6f}" for s_ in sorted(ltr_safe)))
+              "transfers into the fee Safe, Transfer logs", 1e-6, unit="tokens", note="; ".join(f"{s_} {ltr_safe[s_] - lpad_rcvd.get(s_, 0):+.6f}" for s_ in sorted(ltr_safe)))
     fx_raw = []   # (date, fee-exempt volume from the counterparty pass, the replay's), per pool and day
     for row in series:
         d_ = row["date"]; row.update({k_: v_ for k_, v_ in (shares.get(d_) or {}).items()}); row.update(cls.get(d_, {})); row.update(lpad.get(d_, {})); row.update(ltr.get(d_, {}))

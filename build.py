@@ -49,10 +49,10 @@ SECTIONS = {
     panel(5, "Revenue by destination, trailing 30 days", "Where revenue over the selected range went, the protocol’s own phrase being where fees land, followed to what it "
           "became. STANDARD trading fees and charter sales are routed at settlement: 70% to the reserve in expansion or the contraction vault in contraction, 15% to the POL "
           "buyback and 15% to the team. Each epoch’s routed ETH is then followed, first in, first out, through the chain: what the reserve paid for stock tokens, put into its "
-          "pools or still holds as ETH and USDG; STANDARD the contraction vault bought and burned; STANDARD the POL buyback bought for the Incentives vault, as the vault pays "
+          "pools, still holds as ETH and USDG, or sent from the reserve Safe to other wallets (52.2 ETH to one wallet on 10 Nov 2026, less what it returned); STANDARD the contraction vault bought and burned; STANDARD the POL buyback bought for the Incentives vault, as the vault pays "
           "it to the S-Bill premium budget, to bankers through the per-branch claim and its top-ups, or to one other wallet, or still holds it; and routed ETH not yet spent "
           "on buybacks. Each day’s fees take the shares of the epoch they were routed in. LP fees stay in the reserve’s pools. STANDARD pool LP fees go to the team wallet. "
-          "License sales are burned. The launchpad’s protocol share sits in the fee Safe. Fees of the current epoch are not yet routed. Stock tokens are at cost. The POL "
+          "License sales are burned. The launchpad’s protocol share sits in the fee Safe, which sent its holdings to the reserve Safe on 10 Nov 2026; ETH received that way joins the reserve’s cash. Fees of the current epoch are not yet routed. Stock tokens are at cost. The POL "
           "buyback also holds <span id=\"ru_extra\"></span> that no settlement routed to it; no event log shows its source, so it is left out. ", '<div class="alloc" id="alloc"></div>', "h_alloc", "p_alloc") +
     panel(7, "Fee routing by epoch", "STANDARD trading fees and charter proceeds routed by the fee engine at each settlement, in ETH, for the epochs settled inside the selected range. "
           "Green bars are expansion epochs, red contraction.",
@@ -64,7 +64,8 @@ SECTIONS = {
 "liquidity": kpis("liquidity") + '<div class="grid">' +
     panel(12, "Protocol-owned liquidity by pool", "The reserve’s position in each pool and its standing among every pool for the same asset on Robinhood Chain on the last complete "
           "day. Volume is the volume the reserve’s own liquidity served. APR is LP fees over the selected range, annualized over position value. The fee is the rate the pool charged on its latest fee-paying swap. Rank and venues count pools with "
-          "at least $100 of liquidity.", table("t_pools")) +
+          "at least $100 of liquidity. A pool the reserve has left stays in the table with no position, so its fees over the range still count: the reserve Safe "
+          "removed its BABA/USDG liquidity on 10 Nov 2026.", table("t_pools")) +
     panel(6, "Volume served by the reserve, by pool, daily", "Every swap is replayed tick by tick against every provider’s liquidity; the reserve’s part of each step’s input, the fee "
           "included, is the volume its liquidity served, valued at the swap’s price. Other providers hold part of the liquidity in some pools; the reserve’s "
           "share is in the pools table. The headline is the volume that paid the pool fee. The stock pools’ hook keeps a fee-exemption list (FeeExemptSet): "
@@ -791,12 +792,12 @@ reg('revenue', ({Rf, lf, df})=>{ const {sw, wl} = win(), r7 = sum(sw.map(inc)), 
 const winName = ()=>N===0 ? 'since launch' : `trailing ${N} days`;   // tables and blocks that follow the range name it in their title
 const EPD = {}; E.forEach(e=>{for(let t=e.start+3600;t<e.end;t+=86400) EPD[fmt.dt(t)] = e;});
 reg('revenue', ({Rf})=>{ document.querySelector('#p_alloc .pt').textContent = `Revenue by destination, ${winName()}`;
-  const U = ['stocks','pools','cash','burned','sbills','claims','otherPay','held','unbought','team'], al = {open:0, lpad:0, lic:0, slp:0};
+  const U = ['stocks','pools','cash','sentOut','burned','sbills','claims','otherPay','held','unbought','team'], al = {open:0, lpad:0, lic:0, slp:0};
   U.forEach(k=>al[k]=0);
   Rf.forEach(r=>{const tok=((r.tradingFeeEth||0)+(r.charterEth||0))*ethOf(r), e=EPD[r.date], u=e&&e.use, t=u?sum(U.map(k=>u[k]||0)):0;   // each day's routed fees take its epoch's uses
     al.pools += r.spFee||0; al.lpad += lpp(r); al.slp += slp(r); al.lic += lic(r);
     if (t>0) U.forEach(k=>al[k] += tok*(u[k]||0)/t); else al.open += tok; });
-  const G = [['Reserve', [['Stock tokens', al.stocks, C.celadon], ['Pools, with LP fees', al.pools, alpha(C.celadon,.6)], ['ETH and USDG held', al.cash, alpha(C.celadon,.32)]]],
+  const G = [['Reserve', [['Stock tokens', al.stocks, C.celadon], ['Pools, with LP fees', al.pools, alpha(C.celadon,.6)], ['ETH and USDG held', al.cash, alpha(C.celadon,.32)], ['Sent to other wallets', al.sentOut, C.silver]]],
     ['Buybacks', [['Burned', al.burned, C.bronze], ['S-Bill premiums', al.sbills, C.gold], ['Branch claims for bankers', al.claims, alpha(C.gold,.62)], ['Other payouts', al.otherPay, alpha(C.gold,.38)],
       ['Held in the Incentives vault', al.held, C.sand], ['Not yet bought', al.unbought, C.grey]]],
     ['Team', [['Team', al.team+al.slp, C.rose]]], ['License sales, burned', [['License sales, burned', al.lic, C.violet]]],

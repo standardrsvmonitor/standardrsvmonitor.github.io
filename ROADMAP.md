@@ -176,3 +176,23 @@ Owners may reorder, add or strike items at any time.
   on 9 Nov). The first backfill took about 20 minutes; later runs read all v4 venues in one list-filtered query per 100 pools.
 - Custodial pool balances were read at the compile block after the v4 scans and a failed read was stored as 0; after a long backfill the
   compile block's state was gone and 25 of 34 pools read 0 (liqShare_SPCX 32 on 14 Oct). They are now read first, and a failed read stops the run.
+- 10 Nov 2026, reserve Safe and launchpad fee Safe (read from their own logs; gate held from this morning's refresh):
+  - Block 110,970,800 (tx 0x289da451…, a call to MultiSendCallOnly 0xA83C…1836, not the delegatecall MultiSend): the reserve Safe collected
+    the fees of its SPCX, SKHY and ETH/USDG positions and removed and burned its five BABA positions (3789190 to 3789192, 4154479 to 4154481).
+    The ETH came from the PoolManager directly (3.453 ETH), not the PositionManager. The pull read pools only from positions the Safe still
+    owns, so BABA vanished from every day back to 14 Oct (reserve stocks −38%, the drift failure). Pools the reserve has held stay now
+    (`data/cache/reserve_pools.json`; a closed pool's key comes from its Initialize event), and the swap and liquidity caches are read again
+    for a pool the first time it is seen closed.
+  - Block 110,972,302 (tx 0xb222dae3…): the launchpad fee Safe sent everything it held to the reserve Safe: 1,220.09 SPCX, 356.28 SKHY,
+    217.67 BABA, 7.1004 WETH and 1.5655 ETH. Gate `lpad_trades` now compares trade receipts with transfers into the fee Safe, not with what
+    it holds. The reserve figure does not count WETH yet: the reserve Safe holds 7.1004 WETH (open: count WETH with the reserve's ETH).
+  - Blocks 111,025,592 and 111,029,323: the reserve Safe sent 1,220.66 SKHY and 8,928.23 BABA (10 of each first) to 0xf6f0…c02b, an EIP-1167
+    clone of 0xd5fe…ef79b that other wallets (0x9d98…c967) also pay into and that forwards everything it receives to 0xc213…6c95, so
+    it behaves like an exchange deposit address. Since then the Safe holds no SKHY or BABA tokens (its SKHY position remains). Revenue by destination
+    still counts what routed ETH paid for these stocks under stock tokens, at cost (open: follow stock tokens out of the Safe).
+  - Block 111,059,978 (tx 0x9a3c6248…): the reserve Safe sent 52.2 ETH to 0x4e5a…60b6, an externally owned account (nonce 11), which
+    returned 0.4192 ETH at block 111,123,428. Revenue by destination shows it under the reserve as sent to other wallets, net of the return.
+  - The owner Safe 0x5c19…a68c moved 1,864.35 ETH from the expansion vault to the reserve Safe in one transaction (block 78,395,538); routed
+    use treats every transaction carrying an expansion vault forward as routing, so that ETH is not counted as received from outside.
+- 12 Nov 2026: a page held for days had its own compile day (8 Nov, compiled 21:50 UTC, still in progress) compared as a settled day once it was
+  three days old. The drift check now stops at the day before the published compile's date.

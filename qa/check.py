@@ -219,6 +219,7 @@ if A.live:
         m = re.search(r"const DATA = (\{.*?\});\nconst L = DATA\.live", page, re.S)
         P_ = json.loads(m.group(1)); acc = json.load(open(A.accept)) if A.accept and os.path.exists(A.accept) else []
         old = {r["date"]: r for r in P_["series"]}; cut = (dt.date.fromisoformat(L["date"]) - dt.timedelta(3)).isoformat()
+        cut = min(cut, (dt.date.fromisoformat(P_["live"]["date"]) - dt.timedelta(1)).isoformat()) if (P_.get("live") or {}).get("date") else cut   # the published compile's own day was still in progress (a page held for days)
         ep0 = dt.datetime.fromtimestamp(min(L.get("epochStart", 9e9), P_["live"].get("epochStart", 9e9)), dt.timezone.utc).date().isoformat()   # days in the live epoch move until it settles
         moved, waived, reclass = [], [], []
         for r in D["series"]:

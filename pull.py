@@ -957,18 +957,14 @@ def main():
               "every swap's volume at the reserve's share of liquidity at the swap's final tick (the counterparty pass)", 0.05, gate=False, unit="USD")
     reconcile("exempt_served", "Fee-exempt volume served, last 7 days, from the swap replay", e7_, a_ if a_ else None,
               "zero-fee swaps summed in the counterparty pass at each swap's final-tick share", 0.05, gate=False, unit="USD")
-    # the launchpad markets API's own fee total, a cross-check (the API allows only standardreserve.xyz in the browser)
-    MK = "https://markets.standardreserve.xyz/v1/"
-    kp_ = get(MK + "pilot/pool?limit=1", tries=2)
+    # the launchpad markets API's fee total (pilot/pool, feesUsd) was the USD cross-check until the API withdrew the endpoint (404 on 16 Nov 2026;
+    # its /v1/tokens list carries no fee or lifetime volume). The receipts stay reconciled exactly, in token units, against every Trade event (lpad_trades).
     lp_px = {s_: v_["price"] for s_, v_ in lp.items()}; lp_px.update({"USDG": 1.0, "WETH": ethusd})
     out["launchpad"] = {"feeSafe": extra.LPAD["feeSafe"], "held": lpad_held, "heldUsd": sum(a_ * (lp_px.get(s_) or 0) for s_, a_ in lpad_held.items()),
                         "feeSafeEth": fee_safe_eth,   # launch fees, 0.0005 ETH a launch
-                        "indexerFeesUsd": kp_.get("feesUsd"), "indexerAsOf": kp_.get("asOfTime"), "got": lpad_got, "outTo": lpad_out, "top": lt_top,
+                        "got": lpad_got, "outTo": lpad_out, "top": lt_top,
                         "ethToReserve": ru_chk["outsideIn"].get(extra.LPAD["feeSafe"], 0.0)}   # launch fees the Safe sent to the reserve Safe in ETH
-    log("launchpad: fee Safe", {k_: round(v_, 3) for k_, v_ in lpad_held.items()}, "| received, all days", round(sum(v_.get("lpadSafe", 0) for v_ in lpad.values())),
-        "| indexer", kp_.get("feesUsd"))
-    reconcile("launchpad_fees", "Launchpad fees received by the fee Safe, at daily closes", sum(v_.get("lpadSafe", 0) for v_ in lpad.values()), kp_.get("feesUsd"),
-       "launchpad markets API, fees at trade time", 0.03, gate=False, unit="USD")
+    log("launchpad: fee Safe", {k_: round(v_, 3) for k_, v_ in lpad_held.items()}, "| received, all days", round(sum(v_.get("lpadSafe", 0) for v_ in lpad.values())))
     chk_ = [(row["date"], s_, round(row.get("poolVolChain_" + s_) or 0), round(row.get("spVol_" + s_) or 0)) for row in series[-3:-1] for s_ in lp_pools]
     for row in series[-3:-1]:
         a_ = sum(row.get("poolVolChain_" + s_) or 0 for s_ in lp_pools); b_ = sum(row.get("spVol_" + s_) or 0 for s_ in lp_pools)

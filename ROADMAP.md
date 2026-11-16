@@ -21,7 +21,8 @@ Owners may reorder, add or strike items at any time.
   read the release rule from the bank contract, credit the stayers' cut as it is released, and show it in the bank flows chart as released.
   Done: ledger within 0.02% of `totalPendingLive`, gate tolerance tightened to 0.05%.
 - [ ] **Launchpad fees at trade time.** Fee Safe receipts are valued at daily closes and sit about 1% below the markets API's trade-time
-  total. Value each receipt at the pool price of its own block. Done: within 0.3% of the API.
+  total. Value each receipt at the pool price of its own block. Done: within 0.3% of the API. (16 Nov 2026: the API withdrew that total,
+  see findings; the done test needs a new reference, for the owner to choose.)
 - [ ] **Counterparty sampling error.** 150 receipts per pool and day leave about eight points of error on a daily organic share. Read
   every swap's transaction sender for the pools' top executors (exact), sample the rest. Done: stated error under two points a day.
 - [ ] **Venue discovery on chain.** The "share of chain volume" and "share of chain liquidity" panels start from DexScreener's pair list.
@@ -76,6 +77,11 @@ Owners may reorder, add or strike items at any time.
 
 ## Findings (facts later runs rely on)
 
+- 16 Nov 2026: the launchpad markets API withdrew `v1/pilot/pool` (404 "No such endpoint"; the published page already carried
+  `indexerFeesUsd: null`). The site's bundles now call only `v1/tokens`, `v1/tokens/{token}` (candles, trades, holders) and account, convert
+  and onramp routes; none carries a fee total or lifetime volume (304 tokens, fields up to `volume24hUsd`). The `launchpad_fees` watch item,
+  which compared the fee Safe's receipts at daily closes with the API's trade-time total, is removed with the call. The receipts stay
+  reconciled exactly in token units against every Trade event (gate `lpad_trades`). No USD trade-time reference exists any more.
 - 8 Nov 2026: the central bank accrues issuance lazily. `cumulativeIssued` stands at `lastAccrual()` (any interaction moves it), not at the
   block time, so a rebuild run to the compile time drifts above it by the issuance rate times the time since the last interaction (1.9 hours,
   21,797 STANDARD, 0.10%, on 8 Nov). The `issued` reconciliation now compares at `lastAccrual()`, read at the indexer snapshot's block. It

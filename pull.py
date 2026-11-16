@@ -857,7 +857,13 @@ def main():
     log("pool flows", len(pf["rows"]), "rows;", grp_stats, "| bankers", len(bankers), "S-Bill holders", len(sbh))
     fee_lp = 0.01; s0 = ecall_late(SV, sel("getSlot0(bytes32)") + STD_POOL[2:], BT); sp_now = int(s0[2:66], 16) / 2 ** 96
     depth = extra.std_depth(x, STD_POOL, sp_now, ethusd, closes, eth_day, dl, fee_lp, int(snap["tax"]["buyTaxNowBps"]) / 1e4, int(snap["tax"]["sellTaxNowBps"]) / 1e4, H["polManager"].lower())
-    log("depth", {k_: (round(v_) if isinstance(v_, float) else v_) for k_, v_ in depth.items() if k_ in ("bid2", "ask2", "bid5", "ask5", "protocolShare", "positions")})
+    log("depth", {k_: (round(v_) if isinstance(v_, float) else v_) for k_, v_ in depth.items() if k_ in ("bid2", "ask2", "bid5", "ask5", "protocolShare", "positions", "posStd")})
+    # protocol liquidity is the PoolManager's STANDARD balance (the protocol's own definition); the STANDARD/ETH pool's positions hold most of it,
+    # and the rest sits in other STANDARD pools and fees not yet collected (12 Nov 2026 audit: 76,974 at one block, 0.21%)
+    live["poolStdPositions"] = depth["posStd"]; live["poolStdOther"] = pool_now - depth["posStd"]
+    reconcile("pool_positions", "STANDARD in the STANDARD/ETH pool's positions at the current price", depth["posStd"], pool_now,
+              "PoolManager STANDARD balance (protocol liquidity)", 0.01, gate=False, unit="STANDARD",
+              note="the rest is in other STANDARD pools and fees not yet collected")
     # STANDARD price: DexScreener and GeckoTerminal against the pool's own price on chain, valued at Coinbase's ETH price
     reconcile("price_live", "STANDARD price, DexScreener", px, ethusd / (sp_now * sp_now), "STANDARD/ETH pool price at the compile block × Coinbase ETH", 0.02)
     std_c = closes.get(STD_POOL, {}); gt_days = {day(r_[0]) for r_ in ohl}; worst_ = None

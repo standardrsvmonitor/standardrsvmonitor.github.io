@@ -564,6 +564,7 @@ def std_depth(x, pid, sp_now, ethusd, closes, eth_day, dates, fee, tax_buy, tax_
                      "sellImpact": 1 - (out_s_raw / std_in) / mid if std_in else None, "sellAllIn": 1 - (out_s * (1 - tax_sell) / std_in) / mid if std_in else None})
     b2, a2 = depth_usd(rng, sp_now, 0.02, ethusd); b5, a5 = depth_usd(rng, sp_now, 0.05, ethusd)
     in_range = sum(L for a, b, L in rng if a <= sp_now < b)
+    pos_std = sum(L * (min(max(sp_now, a), b) - a) for a, b, L in rng) / 1e18   # STANDARD (token1) in every open position at the current price
     prot = collections.defaultdict(int)
     for ts, tl, tu, dl, sender in mods:
         if sender == protocol_lp: prot[(tl, tu)] += dl
@@ -575,7 +576,7 @@ def std_depth(x, pid, sp_now, ethusd, closes, eth_day, dates, fee, tax_buy, tax_
         rg = ranges_at(mods, day_end(d)); bd, ak = depth_usd(rg, c / 2 ** 96, 0.02, e); b5_, a5_ = depth_usd(rg, c / 2 ** 96, 0.05, e)
         hist[d] = {"bid2": bd, "ask2": ak, "bid5": b5_, "ask5": a5_}
     return {"bid2": b2, "ask2": a2, "bid5": b5, "ask5": a5, "slip": slip, "fee": fee, "taxBuy": tax_buy, "taxSell": tax_sell,
-            "protocolShare": prot_in / in_range if in_range else None, "positions": sum(1 for _ in rng), "hist": hist}
+            "protocolShare": prot_in / in_range if in_range else None, "positions": sum(1 for _ in rng), "posStd": pos_std, "hist": hist}
 
 
 # ---------- every venue for each reserve asset: daily volume and liquidity, from the chain ----------

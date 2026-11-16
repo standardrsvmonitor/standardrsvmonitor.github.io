@@ -51,7 +51,9 @@ Out of scope, by the owner's decision: Token Terminal-style financial statements
 
 - **Circulating supply**: every STANDARD minted (ERC-20 total supply), the protocol's own definition. **Market cap** is price times circulating
   supply, the figure the protocol's site and DexScreener show.
-- The protocol splits circulating supply into **protocol liquidity** (STANDARD in its own pool), **in wallets** and the **Incentives vault**;
+- The protocol splits circulating supply into **protocol liquidity** (the Uniswap v4 PoolManager's STANDARD balance, the protocol's own
+  definition: its STANDARD/ETH pool's positions plus other STANDARD pools and fees not yet collected, shown live as `poolStdOther`; owner
+  decision 16 Nov 2026), **in wallets** and the **Incentives vault**;
   beside it, **in banks** (bankers' ledger balances, minted only on withdrawal), **burned** and **unissued**. **Market cap, in wallets** is price
   times the STANDARD in wallets. Backing per token and price to backing use the STANDARD in wallets, and say so.
 - **Fees** are what users pay. **Revenue** is what the protocol keeps: **STANDARD trading fees** (the buy and sell tax, always named with STANDARD so they are not confused with LP or launchpad fees), **LP fees** earned by

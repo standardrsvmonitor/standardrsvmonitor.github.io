@@ -142,7 +142,7 @@ SECTIONS = {
           "ledger balances in banks and the stayers’ cut the bank holds before releasing it over the next epoch. The bars sum to the line’s daily change; the line reads on the "
           "right-hand axis.", chart("c_supply"), "h_supply") +
     panel(5, "STANDARD supply, 1B cap", "The protocol’s own split of the one-billion hard cap, at the compile block. Protocol liquidity (STANDARD held by the Uniswap v4 PoolManager, the protocol’s own "
-          "definition; about 77,000 of it sits in other STANDARD pools, not the protocol’s), in "
+          "definition; <span id=\"pool_other\">some</span> of it sits outside the STANDARD/ETH pool’s positions, in other STANDARD pools and fees not yet collected), in "
           "wallets and the Incentives vault make up circulating supply. In banks is owed to bankers and minted on withdrawal. Burned is the cap the protocol has removed: "
           "token burns and ledger removals that are never minted. Unissued is the rest of the maximum supply.", '<div class="alloc" id="salloc"></div>', "h_salloc") +
     panel(7, "Net buying of STANDARD by holder group, daily", "STANDARD bought from the protocol’s STANDARD/ETH pool less STANDARD sold into it, by the group of the "
@@ -920,7 +920,8 @@ reg('overview', (x)=>supChart(c_supo, 'h_supo', x));
 function renderSupply(){ const el = document.getElementById('salloc'); if (!el) return;
   el.innerHTML = allocHtml([['Protocol liquidity', L.poolStd, C.blue], ['In wallets', L.float, C.gold], ['Incentives vault', L.incentivesStd, C.celadon], ['In banks', L.pending, C.violet],
     ['Burned', 1e9-L.maxSupply, C.orange], ['Unissued', L.maxSupply-L.totalSupply-L.pending, C.grey]], v=>fmt.n(v,1));
-  document.getElementById('h_salloc').innerHTML = `<em>${fmt.n(L.maxSupply,1)}</em> max supply`; }
+  document.getElementById('h_salloc').innerHTML = `<em>${fmt.n(L.maxSupply,1)}</em> max supply`;
+  const po = document.getElementById('pool_other'); if (po && L.poolStdOther!=null) po.textContent = `${Math.round(L.poolStdOther).toLocaleString('en-US')} STANDARD`; }
 reg('token', ({Rl, ll, dl})=>{ document.getElementById('h_mc').innerHTML = `<em>${fmt.n(L.float,2)}</em> in wallets · ${fmt.n(L.pending,2)} in banks`;
   const sets = [line('In wallets', Rl.map(r=>r.float), C.gold), line('Protocol liquidity and Incentives vault', Rl.map(r=>(r.pool||0)+(r.incentives||0)), C.blue), line('In banks', Rl.map(r=>r.pending), C.violet)];
   sets.forEach((s,i)=>{s.fill=i===0?'origin':'-1'; s.backgroundColor=alpha(s.borderColor,.4); s.borderWidth=1; s.stack='sup';});

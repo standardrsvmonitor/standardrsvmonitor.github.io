@@ -551,9 +551,11 @@ def main():
     reconcile("pool_zero", "Protocol liquidity STANDARD, rebuilt from transfer logs", pool_now - pn, pool_now, "balance at the compile block", 1, absolute=True, unit="STANDARD")
     reconcile("incentives_zero", "Incentives vault STANDARD, rebuilt from transfer logs", inc_now - inn, inc_now, "balance at the compile block", 1, absolute=True, unit="STANDARD")
     # forward ledger: pending = issuance + deposits + recycled exit fees - licenses - gross withdrawals - gross revocations
-    sb_pts = sorted([(int(p["t"]), int(p.get("after", 0)) / 1e18, int(p.get("locked", 0)) / 1e18) for p in (sb.get("points") or []) if p.get("t")])
+    sb_pts = sorted([(int(p["t"]), int(p.get("after", 0)) / 1e18, int(p.get("locked", 0)) / 1e18, bool(p.get("drifting"))) for p in (sb.get("points") or []) if p.get("t")])
     wd_ev = [(int(e["timestamp"]), int(e["values"]["gross"]) / 1e18) for e in act["withdrawn"] + act["revoked"]]   # the contract's 7-day buckets count revoked balances too (withdrawnOnDay; every feeWad on chain reproduced exactly, 3 Nov 2026)
-    sb_c = sb.get("current") or {}; sb_dps = int(sb_c.get("driftPerSecond", 0)) / 1e18 if sb_c.get("drifting") else 0.0; sb_cap = int(sb_c.get("ceiling", 0)) / 1e18 or 1.0
+    # drift applies after each point whose own drifting flag is set, not by today's flag (drifting stopped at the 15 Nov 20:06 roll, which had
+    # zeroed every past day's drift); every drifting gap of 10+ minutes in the history moves by exactly driftPerSecond (1,572 of 1,572, 16 Nov 2026)
+    sb_c = sb.get("current") or {}; sb_dps = int(sb_c.get("driftPerSecond", 0)) / 1e18; sb_cap = int(sb_c.get("ceiling", 0)) / 1e18 or 1.0
     # the stayers' cut reaches bankers a epoch late: the halves of exit and revocation fees collected in an epoch sit in the recycle buffer and
     # stream evenly over the next one (FeesRecycled(epoch, amount) at its start; the live epoch at recycleRate). Credited per day as streamed.
     FREC = "0xee894dd54fd65a2c69a3247565cfcf3f64c9e468076fe25a53b9510e2b22fb44"
@@ -576,8 +578,8 @@ def main():
         t_end = min(now, d_end); pd_ = (t_end - genesis_ts) // 86400   # resolution fee at the day's close, over the contract's seven protocol-day buckets
         w7_ = sum(g for ts_, g in wd_ev if ts_ < t_end and (ts_ - genesis_ts) // 86400 >= pd_ - 6)
         P7 = w7_ / max(pend + w7_, 10_000_000); fee_hist[d] = 0.02 + 0.58 * min(P7 / 0.10, 1) ** 2
-        j = bisect.bisect_right(sb_pts, (t_end, 9e9, 9e9)); sbl_hist[d] = sb_pts[j - 1][2] if j else None
-        rate_hist[d] = min(sb_cap, sb_pts[j - 1][1] + sb_dps * (t_end - sb_pts[j - 1][0])) if j else None   # rate at the close, drift since the last update included
+        j = bisect.bisect_right(sb_pts, (t_end, 9e9, 9e9, True)); sbl_hist[d] = sb_pts[j - 1][2] if j else None
+        rate_hist[d] = min(sb_cap, sb_pts[j - 1][1] + (sb_dps * (t_end - sb_pts[j - 1][0]) if sb_pts[j - 1][3] else 0.0)) if j else None   # rate at the close, drift since the last update included
         if d in census: cen_last = census[d]
         cen_hist[d] = cen_last
     log("ledger check: pending reconstructed", round(pend), "live", round(int(snap["bank"]["totalPendingLive"]) / 1e18),

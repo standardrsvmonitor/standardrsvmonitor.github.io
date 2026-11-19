@@ -172,7 +172,7 @@ SECTIONS = {
           chart("c_policy"), "h_policy") +
     panel(6, "Charter auction clearing prices", "Charters are sold in 12-hour periods, in a Dutch auction that opens at three times the last clearing price (three times the floor after a "
           "period with no sale) and halves every two hours toward a 1 ETH floor. One charter a period until 11 Nov 2026, when the owner set the number to zero from "
-          "the 23:25 UTC period. Triangles are purchases made through a contract.", chart("c_charter"), "h_charter") +
+          "the 23:25 UTC period. The 7D and 30D ranges end at the last sale, so they show the final sales rather than an empty chart. Triangles are purchases made through a contract.", chart("c_charter"), "h_charter") +
     panel(6, "License auction clearing prices and volume", "Expansion licenses are sold in 12-hour periods, paid in STANDARD and burned, opening at twice the last clearing price with a floor of "
           "about two days of one branch’s issuance. The owner sets the number a period and has changed it several times; 15 a period "
           "since 11 Nov 2026.", chart("c_license"), "h_license") +
@@ -955,7 +955,7 @@ reg('banks', ({Rl, ll, dl})=>{ document.getElementById('h_policy').innerHTML = `
   return mk(c_policy, ll, [line('Branches', Rl.map(r=>r.branches), C.violet, {fill:true}), line('Active charters', Rl.map(r=>r.activeCharters), C.teal)], {y:n0, tf:fmt.int}); });
 const CH = DATA.charters, LP = DATA.licensePeriods, CHall = CH, LPall = LP;
 const inRange = (ts)=>!N || ts >= NOWTS - N*86400;   // event charts (epochs, auctions) show the events inside the selected range
-reg('banks', ()=>{ const open = (L.charterRemaining||0)>0, CH = CHall.filter(c=>inRange(c.ts));
+reg('banks', ()=>{ const open = (L.charterRemaining||0)>0, chEnd = Math.min(NOWTS, CHall.length?CHall[CHall.length-1].ts:NOWTS), CH = CHall.filter(c=>!N || c.ts >= chEnd - N*86400);   // the window ends at the last sale, so a range never empties once sales stop
   document.getElementById('h_charter').innerHTML = `last <em>${L.charterLastSale.toFixed(2)} ETH</em> · ${open?'quote '+L.charterPriceNow.toFixed(2)+' ETH':L.chartersPerPeriod===0?'none offered per period':'next '+fmt.hm(L.charterNextOpen)+' UTC at '+L.charterNextStart.toFixed(2)+' ETH'}`;
   return mk(c_charter, CH.map(c=>dm(fmt.dt(c.ts))), [line('Clearing price', CH.map(c=>c.eth), C.violet, {fill:true, pts:CH.map(c=>c.viaContract?3.5:1.8), ps:CH.map(c=>c.viaContract?'triangle':'circle')}),
     ...(open?[{type:'line', label:'Current quote', data:CH.map((c,i)=>i===CH.length-1?L.charterPriceNow:null), borderColor:C.gold, backgroundColor:C.gold, pointRadius:4, pointStyle:'rectRot', showLine:false}]:[])],

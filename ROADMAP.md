@@ -76,6 +76,10 @@ Owners may reorder, add or strike items at any time.
 
 ## Findings (facts later runs rely on)
 
+- 19 Nov 2026: event charts filter to the selected range from the compile time, so a chart whose events have stopped empties at 7D and
+  fails the "range keeps the latest point" rule. The charter auction chart (no charters offered since 11 Nov) now ends its 7D and 30D
+  windows at the last sale; the license chart still uses `inRange` from the compile time. Use the same anchor for any event series that can stop.
+
 - 8 Nov 2026: the central bank accrues issuance lazily. `cumulativeIssued` stands at `lastAccrual()` (any interaction moves it), not at the
   block time, so a rebuild run to the compile time drifts above it by the issuance rate times the time since the last interaction (1.9 hours,
   21,797 STANDARD, 0.10%, on 8 Nov). The `issued` reconciliation now compares at `lastAccrual()`, read at the indexer snapshot's block. It

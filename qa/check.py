@@ -27,9 +27,15 @@ live_tests = DK.get("investor", {})
 required_faults = ("missing pending claims", "malformed multiplier", "HTTP error", "invalid page",
                    "repeated cursor", "stale bills", "midnight", "settlement")
 required_live_checks = {f"{fault} restores the compiled view" for fault in required_faults}
-required_live_checks.add("successful replay updates state and recycled claims")
+required_live_checks.update(("successful replay updates state and recycled claims", "sale-size picker handles fill status"))
 add("render", "live replay regression scenarios executed", required_live_checks.issubset(live_tests))
 for name, passed in live_tests.items(): add("render", name, passed)
+
+for tab, chart_id in (("overview","c_brco"), ("banks","c_policy")):
+    chart = (T.get(tab, {}).get("charts", {}).get(chart_id) or {})
+    add("render", f"{tab} plots branches on the left and charters on the right",
+        chart.get("scales", {}).get("y") == "left" and chart.get("scales", {}).get("y1") == "right" and
+        [(s["label"], s.get("axis")) for s in chart.get("sets", [])] == [("Branches (left)", "y"), ("Active charters (right)", "y1")])
 
 add("render", "page renders without script errors", not DK.get("errors") and not DK.get("fatal"), "; ".join(map(str, DK.get("errors") or []))[:600])
 for w, r in V.get("layouts", {}).items(): add("render", f"page renders at {w}px without script errors", not r.get("errors") and not r.get("fatal"), "; ".join(map(str, r.get("errors") or []))[:400])

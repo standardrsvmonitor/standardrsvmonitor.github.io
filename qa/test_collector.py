@@ -47,6 +47,23 @@ class CollectorTests(unittest.TestCase):
         self.assertGreater(rows[0]["proceeds"], 0)
         self.assertIsNone(rows[-1]["proceeds"])
 
+    def test_quotes_require_full_execution_of_each_input(self):
+        # This position absorbs 9,950 tokens in either direction. Fees bring the
+        # smallest order inside the range even though its fee-free comparison cannot fill.
+        x = extra.Ctx(tip_ts=100)
+        with patch.object(extra, "std_positions", return_value=[]), patch.object(extra, "ranges_at", return_value=[(.5, 2, 9950 * 10**18)]):
+            quotes = extra.std_depth(x, "pool", 1, 1, {}, {}, [], .01, .02, .03, "pol")["slip"]
+        small, large = quotes[:2]
+        self.assertTrue(small["sellFillable"] and small["buyFillable"])
+        self.assertIsNone(small["sellImpact"])
+        self.assertIsNone(small["buyImpact"])
+        expected_net = 9900 / (1 + 9900 / 9950) * .97
+        self.assertAlmostEqual(small["usd"] * (1 - small["sellAllIn"]), expected_net)
+        self.assertFalse(large["sellFillable"] or large["buyFillable"])
+        for key in ("sellAllIn", "buyAllIn", "sellImpact", "buyImpact"):
+            self.assertIsNone(large[key])
+        self.assertIsNone(extra.swap([], 1, 100, False)[0])
+
     def test_liquidity_cost_uses_log_order_including_identical_modifications(self):
         words = lambda *items: "0x" + "".join(pull.u(x % (1 << 256)) for x in items)
         pid, salt = "pool", "0x"+pull.u(1)

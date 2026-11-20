@@ -543,7 +543,8 @@ def _active(rng, s, down):
 
 def swap(rng, sp, amount, eth_in):
     """Walk a swap through the ranges. eth_in: ETH (token0) in, price falls; else STANDARD (token1) in, price rises.
-    Returns (amount out, sqrtPrice after). Amounts are raw (both tokens have 18 decimals)."""
+    Returns (amount out, sqrtPrice after). Output is None if the entire input cannot fill.
+    Amounts are raw (both tokens have 18 decimals)."""
     bounds = sorted({v for a, b, L in rng for v in (a, b)})
     s, rem, out = sp, amount, 0.0
     while rem > 1e-9:
@@ -564,7 +565,7 @@ def swap(rng, sp, amount, eth_in):
             need = L * (nxt - s) if nxt else float("inf")
             if rem >= need: out += L * (1 / s - 1 / nxt); rem -= need; s = nxt
             else: s2 = s + rem / L; out += L * (1 / s - 1 / s2); s = s2; rem = 0
-    return out, s
+    return (None if rem > 1e-9 else out), s
 
 
 def depth_usd(rng, sp, pct, ethusd):
@@ -582,16 +583,12 @@ def depth_usd(rng, sp, pct, ethusd):
 
 def bill_exits(schedule, as_of, rng, sp, ethusd, fee, tax):
     quantity = sum(amount for maturity, amount in schedule["due"] if maturity <= as_of + 7 * 86400)
-    # Token1 capacity until the last initialized tick, net of the input fee.
-    capacity = sum(liquidity * max(0, hi - max(sp, lo)) for lo, hi, liquidity in rng)
     rows = []
     for share in (0.25, 0.5, 1.0):
         principal = share * quantity
         effective = principal * 1e18 * (1 - fee)
-        proceeds = None
-        if effective <= capacity:
-            eth, _ = swap(rng, sp, effective, False)
-            proceeds = eth / 1e18 * ethusd * (1 - tax)
+        eth, _ = swap(rng, sp, effective, False)
+        proceeds = eth / 1e18 * ethusd * (1 - tax) if eth is not None else None
         rows.append({"share": share, "principal": principal, "mark": principal / sp**2 * ethusd, "proceeds": proceeds})
     return rows
 
@@ -609,9 +606,10 @@ def std_depth(x, pid, sp_now, ethusd, closes, eth_day, dates, fee, tax_buy, tax_
         std_in = usd / ethusd / mid * 1e18
         out_s, _ = swap(rng, sp_now, std_in * (1 - fee), False)
         out_s_raw, _ = swap(rng, sp_now, std_in, False)
-        slip.append({"usd": usd,
+        slip.append({"usd": usd, "buyFillable": out_b is not None, "sellFillable": out_s is not None,
                      "buyImpact": (e_in / out_b_raw) / mid - 1 if out_b_raw else None, "buyAllIn": (e_in / out_b) / mid - 1 if out_b else None,
-                     "sellImpact": 1 - (out_s_raw / std_in) / mid if std_in else None, "sellAllIn": 1 - (out_s * (1 - tax_sell) / std_in) / mid if std_in else None})
+                     "sellImpact": 1 - (out_s_raw / std_in) / mid if out_s_raw is not None else None,
+                     "sellAllIn": 1 - (out_s * (1 - tax_sell) / std_in) / mid if out_s is not None else None})
     b2, a2 = depth_usd(rng, sp_now, 0.02, ethusd); b5, a5 = depth_usd(rng, sp_now, 0.05, ethusd)
     in_range = sum(L for a, b, L in rng if a <= sp_now < b)
     pos_std = sum(L * (min(max(sp_now, a), b) - a) for a, b, L in rng) / 1e18   # STANDARD (token1) in every open position at the current price

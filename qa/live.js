@@ -35,6 +35,16 @@ async function checkInvestorDashboard() {
       const event={blockNumber:b,timestamp:t,values:{gross:'110000000000000000000',net:'100000000000000000000'},txHash:'0x1234',logIndex:1};
       return response({events:withdrawal?[event]:[],page:{nextCursor:withdrawal&&fault==='repeated cursor'?'repeat':null}});
     };
+    const fixture={fee:.01,taxSell:.03,slip:[
+      {usd:100000,sellFillable:true,sellAllIn:.06},{usd:250000,sellFillable:false,sellAllIn:null},{usd:500000,sellAllIn:.25}]};
+    renderSaleQuote(fixture,null,123,2000);
+    const size=document.getElementById('sale_size'), payout=document.getElementById('sale_out');
+    const select=value=>{ size.value=String(value); size.dispatchEvent(new Event('change')); return payout.textContent; };
+    const full=payout.textContent==='$94,000 · 47.00 ETH';
+    const exceeds=select(250000)==='Exceeds pool liquidity', unknown=select(500000)==='Estimate unavailable';
+    renderSaleQuote(null,null,123,2000);
+    results['sale-size picker handles fill status']=full && exceeds && unknown && size.disabled && payout.textContent==='Estimate unavailable';
+    renderSaleQuote(DATA.depth,DATA.billSchedule,DATA.tip,BASE.L.ethusd);
     await goLive();
     results['successful replay updates state and recycled claims'] = LIVE && L.price===2 &&
       Math.abs(owedBuf[BASE.row.date] - (initialBuffer+5))<0.001;

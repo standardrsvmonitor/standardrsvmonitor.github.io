@@ -39,7 +39,7 @@ SECTIONS = {
           chart("c_supo", "s"), "h_supo") + '</div>' +
     panel(6, "Reserve assets by component, daily", "Reserve assets at each day’s close, rebuilt from on-chain events and valued at the day’s closing prices. "
           "Today is the reserve read at the compile block.", chart("c_reso"), "h_reso") +
-    panel(6, "Branches and active charters, daily", "Branches and active charters, reconstructed from charter, license, withdrawal and revocation events.",
+    panel(6, "Branches and active charters, daily", "Branches use the left axis and active charters use the right. Each axis scales to the dates shown. Counts are reconstructed from charter, license, withdrawal and revocation events.",
           chart("c_brco"), "h_brco") + '</div>',
 
 "revenue": kpis("revenue") + '<div class="grid">' +
@@ -169,10 +169,10 @@ SECTIONS = {
     panel(6, "STANDARD supply composition, daily", "The protocol’s own split of circulating supply: in wallets, protocol liquidity and the Incentives vault, with "
           "the STANDARD in banks, ledger balances owed to bankers and minted only on withdrawal. The full height is every STANDARD that exists or is owed.", chart("c_mc"), "h_mc") +
     panel(6, "STANDARD in wallets, flows by source, daily", "Daily movements into and out of the STANDARD in wallets; the bars sum to the line.", chart("c_flows")) +
-    panel(12, "STANDARD/ETH market depth, daily", "ETH, in USD, the pool pays out to sellers taking STANDARD’s price down two and five percent (before the 3% sell tax), from every open liquidity range at the "
-          "day’s closing price. Ask depth is in the tooltip.", chart("c_depth"), "h_depth") +
-    panel(12, "STANDARD/ETH execution cost by size", "Each order simulated against the pool’s liquidity at the compile block. Cost adds the 1% pool fee and the hook’s tax.",
-          table("t_slip") + '<div class="kv2" id="slip_s"></div>') +
+    panel(12, "What would a STANDARD sale return?", "Position value uses the STANDARD/ETH pool price before the trade. The estimate sells the entire position in one swap across the pool’s active liquidity ranges. ETH proceeds include price impact, the pool fee and the sell tax. ETH is valued at the USD rate recorded in the snapshot. Gas and trades on other venues are excluded.",
+          '''<div class="sell-quote"><label for="sale_size">Position value <span>at pool price</span><select id="sale_size"></select></label>
+          <div aria-live="polite" aria-atomic="true"><span>Estimated sale proceeds</span><strong id="sale_out"></strong><small id="sale_cost"></small></div></div>
+          <p id="sale_basis" class="sale-basis"></p><details><summary>Compare buy and sell costs by size</summary>''' + table("t_slip") + '<p class="sale-basis" id="sale_pool"></p></details>', "h_sale", "p_sale") +
     panel(12, "STANDARD burned by source, daily", "Expansion licenses paid from ledger balances, the burned half of resolution and revocation fees, and buybacks and other token "
           "burns. The line is the cumulative total as a share of the 1 billion hard cap.", chart("c_burn"), "h_burn") +
 '</div>',
@@ -183,7 +183,7 @@ SECTIONS = {
           "revocation fee, paid to the bankers who stay as it streams out evenly over the epoch after the one it was collected in. Out: STANDARD spent on expansion licenses, which is burned, STANDARD withdrawn by closing "
           "branches (before the exit fee), and the balances of revoked charters. STANDARD in banks is ledger value, minted only when withdrawn.",
           chart("c_bank"), "h_bank") +
-    panel(6, "Branches and active charters, daily", "A charter opens with one branch and licenses add up to nine more. Withdrawals and revocations destroy branches.",
+    panel(6, "Branches and active charters, daily", "Branches use the left axis and active charters use the right. Each axis scales to the dates shown. A charter opens with one branch and licenses add up to nine more.",
           chart("c_policy"), "h_policy") +
     panel(6, "Charter auction clearing prices", "Charters are sold in 12-hour periods, in a Dutch auction that opens at three times the last clearing price (three times the floor after a "
           "period with no sale) and halves every two hours toward a 1 ETH floor. One charter a period until 11 Nov 2026, when the owner set the number to zero from "
@@ -350,6 +350,12 @@ a{color:inherit}
 .ph{display:flex;flex-wrap:wrap;align-items:baseline;gap:.25rem 1rem;padding-right:1.5rem;min-height:1.25rem}
 .pt{font-size:.9375rem;font-weight:500;letter-spacing:-.015em;color:var(--white);white-space:nowrap}
 #bill_funding{white-space:normal;margin:.75rem 0;line-height:1.5} #t_actions td:last-child{overflow-wrap:anywhere;white-space:normal} #t_earnings td,#t_issuance td,#t_lpwindow th{white-space:normal}
+.sell-quote{display:flex;gap:1rem 3rem;align-items:flex-start;flex-wrap:wrap;margin:1rem 0}
+.sell-quote label,.sell-quote div>span{display:block;font-size:.82rem;color:var(--fg)}
+.sell-quote label span,.sell-quote small,.sale-basis{color:var(--sec);font-size:.8rem}
+.sell-quote select{display:block;min-width:11rem;margin-top:.45rem;padding:.5rem .75rem;color:var(--white);background:var(--sel);border:1px solid var(--line2);border-radius:.35rem;font:inherit}
+.sell-quote strong,.sell-quote small{display:block}.sell-quote strong{margin:.2rem 0;color:var(--white);font-size:1.55rem;font-weight:500}
+.sale-basis{margin:.6rem 0 1rem}#p_sale summary{cursor:pointer;font-size:.82rem}
 .flow-columns{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:.75rem 2rem}
 #p_resflow h3{margin:1rem 0 0;font-size:.875rem;font-weight:500;color:var(--white)}
 #reserve_change{margin:.65rem 0 .25rem}
@@ -977,13 +983,6 @@ function renderStatic(){
   const shortA = a=>`<a href="https://robin.etherscan.io/address/${encodeURIComponent(a)}" target="_blank" rel="noopener" style="text-decoration:none">${escH(a.slice(0,6))}…${escH(a.slice(-4))}</a>`;
   document.getElementById('t_sellers').innerHTML = '<tr><th>Wallet</th><th class="l">Group</th><th>Net sold</th><th>Sells</th><th>Buys</th></tr>' +
     (DATA.sellers||[]).map(x=>`<tr><td class="addr">${shortA(x.addr)}</td><td class="l">${escH(GN[x.group]||x.group)}</td><td>${fmt.n(x.net,2)}</td><td>${x.sells}</td><td>${x.buys}</td></tr>`).join('');
-  const DP = DATA.depth;
-  if (DP) {
-    const pc = v=>v==null?'–':fmt.pct(v,1);
-    document.getElementById('t_slip').innerHTML = '<tr><th>Size</th><th>Buy impact</th><th>Buy cost</th><th>Sell impact</th><th>Sell cost</th><th>Net sell proceeds</th></tr>' +
-      DP.slip.map(x=>`<tr><td>${fmt.usd(x.usd,0)}</td><td>${pc(x.buyImpact)}</td><td>${pc(x.buyAllIn)}</td><td>${pc(x.sellImpact)}</td><td>${pc(x.sellAllIn)}</td><td>${fmt.usd(x.sellAllIn==null?null:x.usd*(1-x.sellAllIn),2)}</td></tr>`).join('');
-    document.getElementById('slip_s').innerHTML = [['Pool fee and tax', `${fmt.pct(DP.fee,0)} · ${fmt.pct(DP.taxBuy,0)} buy, ${fmt.pct(DP.taxSell,0)} sell`], ['Depth within 5%', `${fmt.usd(DP.bid5)} bid · ${fmt.usd(DP.ask5)} ask`], ['Protocol share of in-range liquidity', fmt.pct(DP.protocolShare,1)]].map(x=>`<div>${x[0]}</div><div>${x[1]}</div>`).join('');
-  }
   // launchpad: the fee Safe's flows to date
   const HP = {USDG:1, WETH:L.ethusd}; pools.forEach(p=>{HP[p]=L.lp[p].price;});
   const held = LPD.held||{}, got = LPD.got||{}, outTo = LPD.outTo||{}, rs = ((DATA.addrs||{}).reserveSafe||'').toLowerCase();
@@ -1044,6 +1043,10 @@ function mk(el, labels, sets, o={}){
   const yf = o.y||(v=>v), scales = {x:{stacked:!!o.stacked, grid:{display:false}, ticks:{maxRotation:0, autoSkipPadding:14}},
     y:{stacked:!!o.stacked, beginAtZero:o.zero!==false, min:o.ymin, max:o.ymax, grid:{color:'rgba(255,255,255,.06)'}, ticks:{callback:yf}}};
   if (o.y1) scales.y1 = {position:'right', grid:{display:false}, beginAtZero:o.y1zero!==false, min:o.y1min, max:o.y1max, ticks:{callback:o.y1}};
+  if(o.countAxes){
+    for(const [axis,color] of [[scales.y,C.violet],[scales.y1,C.teal]])
+      Object.assign(axis.ticks,{color,precision:0,maxTicksLimit:5});
+  }
   const cb = {label:c=>`${c.dataset.label}: ${(c.dataset.fmt||(c.dataset.yAxisID==='y1'?(o.tfy1||o.y1):null)||o.tf||yf)(c.parsed.y)}`};
   if (o.footer) cb.footer = o.footer; if (o.after) cb.afterBody = o.after; if (o.title) cb.title = o.title;
   return new Chart(el, {data:{labels, datasets:sets}, options:{maintainAspectRatio:false, scales,
@@ -1075,8 +1078,13 @@ const resStack = (el, {Rl, ll, dl}, byPool)=>{ const parts = (r,k)=>(r.reservePa
   sets.forEach((s,i)=>{s.fill = i===0?'origin':'-1'; s.backgroundColor = alpha(s.borderColor,.62); s.borderColor = s.borderColor; s.borderWidth = 1; s.stack='res';});
   return mk(el, ll, sets, {stacked:true, y:usd0, tf:v=>fmt.usd(v), footer:i=>{const r=Rl[i[0].dataIndex]; return r.reserveUsd?`total ${fmt.usd(r.reserveUsd)}`:'';}}); };
 reg('overview', (x)=>{ document.getElementById('h_reso').innerHTML = `<em>${fmt.usd(L.reserve.totalUsd)}</em>`; return resStack(c_reso, x, true); });
-reg('overview', ({Rl, ll, dl})=>{ document.getElementById('h_brco').innerHTML = `<em>${fmt.int(L.branches)}</em> branches · ${fmt.int(L.activeCharters)} charters`;
-  return mk(c_brco, ll, [line('Branches', Rl.map(r=>r.branches), C.violet, {fill:true}), line('Active charters', Rl.map(r=>r.activeCharters), C.teal)], {y:n0, tf:fmt.int}); });
+function participationChart(canvas,headline,{Rl,ll}){
+  document.getElementById(headline).innerHTML=`<em>${fmt.int(L.branches)}</em> branches · ${fmt.int(L.activeCharters)} charters`;
+  return mk(canvas,ll,[line('Branches (left)',Rl.map(r=>r.branches),C.violet,{x:{tension:0}}),
+    line('Active charters (right)',Rl.map(r=>r.activeCharters),C.teal,{ax:'y1',x:{tension:0}})],
+    {y:fmt.int,y1:fmt.int,zero:false,y1zero:false,tf:fmt.int, countAxes:true});
+}
+reg('overview', x=>participationChart(c_brco,'h_brco',x));
 
 // revenue
 reg('revenue', ({Rf, lf, df})=>{ const {sw, wl} = win(), r7 = sum(sw.map(inc)), c7 = sum(sw.map(chs));
@@ -1209,9 +1217,6 @@ reg('token', ({Rf, lf, df})=>{ const ofl = (r)=>{const i=Sh.indexOf(r), p=i>0?Sh
     bar('Net buying', of('Mk'), C.blue), bar('Deposited into banks', of('Dep'), C.grey), bar('S-Bill burns', of('Ob'), C.red),
     ...(OF.some(o=>o&&Math.abs(o.Oth)>=0.5)?[bar('Protocol contracts, other', of('Oth'), C.orange)]:[]), line('Change in wallets', of('dF'), C.fg2, {pts:2})],
     {stacked:true, zero:false, y:n0, tf:v=>fmt.sgn(v)+fmt.n(v,2)}); });
-reg('token', ({Rl, ll, dl})=>{ const DP=DATA.depth||{}; document.getElementById('h_depth').innerHTML = `<em>${fmt.usd(DP.bid2)}</em> bid within 2%`;
-  return mk(c_depth, ll, [line('Bid depth within 2%', Rl.map(r=>r.bid2??null), C.gold, {fill:true}), line('Bid depth within 5%', Rl.map(r=>r.bid5??null), C.blue)], {y:usd0, tf:usd1,
-    after:i=>{const r=Rl[i[0].dataIndex]; return r.ask2!=null?[`ask ${fmt.usd(r.ask2,1)} within 2% · ${fmt.usd(r.ask5,1)} within 5%`]:[];}}); });
 reg('token', ({Rf, lf, df})=>{ document.getElementById('h_burn').innerHTML = `<em>${fmt.n(capRemoved,2)}</em> burned · ${fmt.pct(capRemoved/1e9,1)} of the cap`;
   const cum = []; {let c=0; Sp.forEach(r=>{c+=burnAll(r); cum.push(c);});} const cw = last(cum, N);
   return mk(c_burn, lf, [bar('Expansion licenses', Rf.map(r=>r.licBurn||0), C.gold), bar('Resolution and revocation fees, burned half', Rf.map(r=>(r.exitFeeBurn||0)+(r.revokeFeeBurn||0)), C.orange),
@@ -1226,8 +1231,7 @@ reg('banks', ({Rf, lf, df})=>{ document.getElementById('h_bank').innerHTML = `<e
     line('In banks', Rf.map(r=>r.pending), C.fg2, {ax:'y1'})],
     {stacked:true, zero:false, y:n0, y1:v=>fmt.n(v,1), tf:v=>fmt.sgn(v)+fmt.n(v,2), tfy1:v=>fmt.n(v,2),
      footer:i=>{const r=Rf[i[0].dataIndex], k=Sh.indexOf(r), p=k>0?Sh[k-1]:null; return p&&p.pending!=null&&r.pending!=null?`change in banks ${fmt.sgn(r.pending-p.pending)}${fmt.n(r.pending-p.pending,2)}`:'';}}); });
-reg('banks', ({Rl, ll, dl})=>{ document.getElementById('h_policy').innerHTML = `<em>${fmt.int(L.branches)}</em> branches · ${fmt.int(L.activeCharters)} charters`;
-  return mk(c_policy, ll, [line('Branches', Rl.map(r=>r.branches), C.violet, {fill:true}), line('Active charters', Rl.map(r=>r.activeCharters), C.teal)], {y:n0, tf:fmt.int}); });
+reg('banks', x=>participationChart(c_policy,'h_policy',x));
 const CH = DATA.charters, LP = DATA.licensePeriods, CHall = CH, LPall = LP;
 const inRange = (ts)=>!N || ts >= NOWTS - N*86400;   // event charts (epochs, auctions) show the events inside the selected range
 reg('banks', ()=>{ const open = (L.charterRemaining||0)>0, CH = CHall.filter(c=>inRange(c.ts));
@@ -1381,6 +1385,48 @@ window.SRM_INVESTOR = ()=>({schemaVersion:2, sourceRevision:DATA.sourceRevision|
   authority:DATA.authority||null, stewardship:DATA.stewardship||[], treasuryFlows:DATA.treasuryFlows||[], lateReads:DATA.lateReads||[]});
 window.SRM_EXPORT = ()=>({schemaVersion:2, sourceRevision:DATA.sourceRevision||null, compileBlock:DATA.tip, lateReads:DATA.lateReads||[], compiled:COMPILED+' UTC', source:'https://standardrsvmonitor.github.io/', fields:Object.fromEntries(API_FIELDS.map(f=>[f[0], f[1]])),
   rows:Sh.map(r=>Object.fromEntries(API_FIELDS.map(f=>[f[0], r6(f[2](r))]))), epochs:E});
+function renderSaleQuote(depth,schedule,block,ethUsd){
+  const picker=document.getElementById('sale_size'), output=document.getElementById('sale_out'), cost=document.getElementById('sale_cost');
+  document.getElementById('h_sale').textContent='Block '+fmt.int(block);
+  const rows=(depth?.slip||[]).filter(r=>Number.isFinite(r.usd)&&r.usd>0);
+  // Older compiles lack fill flags. A larger full S-Bill sale at this same block proves capacity for a smaller sale.
+  const proven=schedule?.block===block?Math.max(0,...(depth?.billExits||[]).filter(x=>Number.isFinite(x.proceeds)&&x.proceeds>0&&Number.isFinite(x.mark)).map(x=>x.mark)):0;
+  const fill=r=>r.sellFillable??(r.usd<=proven?true:null);
+  const validRate=r=>Number.isFinite(r)&&r>=0&&r<=1;
+  const dollars=v=>v.toLocaleString('en-US',{style:'currency',currency:'USD',maximumFractionDigits:0});
+  picker.replaceChildren(...rows.map(r=>new Option(dollars(r.usd),String(r.usd))));
+  picker.disabled=!rows.length;
+  if(rows.some(r=>r.usd===100000)) picker.value='100000';
+  function update(){
+    const r=rows.find(r=>r.usd===Number(picker.value));
+    const state=r?fill(r):null;
+    if(state!==true || !validRate(r.sellAllIn) || !(ethUsd>0)){
+      output.textContent=state===false?'Exceeds pool liquidity':'Estimate unavailable';
+      cost.textContent=state===false?'The pool cannot fill this entire sale at this block.':'A full sale could not be verified at this block.';
+      return;
+    }
+    const net=r.usd*(1-r.sellAllIn);
+    output.textContent=dollars(net)+' · '+fmt.eth(net/ethUsd,2);
+    cost.textContent=dollars(r.usd-net)+' below the position value ('+fmt.pct(r.sellAllIn,2)+').';
+  }
+  picker.onchange=update;
+  update();
+  document.getElementById('sale_basis').textContent=Number.isFinite(depth?.fee)&&Number.isFinite(depth?.taxSell)?
+    'Includes price impact, '+fmt.pct(depth.fee,1)+' pool fee and '+fmt.pct(depth.taxSell,1)+' sell tax. Excludes gas.':'';
+  const poolNotes=[];
+  if(Number.isFinite(depth?.taxBuy)) poolNotes.push('Buy tax '+fmt.pct(depth.taxBuy,1));
+  if(Number.isFinite(depth?.protocolShare)) poolNotes.push('Protocol share of in-range liquidity '+fmt.pct(depth.protocolShare,1));
+  if(Number.isFinite(depth?.bid5) && Number.isFinite(depth?.ask5))
+    poolNotes.push('Depth to a 5% price move '+fmt.usd(depth.bid5,1)+' sell side / '+fmt.usd(depth.ask5,1)+' buy side');
+  document.getElementById('sale_pool').textContent=poolNotes.join(' · ');
+  const pct=v=>Number.isFinite(v)?fmt.pct(v,2):'—';
+  investorRows('t_slip',['Position value','Buy impact','Buy total cost','Sell impact','Sell total cost'],rows.map(r=>{
+    const rawSell=r.sellFillable!=null || (1-depth.fee)*proven>=r.usd;
+    return [dollars(r.usd),pct(r.buyFillable===true?r.buyImpact:null),pct(r.buyFillable===true?r.buyAllIn:null),
+      pct(rawSell?r.sellImpact:null),pct(fill(r)===true?r.sellAllIn:null)];
+  }));
+}
+renderSaleQuote(DATA.depth,DATA.billSchedule,DATA.tip,L.ethusd);
 function renderAll(){ owedBuf = computeBuffer(); renderKpis(); renderStatic(); renderBridge(); renderSupply(); renderLeaders(); renderLog(); renderFloat(); }
 
 renderAll();

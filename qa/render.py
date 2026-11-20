@@ -26,7 +26,8 @@ function layout(sec){
 function chartInfo(cv){ const ch=Chart.getChart(cv); if(!ch) return null; const op=ch.options, pl=op.plugins||{}, lg=pl.legend||{}, tt=pl.tooltip||{};
   return {labels:ch.data.labels.map(String), h:cv.clientHeight, w:cv.clientWidth, legend:{display:lg.display!==false, position:lg.position, align:lg.align},
     mode:(op.interaction||{}).mode, tmode:tt.mode,
-    sets:ch.data.datasets.map(d=>({label:d.label, type:d.type||ch.config.type, dash:(d.borderDash||[]).length, n:d.data.length,
+    scales:Object.fromEntries(Object.entries(ch.scales).map(([key,s])=>[key,s.position])),
+    sets:ch.data.datasets.map(d=>({label:d.label,axis:d.yAxisID, type:d.type||ch.config.type, dash:(d.borderDash||[]).length, n:d.data.length,
       nonnull:d.data.filter(v=>v!=null && !(typeof v==='number' && !isFinite(v))).length, data:d.data.map(v=>typeof v==='number' && isFinite(v) ? +v.toFixed(6) : null)}))}; }
 async function run(){
   if (document.fonts) { try { await document.fonts.ready; } catch(e){} }

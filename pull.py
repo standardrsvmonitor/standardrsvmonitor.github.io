@@ -537,7 +537,7 @@ def main():
         v = r["values"]; tot = (int(v["toPol"]) + int(v["toVault"]) + int(v["teamAccrued"])) / 1e18
         st = genesis_ts + (i - 1) * epoch_days * 86400; en = st + epoch_days * 86400
         ch_eth = sum(c["eth"] for c in charters if st <= c["ts"] < en)
-        epochs.append({"epoch": i, "start": st, "end": en, "settledAt": int(r["timestamp"]), "netFlow": int(s["values"]["netFlow"]) / 1e18,
+        epochs.append({"epoch": i, "start": st, "end": en, "txHash": r["txHash"], "settledAt": int(r["timestamp"]), "netFlow": int(s["values"]["netFlow"]) / 1e18,
                        "expansion": v["expansion"], "routed": tot, "toVault": int(v["toVault"]) / 1e18, "toPol": int(v["toPol"]) / 1e18,
                        "team": int(v["teamAccrued"]) / 1e18, "charterEth": ch_eth, "multiplierAfter": int(s["values"]["multiplierWad"]) / 1e18})
     # multiplier by epoch index (applies during epoch k): epoch1 = M_START

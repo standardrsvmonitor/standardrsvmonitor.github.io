@@ -220,7 +220,13 @@ def reserve_history(x, lp_pools, closes, eth_day, epochs, dates, today_parts):
         quantities["safe-and-vault-eth"] = eth_units
         prices = {**px, "safe-and-vault-eth": e_px}
         if prior_units is not None and all(prices[s] is not None and prior_prices[s] is not None for s,q in prior_units.items() if q):
-            out[d]["markChange"] = sum(q * (prices[s] - prior_prices[s]) for s,q in prior_units.items() if q)
+            marks = collections.Counter()
+            for key, quantity in prior_units.items():
+                if quantity:
+                    asset = "ETH" if key == "safe-and-vault-eth" else key
+                    marks[asset] += quantity * (prices[key] - prior_prices[key])
+            out[d]["markByAsset"] = dict(marks)
+            out[d]["markChange"] = sum(marks.values())
         out[d]["buybackSpend"] = buybacks[d] * e_px
         prior_units, prior_prices = quantities, prices
     if dates and today_parts is not None:       # today is the reserve read at the compile block, the same figures as the tile

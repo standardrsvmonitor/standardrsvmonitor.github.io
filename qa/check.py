@@ -323,31 +323,73 @@ for w, src in [("1440", DK)] + list(V.get("layouts", {}).items()):
 for r in RES:
     if r["section"] == "rules": r["severity"] = "warn"
 
+# Independently reconcile the displayed flow subtotals and holding-price effects for each range.
+complete = [r for r in D["series"] if r["date"] < D["live"]["date"]]
+for n in (7, 30, 0):
+    closes = complete[-(n+1):] if n else complete
+    if len(closes) < 2:
+        continue
+    opening, *period = closes
+    prices = {r["date"]: r["eth"] for r in period}
+    parts = [r.get("reserveParts") or {} for r in period]
+    if not all(all(isinstance(p.get(k), (int, float)) for k in ("markChange","feeSafeIn","externalOut","buybackSpend"))
+               and isinstance(p.get("markByAsset"), dict) for p in parts):
+        add("recompute", f"reserve attribution coverage for {n or 'all'} days", False, "Missing historical price or flow attribution")
+        continue
+    settlements = sum(e["toVault"] * prices[day] for e in D["epochs"]
+                      if (day := dt.datetime.fromtimestamp(e["settledAt"], dt.timezone.utc).date().isoformat()) in prices)
+    flow = settlements + sum(p["feeSafeIn"] + p["externalOut"] - p["buybackSpend"] for p in parts)
+    mark = sum(p["markChange"] for p in parts)
+    residual = period[-1]["reserveUsd"] - opening["reserveUsd"] - flow - mark
+    panel = DK.get("reserveFlows", {}).get(str(n), {})
+    cash = dict(panel.get("t_cashflows", []))
+    value = dict(panel.get("t_valuation", []))
+    def signed_usd(v):
+        return ("+" if v > 0 else "") + usd(v, 2)
+    add("recompute", f"reserve movements reconcile across {n or 'all'} days",
+        cash.get("Net identified flow") == signed_usd(flow) and value.get("Price changes on prior holdings") == signed_usd(mark) and
+        value.get("Inventory changes still unattributed") == signed_usd(residual))
+    marks = {}
+    for part in parts:
+        for asset, move in part["markByAsset"].items():
+            marks[asset] = marks.get(asset, 0) + move
+    add("recompute", f"reserve price effects reconcile by asset across {n or 'all'} days",
+        all(abs(sum(p["markByAsset"].values())-p["markChange"]) < .01 for p in parts) and
+        all(dict(panel.get("t_marks", [])).get(asset) == signed_usd(move) for asset,move in marks.items() if abs(move) >= .005))
+
 # Match displayed exposure and modeled exits to the native balances and actual pool inputs.
 inv = DK.get("investorData") or {}
 exposure = inv.get("exposureUsd", {})
 add("recompute", "look-through assets reconcile to the reserve", bool(exposure) and
     abs(sum(exposure.values())-D["live"]["reserve"]["totalUsd"])<1)
 schedule = D.get("billSchedule")
-if schedule:
+bill_tables = T.get("token", {}).get("tables", {})
+has_schedule = (isinstance(schedule, dict) and schedule.get("block")==D["tip"]
+                and isinstance(schedule.get("due"), list) and isinstance(schedule.get("principal"), (float, int)))
+add("data", "S-Bill schedule included at the compile block", has_schedule,
+    f"Expected active bill maturities for block {D['tip']}")
+add("render", "five maturity buckets and three exit scenarios visible",
+    len(bill_tables.get("t_maturities", []))==6 and len(bill_tables.get("t_roll", []))==4)
+if has_schedule:
     due = schedule["due"]
-    add("recompute", "bill maturities reconcile to active principal at the same block", schedule["block"]==D["tip"] and
-        abs(sum(amount for _,amount in due)-schedule["principal"])<1e-5)
+    add("recompute", "bill maturities reconcile to active principal at the same block", inv.get("billSchedule")==schedule and
+        all(maturity>0 and amount>=0 for maturity,amount in due) and abs(sum(amount for _,amount in due)-schedule["principal"])<1e-5)
     eligible = sum(amount for maturity,amount in due if maturity <= D["tipTs"]+7*86400)
     exits = inv.get("billExitScenarios", [])
     add("recompute", "exit scenarios use the eligible principal once and respect execution costs", len(exits)==3 and
         all(x["share"]==share and abs(x["principal"]-eligible*share)<1e-5 and
             (x["proceeds"] is None or 0<=x["proceeds"]<=x["mark"]+1e-7) for x,share in zip(exits,(.25,.5,1.))))
-    if "treasuryFlows" in D:
-        flows=inv["treasuryFlows"]
-        worst=max((abs(r["reserveParts"][kind]-sum(a["usd"] for a in flows if a["kind"]==kind and a["date"]==r["date"]))
-                   for r in D["series"] if r.get("reserveParts") for kind in ("feeSafeIn","externalOut")),default=0)
-        add("recompute","daily external transfers reconcile to transaction-linked flows", worst<1e-6)
-    authority=inv.get("authority") or {}
-    add("recompute", "Safe authority is pinned to the compile block", authority.get("block")==D["tip"] and
-        0<authority.get("threshold",0)<=len(set(authority.get("owners",[]))))
-    add("data", "treasury history carries transaction evidence", bool(inv.get("stewardship")) and
-        all(re.fullmatch(r"0x[0-9a-fA-F]{64}",a["tx"]) and 0<a["block"]<=D["tip"] for a in inv["stewardship"]))
+
+if "treasuryFlows" in D:
+    flows=inv["treasuryFlows"]
+    worst=max((abs(r["reserveParts"][kind]-sum(a["usd"] for a in flows if a["kind"]==kind and a["date"]==r["date"]))
+               for r in D["series"] if r.get("reserveParts") for kind in ("feeSafeIn","externalOut")),default=0)
+    add("recompute","daily external transfers reconcile to transaction-linked flows", worst<1e-6)
+authority=inv.get("authority") or {}
+add("recompute", "Safe authority is pinned to the compile block", authority.get("block")==D["tip"] and
+    0<authority.get("threshold",0)<=len(set(authority.get("owners",[]))))
+add("data", "treasury history carries transaction evidence", bool(inv.get("stewardship")) and
+    all(re.fullmatch(r"0x[0-9a-fA-F]{64}",a["tx"]) and 0<a["block"]<=D["tip"] for a in inv["stewardship"]))
 
 # ---------------------------------------------------------------- report
 fails = [r for r in RES if not r["ok"] and r["severity"] == "fail"]; warns = [r for r in RES if not r["ok"] and r["severity"] == "warn"]

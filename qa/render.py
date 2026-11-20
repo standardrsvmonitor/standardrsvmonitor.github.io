@@ -39,12 +39,14 @@ async function run(){
     o.side = txt(document.querySelector('.side-foot')); o.foot = txt(document.querySelector('.foot')); o.status = txt(document.getElementById('status'));
     o.tips = [...document.querySelectorAll('.tip')].map(txt);
     // every chart at every range setting: the labels it shows
-    o.sweep = {};
+    o.sweep = {}; o.reserveFlows = {};
     for (const n of ['7','30','0']) { const b=document.querySelector(`#range button[data-n="${n}"]`); if(!b) continue; b.click(); const r={};
       tabs.forEach(t=>{ show(t); document.querySelectorAll('#t-'+t+' canvas').forEach(cv=>{ const ch=Chart.getChart(cv);
         r[cv.id] = ch ? {tab:t, n:ch.data.labels.length, last:String(ch.data.labels[ch.data.labels.length-1]), sig:ch.data.labels.join('|'),
           headline:txt(cv.closest('.panel').querySelector('.pn')), title:txt(cv.closest('.panel').querySelector('.pt'))} : null; }); });
-      o.sweep[n] = r; }
+      o.sweep[n] = r;
+      o.reserveFlows[n] = Object.fromEntries(['t_cashflows','t_valuation','t_marks'].map(id=>
+        [id,[...document.getElementById(id).tBodies[0].rows].map(row=>[...row.cells].map(txt))])); }
     const b30 = document.querySelector('#range button[data-n="30"]'); if (b30) b30.click();
   }
   tabs.forEach(t=>{ show(t); const sec=document.getElementById('t-'+t), T={layout:layout(sec)};

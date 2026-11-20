@@ -128,22 +128,27 @@ SECTIONS = {
           "router, an aggregator or another executor) are not identifiable from the swap and fall under all other trades, so the launchpad figure is a floor.", chart("c_lroute"), "h_lroute") + '</div>',
 
 "reserve": kpis("reserve") + '<div class="grid">' +
-    panel(6, "Exposure by underlying asset", "Includes both legs of every reserve LP position, Safe balances and policy vaults at their compile marks. Pool capital is already included.", table("t_exposure"), "h_exposure") +
-    panel(6, "What changed reserve value?", "Opening and closing values use complete UTC days. Settlement ETH is valued at the day’s close. Prior holdings are repriced at closing marks. Outside transfers count tracked assets sent in a transaction with no tracked asset received. Other inventory changes include LP rebalancing, trades and unclassified flows. Transfer evidence is available in Investor data.", table("t_navbridge")) +
+    panel(12, "Reserve flows and price changes", "Opening and closing reserve use complete UTC days. Settlements and buybacks use the ETH close on the transaction date. Price effects revalue the prior day’s holdings at the new close. The remainder can include pool rebalancing, trades and unclassified transfers. Uncollected LP fees are excluded from reserve value.", '''<div id="reserve_change"></div>
+      <div id="reserve_drivers"><div class="flow-columns">
+      <div><h3>Money in and out</h3>''' + table("t_cashflows") + '''</div>
+      <div><h3>Price effects and unexplained change</h3>''' + table("t_valuation") + '''</div></div>
+      <details><summary>See dated flows and price changes by asset</summary><div class="flow-columns">
+      <div>''' + table("t_flowlog") + '''</div><div>''' + table("t_marks") + '''</div></div></details></div>''', "h_resflow", "p_resflow") +
     panel(7, "Reserve assets by component, daily", "ETH and USDG in the reserve Safe, ETH in the policy vaults, tokenized equities held outside pools and the Safe’s Uniswap v4 "
           "positions, at each day’s close; WETH in the Safe counts as ETH. Equities held before their pools opened (2 to 13 Oct) are valued at each pool’s first close on "
           "14 Oct. Excludes ETH held by the POL buyback contract and the team wallet, and uncollected position fees. On 10 Nov 2026 the Safe collected its position fees, "
           "closed its BABA positions and received the launchpad fee Safe’s balance, then sent 8,928 BABA and 1,221 SKHY to a deposit address built from the same contract "
           "as the one it paid USDG into for its stock tokens in October, and 52.2 ETH to an outside wallet, which sent 0.42 ETH back.", chart("c_res", "l"), "h_res") +
+    panel(5, "Exposure by underlying asset", "Includes both legs of every reserve LP position, Safe balances and policy vaults at their compile marks. Pool capital is already included.", table("t_exposure"), "h_exposure") +
     panel(5, "Wallet cap / reserve, daily", "Market cap of the STANDARD in wallets divided by reserve assets. The protocol’s own liquidity and the Incentives vault are left out: "
           "tokenholders cannot redeem STANDARD for these assets.", chart("c_pb", "l"), "h_pb") +
-    panel(12, "Treasury control and transactions", "Safe threshold and signers are read at the compile block. History includes tracked Safe transfers, signer and threshold changes, registry assignments and reserve-pool fee exemptions. Token transfers are net per asset and transaction. See the explorer for transaction context.", '<div id="safe_control"></div><details><summary>View transaction history</summary>' + table("t_actions") + '</details>') +
+    panel(7, "Treasury control and transactions", "Safe threshold and signers are read at the compile block. History includes tracked Safe transfers, signer and threshold changes, registry assignments and reserve-pool fee exemptions. Token transfers are net per asset and transaction. See the explorer for transaction context.", '<div id="safe_control"></div><details><summary>View transaction history</summary>' + table("t_actions") + '</details>') +
     panel(12, "Reserve composition, daily change", "Each component today, read at the compile block, against the close one day earlier and the close at the start of the selected range.", table("t_resd")) + '</div>',
 
 "token": kpis("token") + '<div class="grid">' +
     panel(6, "Issuance versus permanent removals", "Complete UTC days. Includes issued and unminted banker claims. Buybacks count only when they permanently retire supply.", table("t_issuance")) +
     panel(6, "S-Bill maturity schedule", "Principal still active at the compile block. Matured positions can remain open. Custody coverage divides the contract’s STANDARD by active principal plus booked base premiums. The budget is shown separately. Bonus claims and future premiums are outside this ratio.", table("t_maturities") + '<div class="pn" id="bill_funding"></div>', "h_bills") +
-    panel(12, "If maturing billholders exit", "Includes matured active principal and the next seven days. Assumes the indicated fraction exits once. Assumes all released principal is sold in one trade against the STANDARD/ETH pool at the compile block. Proceeds include LP fee, sell tax and price impact. Premiums, gas, new liquidity and trades by others are excluded.", table("t_roll")) +
+    panel(12, "If maturing billholders exit", "Includes matured active principal and the next seven days. Assumes the indicated fraction exits once. Assumes all released principal is sold in one trade against the STANDARD/ETH pool at the compile block. Proceeds include LP fee, sell tax and price impact. Premiums, gas, new liquidity and trades by others are excluded.", table("t_roll") + '<div class="pn" id="bill_exit_note"></div>') +
     panel(7, "Price and market capitalization, daily", "Daily close: the protocol STANDARD/ETH pool’s own price after its last trade of the UTC day, at Coinbase’s ETH close; today is live. Market cap is price times circulating supply, every STANDARD minted, as the protocol’s "
           "site and DexScreener show it. Shaded days are contraction epochs.", chart("c_price", "l"), "h_price") +
     panel(5, "Supply reconciliation", "From the genesis mint to circulating supply, the STANDARD in wallets and free float, at one block.", '<div class="bridge" id="bridge"></div>') +
@@ -344,7 +349,19 @@ a{color:inherit}
 .panel{position:relative;min-width:0;padding:1.125rem 1.25rem 1rem;border:1px solid rgb(255 255 255 / 12%);border-radius:.5rem;background:linear-gradient(180deg,rgb(255 255 255 / 5%),rgb(255 255 255 / 1.6%)),#141413}
 .ph{display:flex;flex-wrap:wrap;align-items:baseline;gap:.25rem 1rem;padding-right:1.5rem;min-height:1.25rem}
 .pt{font-size:.9375rem;font-weight:500;letter-spacing:-.015em;color:var(--white);white-space:nowrap}
-#bill_funding{white-space:normal;margin:.75rem 0;line-height:1.5} #t_actions td:last-child{overflow-wrap:anywhere;white-space:normal} #t_earnings td,#t_issuance td,#t_lpwindow th,#t_navbridge td{white-space:normal}
+#bill_funding{white-space:normal;margin:.75rem 0;line-height:1.5} #t_actions td:last-child{overflow-wrap:anywhere;white-space:normal} #t_earnings td,#t_issuance td,#t_lpwindow th{white-space:normal}
+.flow-columns{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:.75rem 2rem}
+#p_resflow h3{margin:1rem 0 0;font-size:.875rem;font-weight:500;color:var(--white)}
+#reserve_change{margin:.65rem 0 .25rem}
+#reserve_change strong{font-size:1.75rem;font-weight:500;color:var(--white);letter-spacing:-.035em}
+#reserve_change p{margin:.45rem 0 0;font-size:.9rem;color:var(--fg)}
+#reserve_change small{display:block;color:var(--sec);font-size:.8125rem;margin-top:.25rem}
+#p_resflow details{margin-top:1rem}
+#p_resflow summary{cursor:pointer;color:var(--sec);font-size:.8125rem}
+#p_resflow td:first-child,#p_resflow th{white-space:normal}
+#p_resflow td:last-child{font-variant-numeric:tabular-nums}
+#t_cashflows tr:last-child td,#t_valuation tr:last-child td{color:var(--white);font-weight:550}
+@media(max-width:720px){.flow-columns{grid-template-columns:1fr;gap:0}}
 .pn{margin-left:auto;color:var(--sec);font-size:.8125rem;white-space:nowrap}
 .pn em{font-style:normal;color:var(--white);font-weight:500}
 .ph>.i{position:absolute;top:1.15rem;right:1rem}
@@ -449,6 +466,7 @@ table.gm td.c{min-width:80px}
 <script>
 const DATA = __DATA__;
 const L = DATA.live, S = DATA.series, E = DATA.epochs, LPD = DATA.launchpad || {};
+const compiledBillPrincipal = L.sbills?.principal;
 const C = {gold:'#deb553', gold2:'#ffdd8a', silver:'#c9cacd', celadon:'#a8c79a', sapphire:'#8fa2f0', red:'#e5484d', rose:'#e7a3aa', bronze:'#d5c4a5', violet:'#d7cce3',
   sand:'#aaa79c', grey:'#77776c', fg:'#e8e3d9', up:'#b5c69b', dn:'#e7a3aa',
   blue:'#8fa2f0', teal:'#a8c79a', green:'#b5c69b', orange:'#d5c4a5', pink:'#e7a3aa', muted:'#aaa79c', fg2:'#e8e3d9'};   // aliases keep older series names on the same palette
@@ -635,7 +653,14 @@ function renderInvestor() {
     }));
   document.getElementById('h_lpwindow').textContent = header;
   const schedule=DATA.billSchedule;
-  if(schedule && schedule.block===DATA.tip) {
+  const blockLabel='Block '+DATA.tip.toLocaleString('en-US');
+  document.getElementById('h_bills').textContent=blockLabel;
+  const exitNote=document.getElementById('bill_exit_note');
+  const maturityTable=document.getElementById('t_maturities'), exitTable=document.getElementById('t_roll');
+  const hasMaturities=schedule?.block===DATA.tip && Array.isArray(schedule.due);
+  maturityTable.hidden=!hasMaturities;
+  exitTable.hidden=!(hasMaturities && DATA.depth?.billExits?.length);
+  if(hasMaturities) {
     const buckets=[0,0,0,0,0];
     for(const [due,qty] of schedule.due){
       const days=(due-DATA.tipTs)/86400;
@@ -647,49 +672,103 @@ function renderInvestor() {
     const exits=DATA.depth?.billExits;
     if(exits?.length) investorRows('t_roll',['Share exiting and selling','Principal sold','Pool mark','Modeled sell proceeds'],
       exits.map(x=>[fmt.pct(x.share,0),fmt.n(x.principal,2),fmt.usd(x.mark,2),x.proceeds==null?'Exceeds pool capacity':fmt.usd(x.proceeds,2)]));
-    else investorRows('t_roll',['Execution model'],[['No matching liquidity snapshot for these maturities']]);
-    document.getElementById('h_bills').textContent='Block '+schedule.block.toLocaleString('en-US');
+    const eligible=buckets[0]+buckets[1];
+    exitNote.textContent=fmt.n(eligible,2)+' STANDARD matured or due within 7 days at block '+DATA.tip.toLocaleString('en-US')+
+      (exits?.length?'.':'. This snapshot omits the pool execution estimates.');
     const custody=DATA.live.balances.sbills?.STANDARD;
     const obligations=schedule.principal+schedule.premium;
     document.getElementById('bill_funding').textContent='Booked premium '+fmt.n(schedule.premium,2)+' · Budget '+fmt.n(schedule.budget,2)+' · Custody '+fmt.n(custody,2)+' STANDARD · '+fmt.x(custody!=null&&obligations?custody/obligations:null,3)+' principal and booked premium';
   } else {
-    for(const id of ['t_maturities','t_roll']) investorRows(id,['Coverage'],[['Bill-level data unavailable at this compile block']]);
+    const reason=schedule && schedule.block!==DATA.tip?'The recorded maturity dates belong to another block.':'This snapshot omits individual maturity dates.';
+    document.getElementById('bill_funding').textContent=(Number.isFinite(compiledBillPrincipal)?
+      'Reported active principal '+fmt.n(compiledBillPrincipal,2)+' STANDARD. ':'')+reason;
+    exitNote.textContent='The seven-day sale estimate needs principal by maturity at block '+DATA.tip.toLocaleString('en-US')+'.';
   }
-  const opening=start || sw[0];
-  const bridgeDays=start ? sw : sw.slice(1);
-  const bridgeSum = fn=>sum(bridgeDays.map(fn));
-  if(end && opening?.reserveUsd!=null && end.reserveUsd!=null) {
-    const dollars = r=>sum(E.filter(e=>fmt.dt(e.settledAt)===r.date).map(e=>e.toVault))*ethOf(r);
-    const routed = bridgeSum(dollars), change=end.reserveUsd-opening.reserveUsd;
-    const detailed=bridgeDays.every(r=>r.reserveParts?.markChange!=null && r.reserveParts?.buybackSpend!=null);
-    const mark=detailed?bridgeSum(r=>r.reserveParts.markChange):0, spent=detailed?bridgeSum(r=>r.reserveParts.buybackSpend):0;
-    const hasFlows=bridgeDays.every(r=>r.reserveParts?.feeSafeIn!=null && r.reserveParts?.externalOut!=null);
-    const receipts=hasFlows?bridgeSum(r=>r.reserveParts.feeSafeIn):0, external=hasFlows?bridgeSum(r=>r.reserveParts.externalOut):0;
-    const legs=[['Settlements routed to reserve vaults',routed]];
-    if(detailed) legs.push(['Contraction buybacks',-spent],['Prior inventory repriced at closing marks',mark]);
-    if(hasFlows) legs.push(['Transfers from the launchpad fee Safe',receipts],['One-way transfers to outside addresses',external]);
-    legs.push([detailed?'Other inventory changes and flows':'Other flows and changes in asset prices',change-sum(legs.map(row=>row[1]))]);
-    const rows=[['Opening reserve · '+opening.date,fmt.usd(opening.reserveUsd,2)],
-      ...legs.map(([label,value])=>[label,fmt.usd(value,2)]),['Closing reserve · '+end.date,fmt.usd(end.reserveUsd,2)]];
-    if(opening.float>0 && end.float>0) {
-      rows.push(['Reserve change per opening wallet token',fmt.usd(change/opening.float,5)],
-        ['Supply effect per wallet token',fmt.usd(end.reserveUsd*(1/end.float-1/opening.float),5)]);
+  renderReserveFlows(start || sw[0], end, start ? sw : sw.slice(1));
+}
+
+function explorerLink(type,id,label){
+  const link=document.createElement('a');
+  link.textContent=label;
+  if((type==='tx' && /^0x[0-9a-f]{64}$/i.test(id)) || (type==='address' && /^0x[0-9a-f]{40}$/i.test(id)))
+    link.href='https://robin.etherscan.io/'+type+'/'+id;
+  return link;
+}
+
+function renderReserveFlows(opening,end,days){
+  const summary=document.getElementById('reserve_change');
+  const details=document.getElementById('reserve_drivers');
+  const header=document.getElementById('h_resflow');
+  summary.replaceChildren();
+  details.hidden=true;
+  header.textContent='';
+  if(!days.length || !Number.isFinite(opening?.reserveUsd) || !Number.isFinite(end?.reserveUsd)){
+    summary.textContent='Two reserve closes are needed to measure this period.';
+    return;
+  }
+  const change=end.reserveUsd-opening.reserveUsd;
+  const signed=v=>(v>0?'+':'')+fmt.usd(v,2);
+  const piece=key=>days.every(r=>Number.isFinite(r.reserveParts?.[key])) ? sum(days.map(r=>r.reserveParts[key])) : null;
+  const shown=v=>v==null?'Unmeasured':signed(v);
+  const fees=piece('feeSafeIn'), external=piece('externalOut'), spent=piece('buybackSpend'), mark=piece('markChange');
+  let routed=0;
+  const log=[];
+  for(const r of days){
+    const settlements=E.filter(e=>fmt.dt(e.settledAt)===r.date && e.toVault>0);
+    for(const e of settlements){
+      const usd=e.toVault*ethOf(r);
+      routed+=usd;
+      log.push([r.date,'Epoch '+e.epoch+' settlement',fmt.eth(e.toVault,2),signed(usd),e.txHash]);
     }
-    investorRows('t_navbridge',['Reserve change','USD'],rows);
-    const stops=[opening.reserveUsd];
-    for(const [,delta] of legs) stops.push(stops.at(-1)+delta);
-    const max=Math.max(...stops), min=Math.min(...stops), span=max-min;
-    const body=document.getElementById('t_navbridge').tBodies[0];
-    if(span>0) legs.forEach(([,delta],i)=>{
-      const track=document.createElement('span');track.className='share-track';
-      track.setAttribute('aria-hidden','true');
-      const fill=track.appendChild(document.createElement('span'));
-      fill.style.marginLeft=100*(Math.min(stops[i],stops[i+1])-min)/span+'%';
-      fill.style.width=100*Math.abs(delta)/span+'%';
-      fill.style.background=delta<0?C.rose:C.celadon;
-      body.rows[i+1].cells[0].append(track);
-    });
-  } else investorRows('t_navbridge',['Reserve change'],[['Opening close unavailable for this range']]);
+    if(r.reserveParts?.buybackSpend>0){
+      const usd=r.reserveParts.buybackSpend;
+      log.push([r.date,'Contraction buybacks',fmt.eth(usd/ethOf(r),2),signed(-usd)]);
+    }
+  }
+  for(const tx of DATA.treasuryFlows||[]){
+    if(tx.date>opening.date && tx.date<=end.date)
+      log.push([tx.date,tx.kind==='feeSafeIn'?'Launchpad fee transfer':'External transfer',fmt.n(Math.abs(tx.units),2)+' '+tx.asset,signed(tx.usd),tx.tx]);
+  }
+  const fullFlows=[fees,external,spent].every(Number.isFinite);
+  const flow=routed+(fees??0)+(external??0)-(spent??0);
+  const total=summary.appendChild(document.createElement('strong'));
+  total.textContent=signed(change)+(opening.reserveUsd>0?' ('+fmt.pct(change/opening.reserveUsd,1)+')':'');
+  const balance=summary.appendChild(document.createElement('small'));
+  balance.textContent=fmt.usd(opening.reserveUsd,2)+' at '+dm(opening.date)+' close → '+fmt.usd(end.reserveUsd,2)+' at '+dm(end.date)+' close';
+  if(fullFlows && mark!=null){
+    const verdict=summary.appendChild(document.createElement('p'));
+    const describe=(v,up,down)=>v===0?'had no net effect':(v>0?up:down)+' '+fmt.usd(Math.abs(v),1);
+    const priceEffect=mark===0?'Asset prices had no net effect.':
+      'Asset prices '+(mark<0?'reduced':'increased')+' reserve value by '+fmt.usd(Math.abs(mark),1)+'.';
+    verdict.textContent='Identified flows '+describe(flow,'added','removed')+'. '+priceEffect;
+  }
+  header.textContent=dm(days[0].date)+' – '+dm(end.date)+' UTC';
+  details.hidden=false;
+  investorRows('t_cashflows',['Source or use','USD'],[
+    ['Epoch settlements received',signed(routed)],['Launchpad fees transferred in',shown(fees)],
+    ['Contraction buybacks',shown(spent==null?null:-spent)],['One-way transfers out',shown(external)],
+    [fullFlows?'Net identified flow':'Subtotal of measured flows',signed(flow)]]);
+  const residual=change-flow-(mark??0);
+  const values=[['Price changes on prior holdings',shown(mark)],
+    [fullFlows && mark!=null?'Inventory changes still unattributed':'Change still unexplained by available records',signed(residual)]];
+  if(fullFlows && mark!=null) values.push(['Total change outside identified flows',signed(change-flow)]);
+  investorRows('t_valuation',['Source of change','USD'],values);
+  log.sort((a,b)=>b[0].localeCompare(a[0]));
+  investorRows('t_flowlog',['UTC date','Recorded flow','Amount','USD'],log.length?log.map(([date,label,amount,value])=>[dm(date),label,amount,value]):[['—','No identified flows in this period','—','—']]);
+  log.forEach((entry,i)=>{
+    if(entry[4]){
+      const cell=document.getElementById('t_flowlog').tBodies[0].rows[i].cells[1];
+      cell.replaceChildren(explorerLink('tx',entry[4],entry[1]));
+    }
+  });
+  const marks=new Map();
+  const covered=days.every(r=>r.reserveParts?.markByAsset!=null);
+  if(covered) for(const r of days) for(const [asset,v] of Object.entries(r.reserveParts.markByAsset))
+    marks.set(asset,(marks.get(asset)||0)+v);
+  const breakdown=[...marks].sort((a,b)=>Math.abs(b[1])-Math.abs(a[1])).filter(([,v])=>Math.abs(v)>=.005);
+  investorRows('t_marks',['Price effect by asset','USD'],breakdown.length?breakdown.map(([asset,v])=>[asset,signed(v)]):
+    [[covered?'No measurable price change':'Asset-level marks missing from this snapshot','—']]);
+
 }
 
 function renderKpis(){ derive();
@@ -870,11 +949,7 @@ const R = L.reserve, ctx = L.poolCtx, ydS = yd || '1d';
 const pvm = (r,p)=>r['spVolMine_'+p]!=null ? r['spVolMine_'+p] : (r['spVol_'+p]||0);
 function renderStatic(){
   const auth=DATA.authority, safeEl=document.getElementById('safe_control');
-  const explorerLink = (type, id, label) => {
-    const link=document.createElement('a'); link.textContent=label;
-    if(/^0x[0-9a-f]+$/i.test(id)) link.href='https://robin.etherscan.io/'+type+'/'+id;
-    return link;
-  };
+
   if(auth && auth.block===DATA.tip){
     safeEl.replaceChildren(document.createTextNode('Reserve Safe · '+auth.threshold+' of '+auth.owners.length+' signers · '));
     auth.owners.forEach((address,i)=>{if(i) safeEl.append(' · '); safeEl.append(explorerLink('address',address,address.slice(0,8)+'…'+address.slice(-4)));});

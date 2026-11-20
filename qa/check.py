@@ -22,6 +22,15 @@ RES = []                                       # [section, name, ok, detail, sev
 def add(sec, name, ok, detail="", sev="fail"): RES.append({"section": sec, "check": name, "ok": bool(ok), "detail": detail, "severity": sev})
 
 # ---------------------------------------------------------------- render
+add("render", "investor navigation and default range", DK.get("defaultRange")==7 and [tab["text"] for tab in DK.get("nav",[])]==["Overview","Treasury","Revenue","Token","Banks","Data"])
+live_tests = DK.get("investor", {})
+required_faults = ("missing pending claims", "malformed multiplier", "HTTP error", "invalid page",
+                   "repeated cursor", "stale bills", "midnight", "settlement")
+required_live_checks = {f"{fault} restores the compiled view" for fault in required_faults}
+required_live_checks.add("successful replay updates state and recycled claims")
+add("render", "live replay regression scenarios executed", required_live_checks.issubset(live_tests))
+for name, passed in live_tests.items(): add("render", name, passed)
+
 add("render", "page renders without script errors", not DK.get("errors") and not DK.get("fatal"), "; ".join(map(str, DK.get("errors") or []))[:600])
 for w, r in V.get("layouts", {}).items(): add("render", f"page renders at {w}px without script errors", not r.get("errors") and not r.get("fatal"), "; ".join(map(str, r.get("errors") or []))[:400])
 for t, X in T.items():
@@ -60,10 +69,10 @@ try:
        gm("Market cap, in wallets")[1])
     eq("reserve assets", kv("overview", "Reserve assets"), kv("reserve", "Reserve assets"), gm("Reserve assets")[1], em("overview", "Reserve assets by component, daily"),
        em("reserve", "Reserve assets by component, daily"), row("reserve", "t_resd", "Total")[1])
-    eq("price to backing", kv("reserve", "Price to backing"), gm("Price to backing")[1], em("reserve", "Price to backing, daily"),
-       rx(r"([\d.]+×) P/B", (kpi("overview", "Reserve assets") or [""] * 3)[2]))
-    eq("backing per token", kv("reserve", "Backing per token"), gm("Backing per STANDARD in wallets")[1], rx(r"backing (\$[\d.]+)", head("reserve", "Price to backing, daily")))
-    # the page opens on 30D, and tiles, headlines, tables and the growth monitor all take the window from the range
+    eq("price to backing", kv("reserve", "Wallet cap / reserve"), gm("Wallet cap / reserve")[1], em("reserve", "Wallet cap / reserve, daily"),
+       rx(r"([\d.]+×) wallet cap / reserve", (kpi("overview", "Reserve assets") or [""] * 3)[2]))
+    eq("backing per token", kv("reserve", "Reserve per wallet token"), gm("Backing per STANDARD in wallets")[1], rx(r"backing (\$[\d.]+)", head("reserve", "Wallet cap / reserve, daily")))
+    # the comparison snapshot uses 30D, and tiles, headlines, tables and the growth monitor all take the window from the range
     eq("revenue, 30d", kv("overview", "Revenue, 30d"), kv("revenue", "Revenue, 30d"), em("revenue", "Revenue by stream, daily"), em("overview", "Revenue by stream, daily"),
        gm("Revenue")[1], em("revenue", "Revenue by destination, trailing 30 days"))
     eq("STANDARD trading fees, 30d", kv("revenue", "STANDARD trading fees, 30d"), gm("STANDARD trading fees")[1])
@@ -113,7 +122,7 @@ except Exception as e:
     add("consistency", "consistency checks ran", False, f"{type(e).__name__}: {e}")
 
 # ---------------------------------------------------------------- recompute from dash.json
-L = D["live"]; S = [r for r in D["series"] if r["date"] < L["date"]]; s7 = S[-30:]   # the page's default window is 30 days
+L = D["live"]; S = [r for r in D["series"] if r["date"] < L["date"]]; s7 = S[-30:]   # the cross-tab QA snapshot uses 30 days
 try:   # the supply chart: issued less burned equals the change in circulating supply plus what is owed to bankers, every day
     buf_ = 0.0; prev_ = None; worst_ = 0.0
     for r in D["series"]:
@@ -221,10 +230,22 @@ if A.live:
         old = {r["date"]: r for r in P_["series"]}; cut = (dt.date.fromisoformat(L["date"]) - dt.timedelta(3)).isoformat()
         ep0 = dt.datetime.fromtimestamp(min(L.get("epochStart", 9e9), P_["live"].get("epochStart", 9e9)), dt.timezone.utc).date().isoformat()   # days in the live epoch move until it settles
         moved, waived, reclass = [], [], []
+        expected_days = {day for day in old if day <= cut}
+        genesis = dt.datetime.fromtimestamp(P_["genesisTs"], dt.timezone.utc).date()
+        end = min(dt.date.fromisoformat(cut), dt.date.fromisoformat(P_["live"]["date"]))
+        calendar = {(genesis+dt.timedelta(days=n)).isoformat() for n in range((end-genesis).days+1)}
+        if not calendar or expected_days != calendar or len(old)!=len(P_["series"]) or not all(
+                type(old[d].get(field)) in (int,float) for d in calendar for field in ("supply","price","float","reserveUsd")):
+            raise ValueError("Missing or incompatible published history")
+        missing_days = expected_days - {r["date"] for r in D["series"]}
+        moved.extend(f"{d} missing observation" for d in sorted(missing_days))
         for r in D["series"]:
             d = r["date"]
             if d > cut or d not in old: continue
             a, b = flat(old[d]), flat(r)
+            for k in a.keys() - b.keys():
+                why = accepted(k, d, acc)
+                (waived if why else moved).append(f"{d} {k} lost numeric observation")
             for k in set(a) & set(b):
                 if k in ("tradingFeeEth", "routedEth", "routedLive") and d >= ep0: continue
                 t = tol_for(k)
@@ -244,7 +265,7 @@ if A.live:
         if reclass: add("drift", "counterparty mix reclassified on older days (as the classifier learns; not blocking)", False, "; ".join(reclass[:15]), "warn")
         if waived: add("drift", "moves allowed by qa/accept.json", True, "; ".join(waived[:15]) + (f" … {len(waived)} in all" if len(waived) > 15 else ""), "warn")
     except Exception as e:
-        add("drift", "published page readable for the drift check", False, f"{type(e).__name__}: {e}", "warn")
+        add("drift", "published page readable for the drift check", False, f"{type(e).__name__}: {e}")
 
 # ---------------------------------------------------------------- rules (the house style)
 BANNED = ["income", "recurring revenue", "revolutionary", "game-changing", "game changing", "notably", "comprehensive", "robust", "landscape", "delve", "banking", "scorecard", "thesis progress",
@@ -257,7 +278,7 @@ for cid, c in (sw.get("0") or {}).items():
     a7, a30 = (sw.get("7") or {}).get(cid), (sw.get("30") or {}).get(cid)
     follows = not (c["n"] > 8 and a7 and a7["sig"] == c["sig"])
     add("rules", f"chart follows the range selector: {c['title']}", follows, f"7D {a7 and a7['n']} · 30D {a30 and a30['n']} · All {c['n']} points")
-    add("rules", f"range keeps the latest point: {c['title']}", not a7 or a7["last"] == c["last"], f"7D ends {a7 and a7['last']}, All ends {c['last']}")
+    add("rules", f"range keeps the latest point: {c['title']}", not a7 or a7["last"] == c["last"] or (cid == "c_charter" and not a7["n"] and "No sales in range" in (a7.get("headline") or "")), f"7D ends {a7 and a7['last']}, All ends {c['last']}")
 for t, X in T.items():
     for cid, c in (X.get("charts") or {}).items():
         if not c: continue
@@ -301,6 +322,32 @@ for w, src in [("1440", DK)] + list(V.get("layouts", {}).items()):
 # scheduled agent fixes warnings, so a clipped label never keeps yesterday's data up
 for r in RES:
     if r["section"] == "rules": r["severity"] = "warn"
+
+# Match displayed exposure and modeled exits to the native balances and actual pool inputs.
+inv = DK.get("investorData") or {}
+exposure = inv.get("exposureUsd", {})
+add("recompute", "look-through assets reconcile to the reserve", bool(exposure) and
+    abs(sum(exposure.values())-D["live"]["reserve"]["totalUsd"])<1)
+schedule = D.get("billSchedule")
+if schedule:
+    due = schedule["due"]
+    add("recompute", "bill maturities reconcile to active principal at the same block", schedule["block"]==D["tip"] and
+        abs(sum(amount for _,amount in due)-schedule["principal"])<1e-5)
+    eligible = sum(amount for maturity,amount in due if maturity <= D["tipTs"]+7*86400)
+    exits = inv.get("billExitScenarios", [])
+    add("recompute", "exit scenarios use the eligible principal once and respect execution costs", len(exits)==3 and
+        all(x["share"]==share and abs(x["principal"]-eligible*share)<1e-5 and
+            (x["proceeds"] is None or 0<=x["proceeds"]<=x["mark"]+1e-7) for x,share in zip(exits,(.25,.5,1.))))
+    if "treasuryFlows" in D:
+        flows=inv["treasuryFlows"]
+        worst=max((abs(r["reserveParts"][kind]-sum(a["usd"] for a in flows if a["kind"]==kind and a["date"]==r["date"]))
+                   for r in D["series"] if r.get("reserveParts") for kind in ("feeSafeIn","externalOut")),default=0)
+        add("recompute","daily external transfers reconcile to transaction-linked flows", worst<1e-6)
+    authority=inv.get("authority") or {}
+    add("recompute", "Safe authority is pinned to the compile block", authority.get("block")==D["tip"] and
+        0<authority.get("threshold",0)<=len(set(authority.get("owners",[]))))
+    add("data", "treasury history carries transaction evidence", bool(inv.get("stewardship")) and
+        all(re.fullmatch(r"0x[0-9a-fA-F]{64}",a["tx"]) and 0<a["block"]<=D["tip"] for a in inv["stewardship"]))
 
 # ---------------------------------------------------------------- report
 fails = [r for r in RES if not r["ok"] and r["severity"] == "fail"]; warns = [r for r in RES if not r["ok"] and r["severity"] == "warn"]

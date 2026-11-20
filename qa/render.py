@@ -31,9 +31,10 @@ function chartInfo(cv){ const ch=Chart.getChart(cv); if(!ch) return null; const 
 async function run(){
   if (document.fonts) { try { await document.fonts.ready; } catch(e){} }
   const mobile = /[?&]m=1/.test(location.search);
-  const tabs = [...document.querySelectorAll('#tabs button[data-t]')].map(b=>b.dataset.t);
+  const tabs = [...document.querySelectorAll('section.tab')].map(s=>s.id.slice(2));
   const o = {errors:window.__err, width:window.innerWidth, chartjs:typeof Chart!=='undefined', tabs:{}};
   if (!mobile) {
+    o.defaultRange = N;
     o.title = document.title; o.nav = [...document.querySelectorAll('#tabs button[data-t]')].map(b=>({t:b.dataset.t, text:txt(b), marks:b.querySelectorAll('i,svg,img').length}));
     o.side = txt(document.querySelector('.side-foot')); o.foot = txt(document.querySelector('.foot')); o.status = txt(document.getElementById('status'));
     o.tips = [...document.querySelectorAll('.tip')].map(txt);
@@ -42,7 +43,7 @@ async function run(){
     for (const n of ['7','30','0']) { const b=document.querySelector(`#range button[data-n="${n}"]`); if(!b) continue; b.click(); const r={};
       tabs.forEach(t=>{ show(t); document.querySelectorAll('#t-'+t+' canvas').forEach(cv=>{ const ch=Chart.getChart(cv);
         r[cv.id] = ch ? {tab:t, n:ch.data.labels.length, last:String(ch.data.labels[ch.data.labels.length-1]), sig:ch.data.labels.join('|'),
-          title:txt(cv.closest('.panel').querySelector('.pt'))} : null; }); });
+          headline:txt(cv.closest('.panel').querySelector('.pn')), title:txt(cv.closest('.panel').querySelector('.pt'))} : null; }); });
       o.sweep[n] = r; }
     const b30 = document.querySelector('#range button[data-n="30"]'); if (b30) b30.click();
   }
@@ -58,7 +59,8 @@ async function run(){
       T.hero = txt(sec.querySelector('.hero')); T.text = sec.innerText;
     }
     o.tabs[t]=T; });
-  if (!mobile && window.SRM_EXPORT) o.export = SRM_EXPORT();
+  if (!mobile && window.SRM_EXPORT) { o.export = SRM_EXPORT(); o.investorData = SRM_INVESTOR(); }
+  if (!mobile && window.checkInvestorDashboard) o.investor = await checkInvestorDashboard();
   const pre=document.createElement('pre'); pre.id='vfy'; pre.style.display='none'; pre.textContent=JSON.stringify(o); document.body.appendChild(pre);
 }
 window.addEventListener('load', ()=>setTimeout(()=>run().catch(e=>{ window.__err.push('qa: '+e); const pre=document.createElement('pre'); pre.id='vfy'; pre.textContent=JSON.stringify({errors:window.__err, fatal:String(e)}); document.body.appendChild(pre); }), 1500));
@@ -98,10 +100,12 @@ def write_api(api, d):
     if not ex or not ex.get("rows"): print("no export from the page; open data files not written"); return
     os.makedirs(api, exist_ok=True)
     json.dump(ex, open(os.path.join(api, "daily.json"), "w"), separators=(",", ":"))
+    with open(os.path.join(api, "investor.json"), "w") as investor_file:
+        json.dump(d["investorData"], investor_file, separators=(",", ":"))
     keys = list(ex["fields"])
     esc = lambda v: "" if v is None else (('"' + str(v).replace('"', '""') + '"') if re.search(r'[",\n]', str(v)) else str(v))
     open(os.path.join(api, "daily.csv"), "w").write("\n".join([",".join(keys)] + [",".join(esc(r.get(k)) for k in keys) for r in ex["rows"]]) + "\n")
-    summ = {"compiled": ex["compiled"], "source": ex["source"], "tabs": {t: {"tiles": [{"label": k[0], "value": k[1], "detail": k[2]} for k in X.get("kpis", [])],
+    summ = {"schemaVersion": ex["schemaVersion"], "sourceRevision": ex["sourceRevision"], "compileBlock": ex["compileBlock"], "compiled": ex["compiled"], "source": ex["source"], "tabs": {t: {"tiles": [{"label": k[0], "value": k[1], "detail": k[2]} for k in X.get("kpis", [])],
             "panels": {p["title"]: X.get("heads", {}).get(p["title"]) for p in X.get("panels", [])}} for t, X in d.get("tabs", {}).items()}}
     json.dump(summ, open(os.path.join(api, "summary.json"), "w"), indent=1, ensure_ascii=False)
     print("open data:", len(ex["rows"]), "days,", len(keys), "fields ->", api)
@@ -113,6 +117,9 @@ def main():
     src, out = av[0], av[1]; live = len(av) > 2 and av[2] == "live"
     s = open(src).read().replace("<head>", "<head>" + CAP, 1)
     if not live: s = s.replace("goLive(); setInterval(goLive, 300000);", "")
+    if not live:
+        with open(os.path.join(os.path.dirname(__file__), "live.js")) as live_tests_src:
+            s=s.replace("</body>", "<script>"+live_tests_src.read()+"</script></body>")
     s = s.replace("</body>", QA + "</body>")
     tmp = tempfile.mkdtemp(prefix="srqa-")
     open(os.path.join(tmp, "page.html"), "w").write(s)

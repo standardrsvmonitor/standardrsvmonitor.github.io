@@ -1,14 +1,13 @@
 # Standard Reserve Monitor
 
-An independent on-chain monitor of the Standard Reserve protocol on Robinhood Chain: reserve assets and backing, revenue by stream, the
-liquidity business in the reserve's own pools, the launchpad, STANDARD supply, burns and holder flows, banks,
-branches, the Auction House and S-Bills. Live at https://standardrsvmonitor.github.io/.
+An independent on-chain monitor of Standard Reserve on Robinhood Chain. [Open the dashboard](https://standardrsvmonitor.github.io/).
+
+Overview opens on seven complete UTC days. Treasury groups underlying asset exposure, reserve changes, Safe transactions and pool performance. Revenue retains launchpad history alongside fees and noncash license cancellations. Token covers issuance, supply, S-Bill maturities and modeled sale proceeds. Banks covers participation and auctions. Data provides the daily ledger and downloads.
 
 ## Sources and method
 
-Figures are rebuilt from Robinhood Chain logs and balances (public RPC) and the Standard Reserve indexer and markets API, with STANDARD's price from
-its own pool on chain (daily closes) and DexScreener (live), ETH from Coinbase, and GeckoTerminal as a cross-check. Every panel's ⓘ note gives its method. Between compiles the page
-replays the blocks after the compile in the browser, so tiles, the current day and the top bankers describe the latest block.
+Figures are rebuilt from Robinhood Chain logs and balances (public RPC) and the Standard Reserve indexer, with STANDARD's price from
+its own pool on chain (daily closes) and DexScreener (live), ETH from Coinbase, and GeckoTerminal as a cross-check. Every panel's ⓘ note gives its method. Between compiles, market and banker readings update after the browser verifies their inputs. Treasury, liquidity, bill maturities and accrued fees carry compile-block marks. A failed refresh, UTC rollover or new epoch returns the page to the compiled snapshot until the next complete build.
 
 ## Publication and checks
 
@@ -25,10 +24,10 @@ A failing check keeps the previous page up and opens an issue labelled `qa-gate`
 ## Open data
 
 Published with every compile: `api/daily.csv` and `api/daily.json` (every daily observation, with field definitions), `api/summary.json`
-(every tile and panel headline), `api/recon.json` and `api/qa.json`. They are written from the rendered page, so every figure matches it. Field names follow the page's vocabulary (circulating supply and market cap as the protocol defines them, revenue as what the protocol keeps).
+(every tile and panel headline), `api/investor.json` (asset exposure, bill maturities, execution scenarios and Safe history), `api/recon.json` and `api/qa.json`. They are written from the rendered page, so every figure matches it. Field names follow the page's vocabulary (circulating supply and market cap as the protocol defines them, revenue as what the protocol keeps).
 
 ## Code
 
-`pull.py` and `extra.py` collect into `data/dash.json` (incremental caches in `data/cache/`), `build.py` renders `index.html`,
+`pull.py`, `extra.py` and `stewardship.py` collect into `data/dash.json` (incremental caches in `data/cache/`), `build.py` renders `index.html`,
 `qa/render.py` renders it in headless Chrome and writes the open data, `qa/check.py` is the gate, `qa/watch_sr.py` watches the protocol's
 site for new contracts. Standard library Python only. Working rules for contributors and the scheduled agent: `CLAUDE.md`; backlog: `ROADMAP.md`.

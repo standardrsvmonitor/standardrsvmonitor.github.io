@@ -1,10 +1,11 @@
 #!/usr/bin/env python3
 """Standard Reserve daily tracker: pull everything, keep caches, emit data/dash.json.
 Run daily. First run backfills from genesis (several minutes); later runs are incremental."""
-import json, urllib.request, time, datetime as dt, os, sys, math, bisect, collections
+import json, urllib.request, urllib.parse, time, datetime as dt, os, sys, math, bisect, collections, fcntl
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from k import keccak
 import extra
+import stewardship
 
 D = os.path.join(os.path.dirname(os.path.abspath(__file__)), "data")
 C = os.path.join(D, "cache"); os.makedirs(C, exist_ok=True)
@@ -35,10 +36,7 @@ def sel(sig): return "0x" + keccak(sig.encode()).hex()[:8]
 def pad(a): return "0x" + a[2:].lower().rjust(64, "0")
 def u(x): return hex(x)[2:].rjust(64, "0")
 def s128(h): x = int(h, 16); return x - (1 << 256) if x >= (1 << 255) else x
-def jload(p, default):
-    try: return json.load(open(p))
-    except Exception: return default
-def jsave(p, o): json.dump(o, open(p, "w"))
+jload, jsave = extra.read_json, extra.write_json
 def log(*a): print(dt.datetime.utcnow().strftime("%H:%M:%S"), *a, flush=True)
 
 def rpc(m, p, tries=6, timeout=120):
@@ -55,16 +53,25 @@ def rpcb(calls, tries=6):   # batched JSON-RPC, results in call order
         try:
             r = urllib.request.Request(RPC, json.dumps([{"jsonrpc": "2.0", "id": k, "method": m, "params": p} for k, (m, p) in enumerate(calls)]).encode(),
                                        {"Content-Type": "application/json", "User-Agent": "Mozilla/5.0"})
-            res = json.load(urllib.request.urlopen(r, timeout=120)); return [x.get("result") for x in sorted(res, key=lambda x: x["id"])]
+            res = json.load(urllib.request.urlopen(r, timeout=120))
+            if not isinstance(res, list) or len(res) != len(calls): raise ValueError("Incomplete RPC response")
+            ordered = sorted(res, key=lambda obj: obj["id"])
+            if [obj["id"] for obj in ordered] != list(range(len(calls))): raise ValueError("Invalid RPC batch IDs")
+            return [obj.get("result") for obj in ordered]
         except Exception as e:
             err = e; time.sleep(2 + 2 * i)
     raise RuntimeError(f"rpc batch failed: {err}")
 def ecall(to, data, block="latest"):
     r = rpc("eth_call", [{"to": to, "data": data}, block]); return r.get("result")
 def round_d(d): return {k: round(v, 4) for k, v in d.items()}
+LATE_READS = []
 def ecall_late(to, data, block):   # a read late in a long run: the RPC keeps state ~10 minutes, so fall back to the newest block, and say so
     r = ecall(to, data, block)
-    if r is None: log("state at", int(block, 16), "is gone; read", to[:10], data[:10], "at latest"); r = ecall(to, data)
+    if r is None:
+        new_block = rpc("eth_blockNumber", [])["result"]
+        r = ecall(to, data, new_block)
+        if not r or r == "0x": raise RuntimeError("State unavailable at fallback block")
+        LATE_READS.append({"address": to, "selector": data[:10], "requestedBlock": int(block,16), "readBlock": int(new_block,16)})
     return r
 def get(url, tries=4, backoff=3):
     for i in range(tries):
@@ -91,7 +98,7 @@ def getlogs(q, lo, hi, step=400000):   # step halves when a range fails; it grow
     return out
 
 # ---------- block timestamps (anchor cache, interpolation) ----------
-ANCH = jload(os.path.join(C, "blocks.json"), {})
+ANCH = {}
 def block_ts(b):
     k = str(b)
     if k in ANCH: return ANCH[k]
@@ -146,6 +153,105 @@ def day_anchors(t0, tip):   # the first block of every UTC day and the block bef
     jsave(os.path.join(C, "midnights.json"), seen); jsave(os.path.join(C, "blocks.json"), ANCH)
     return seen
 
+def bill_batch(address, start, stop, block, evm_number):
+    """Use Multicall3 aggregate((address,bytes)[]) so each batch costs a single RPC call."""
+    calls = []
+    for bill_id in range(start, stop):
+        calldata = sel("bills(uint256)")[2:] + u(bill_id)
+        calls.append(pad(address)[2:] + u(64) + u(36) + calldata.ljust(128, "0"))
+    offset = 32 * len(calls)
+    offsets = []
+    for call in calls:
+        offsets.append(u(offset))
+        offset += len(call) // 2
+    payload = sel("aggregate((address,bytes)[])") + u(32) + u(len(calls)) + "".join(offsets + calls)
+    raw = ecall(extra.MC3, payload, block)
+    if not raw or raw == "0x": raise RuntimeError("S-Bill multicall unavailable")
+    result = bytes.fromhex(raw[2:])
+    word = lambda i: int.from_bytes(result[i:i+32], "big")
+    pos = word(32)
+    if word(0) != evm_number or pos != 64 or word(pos) != len(calls):
+        raise ValueError("S-Bill multicall returned an incomplete or mismatched block")
+    base = pos + 32
+    rows = []
+    for i in range(len(calls)):
+        offset = base + word(base + i*32)
+        if word(offset) != 256 or offset + 288 > len(result): raise ValueError("Incomplete S-Bill record")
+        rows.append("0x" + result[offset+32:offset+288].hex())
+    return rows
+
+
+def bill_schedule(block):
+    """Read the S-Bill contract's active bills at one block, in native units."""
+    address = H["sbills"]
+    def read(signature):
+        return int(ecall(address, sel(signature), block), 16)
+    principal = read("totalPrincipal()")
+    last_id = read("nextBillId()")
+    budget = read("budget()")
+    due = collections.Counter()
+    premiums = 0
+    # ArbOS exposes the L1 block number inside the EVM. eth_call itself is pinned to the L2 block.
+    header = rpc("eth_getBlockByNumber", [block, False])["result"]
+    evm_number = int(header.get("l1BlockNumber", header["number"]), 16)
+    for start in range(0, last_id + 1, 100):
+        for record in bill_batch(address, start, min(start + 100, last_id + 1), block, evm_number):
+            _, _, active, amount, premium, _, maturity, _ = [int(w, 16) for w in extra.words(record)]
+            if active:
+                due[maturity] += amount
+                premiums += premium
+    if sum(due.values()) != principal: raise RuntimeError("Active bills do not reconcile to total principal")
+    return {"block": int(block, 16), "principal": principal / 1e18, "premium": premiums / 1e18,
+            "budget": budget / 1e18, "due": [[ts, amt / 1e18] for ts, amt in sorted(due.items())]}
+
+def select_cache(tip, block_hash):
+    """Keep a forked cache intact and start a clean generation after a confirmed reorganization."""
+    global C, ANCH, _KEYS
+    root = os.path.join(D, "cache")
+    pointer = os.path.join(root, "active_generation.json")
+    generation = jload(pointer, None)
+    C = os.path.join(root, generation) if generation else root
+    checkpoint = jload(os.path.join(C, "chain_checkpoint.json"), None)
+    if checkpoint:
+        if checkpoint["block"] > tip: raise RuntimeError("RPC head is behind the cached checkpoint")
+        previous = rpc("eth_getBlockByNumber", [hex(checkpoint["block"]), False]).get("result")
+        if not previous: raise RuntimeError("Cannot verify cached block")
+        if previous["hash"] != checkpoint["hash"]:
+            generation = "chain-" + block_hash[2:]
+            C = os.path.join(root, generation)
+            os.makedirs(C, exist_ok=True)
+            jsave(pointer, generation)
+            log("canonical block hash changed, rebuilding in", generation)
+    ANCH = jload(os.path.join(C, "blocks.json"), {})
+    _KEYS = []
+    jsave(os.path.join(C, "chain_checkpoint.json"), {"block": tip, "hash": block_hash})
+
+
+def attach_treasury_flows(out):
+    actions = out["stewardship"]
+    for action in actions:
+        action["date"] = day(T(action["block"]))
+        if action["kind"] == "Registry assignment" and action["detail"].startswith("0x"):
+            role, separator, target = action["detail"].partition(" → ")
+            raw = bytes.fromhex(role[2:]).rstrip(b"\0")
+            if separator and raw.isascii() and raw.replace(b"_",b"").isalnum():
+                action["detail"] = raw.decode()+separator+target
+    hashes = sorted({a["tx"] for a in actions if a["kind"].startswith("Safe ")})
+    cache_path = os.path.join(C, "treasury_receipts.json")
+    cached = jload(cache_path, {})
+    missing = [tx for tx in hashes if tx not in cached]
+    for i in range(0,len(missing),12):
+        batch = missing[i:i+12]
+        receipts = rpcb([("eth_getTransactionReceipt",[tx]) for tx in batch])
+        if len(receipts)!=len(batch) or any(not r or r["transactionHash"]!=tx for tx,r in zip(batch,receipts)):
+            raise ValueError("Incomplete treasury receipts")
+        cached.update(zip(batch,receipts))
+    jsave(cache_path,cached)
+    closes = {pid:pool["close"] for pid,pool in jload(os.path.join(C,"pool_close2.json"),{}).items()}
+    out["treasuryFlows"] = stewardship.reserve_flows(out, jload(os.path.join(C,"reserve_pools.json"),{}), closes,
+        [cached[tx] for tx in hashes], lambda b:day(T(b)), POSM, PM, USDG, WETH)
+
+
 def main():
     t_start = time.time()
     tip = int(rpc("eth_blockNumber", [])["result"], 16); now = int(time.time()); today = day(now)
@@ -177,33 +283,49 @@ def main():
     # (balances read at "latest" after a minutes-long log scan picked up transfers the scan never saw, and the supply
     #  history, rebuilt backwards from these balances, carried the gap: 4,600 STANDARD on 26 Oct 2026)
     tip = int(rpc("eth_blockNumber", [])["result"], 16); out["tip"] = tip; BT = hex(tip)
+    header = rpc("eth_getBlockByNumber", [BT, False])["result"]
+    select_cache(tip, header["hash"])
     toks = {"STANDARD": (STD, 18), "USDG": (USDG, 6), "WETH": (WETH, 18)}   # WETH: the reserve Safe holds 7.1 from the launchpad fee Safe (10 Nov 2026)
     bal = {}
     for n, a in H.items():
         row = {"ETH": int(rpc("eth_getBalance", [a, BT])["result"], 16) / 1e18}
         for t, (ta, dec) in toks.items():
-            r = ecall(ta, "0x70a08231" + pad(a)[2:], BT); v = int(r, 16) / 10 ** dec if r and r != "0x" else 0
+            r = ecall(ta, "0x70a08231" + pad(a)[2:], BT); v = int(r, 16) / 10 ** dec
             if v: row[t] = v
         bal[n] = row
     fee_safe_eth = int(rpc("eth_getBalance", [extra.LPAD["feeSafe"], BT])["result"], 16) / 1e18   # the launchpad fee Safe's launch fees, read with the other balances
     bal["poolManager"] = {"STANDARD": int(ecall(STD, "0x70a08231" + pad(PM)[2:], BT), 16) / 1e18}
     total_supply = int(ecall(STD, "0x18160ddd", BT), 16) / 1e18
+    out["authority"] = stewardship.authority(BT, H["reserveSafe"], ecall, sel)
+    standard_slot = ecall(SV, sel("getSlot0(bytes32)") + STD_POOL[2:], BT)
+    standard_sqrt_price = int(standard_slot[2:66], 16) / 2**96
+    out["billSchedule"] = bill_schedule(BT)
     # S-Bill history: the full endpoint now stalls for minutes, so fetch the last seven days and merge into the cached points
     sb_old = jload(os.path.join(C, "sbills.json"), {})
     sb = get(IX + f"sbills/history?chainId={CHAIN}&range={'7d' if sb_old.get('points') else '30d'}", tries=2)
-    if "current" not in sb: sb = dict(sb_old)
+    sb_time = int((sb.get("asOf") or {}).get("blockTimestamp", 0))
+    if not {"rate", "principal", "locked"} <= (sb.get("current") or {}).keys() or abs(now - sb_time) > 1800:
+        raise RuntimeError("S-Bill current balances missing or older than 30 minutes")
     key = lambda q: (q.get("t"), q.get("txHash"), q.get("kind"), q.get("amount"))
     pts = {key(q): q for q in (sb_old.get("points") or [])}; pts.update({key(q): q for q in (sb.get("points") or [])})
     sb["points"] = sorted(pts.values(), key=lambda q: (q.get("t") or 0)); sb.setdefault("deploymentBlock", sb_old.get("deploymentBlock"))
     lic = get(IX + f"auctions/license/periods?chainId={CHAIN}")
     act = {}
     for k in ["epoch-settled", "epoch-routed", "licenses-purchased", "withdrawn", "deposited", "charter-created", "revoked", "branches-opened", "checked-in"]:
-        ev = []; cur = None
+        ev = []; cur = None; cursors = set(); seen_ids = set()
         while True:
-            d = get(IX + f"activity?chainId={CHAIN}&since=0&limit=100&kind={k}" + (f"&cursor={cur}" if cur else ""))
-            if "events" not in d: log("activity ERR", k, d); break
-            ev += d["events"]; cur = d["page"].get("nextCursor")
-            if not cur or not d["events"]: break
+            d = get(IX + f"activity?chainId={CHAIN}&since=0&limit=100&kind={k}" + (f"&cursor={urllib.parse.quote(str(cur), safe='')}" if cur else ""))
+            if not isinstance(d.get("events"), list) or "nextCursor" not in d.get("page", {}):
+                raise ValueError(f"Incomplete activity page for {k}")
+            for event in d["events"]:
+                key = (event["txHash"], event["logIndex"])
+                if key in seen_ids: raise ValueError(f"Duplicate event in {k} pagination")
+                seen_ids.add(key)
+                ev.append(event)
+            cur = d["page"]["nextCursor"]
+            if not cur: break
+            if not d["events"] or cur in cursors: raise ValueError(f"Interrupted activity pagination for {k}")
+            cursors.add(cur)
         act[k] = [e for e in ev if int(e.get("blockNumber") or 0) <= tip]; log("indexer activity", k, len(ev))
     jsave(os.path.join(C, "activity.json"), act); jsave(os.path.join(C, "home.json"), home)
     jsave(os.path.join(C, "sbills.json"), sb); jsave(os.path.join(C, "license_periods.json"), lic)
@@ -316,7 +438,7 @@ def main():
     for n, a in H.items():
         for t, (ta, dec) in toks.items():
             if t in ("STANDARD", "USDG"): continue
-            r = ecall(ta, "0x70a08231" + pad(a)[2:], BT); v = int(r, 16) / 10 ** dec if r and r != "0x" else 0
+            r = ecall(ta, "0x70a08231" + pad(a)[2:], BT); v = int(r, 16) / 10 ** dec
             if v > 1e-6: bal[n][t] = v
     log("pools", {k: round(v["valueUSD"]) for k, v in lp.items()})
 
@@ -366,7 +488,7 @@ def main():
 
     # ---------- prices ----------
     ds = get("https://api.dexscreener.com/tokens/v1/robinhood/" + STD)
-    dstd = ds[0] if isinstance(ds, list) and ds else {}
+    dstd = next(pair for pair in ds if pair["pairAddress"].lower() == STD_POOL and float(pair["priceUsd"]) > 0)
     eth = get("https://api.coinbase.com/v2/prices/ETH-USD/spot"); ethusd = float(eth["data"]["amount"])
     ohl = jload(os.path.join(C, "ohlcv.json"), None)
     if ohl is None: ohl = jload(os.path.join(os.path.dirname(D), "..", "industry", "std_ohlcv_daily.json"), [])
@@ -670,7 +792,7 @@ def main():
     sb_drift = int(sbc.get("driftPerSecond", 0)) / 1e18 if sbc.get("drifting") else 0.0   # the term rate drifts up between deposits; the indexer reports it as of the last update
     sb_rate = int(sbc.get("rate", 0)) / 1e18 + sb_drift * max(0, now - int(sbc.get("rateUpdatedAt") or now))
     sb_rate = min(int(sbc.get("ceiling", 0)) / 1e18 or 1.0, sb_rate)
-    sbills = {"rate": sb_rate, "locked": int(sbc.get("locked", 0)) / 1e18, "principal": int(sbc.get("principal", 0)) / 1e18,
+    sbills = {"asOf": sb["asOf"], "rate": sb_rate, "locked": int(sbc.get("locked", 0)) / 1e18, "principal": int(sbc.get("principal", 0)) / 1e18,
               "floor": int(sb.get("start", {}).get("floor", 0)) / 1e18, "ceiling": int(sb.get("start", {}).get("ceiling", 0)) / 1e18,
               "points": [{"t": p.get("t"), "rate": int(p.get("after", 0)) / 1e18, "locked": int(p.get("locked", 0)) / 1e18, "kind": p.get("kind")}
                          for p in (sb.get("points") or sb.get("history") or sb.get("series") or []) if p.get("t")]}
@@ -757,7 +879,7 @@ def main():
               absolute=True, note=", ".join(o_[:10] for o_ in off_[:8]))
     log("leaderboard", len(bankers), "bankers; ENS names in top 25:", sum(1 for l in leaders if l["ens"]))
     # ---------- reserve history, pool flows by holder group, STANDARD/ETH depth (extra.py) ----------
-    x = extra.Ctx(cache=C, H={k: v for k, v in H.items()}, G=G, tip=tip, tip_ts=block_ts(tip), genesis_ts=genesis_ts, getlogs=getlogs, rpcb=rpcb, T=T,
+    x = extra.Ctx(cache=C, late_reads=LATE_READS, H={k: v for k, v in H.items()}, G=G, tip=tip, tip_ts=block_ts(tip), genesis_ts=genesis_ts, getlogs=getlogs, rpcb=rpcb, T=T,
                   PM=PM, SW=SW, ML=ML, TR=TR, pad=pad, STD=STD, USDG=USDG, POSM=POSM, SEED_BLOCK=SEED_BLOCK, bal=bal,
                   pos_ids=[q["id"] for q in pos], lp_liq_now=sum(q["liq"] for q in pos), log=log, rpc=rpc, sel=sel, B=ts_block, SV=SV,
                   INIT="0x" + keccak(b"Initialize(bytes32,address,address,uint24,int24,address,uint160,int24)").hex())
@@ -815,6 +937,7 @@ def main():
     today_parts = {"total": reserve["totalUsd"], "eth": (reserve["safeEth"] + reserve["safeWeth"] + reserve["contractionEth"] + reserve["expansionEth"]) * ethusd, "usdg": reserve["safeUsdg"],
                    "stocks": reserve["safeStockUsd"], "lp": {s_: v_["valueUSD"] for s_, v_ in lp.items()}}
     res_hist, res_chk = extra.reserve_history(x, lp_pools, closes, eth_day, epochs, dl, today_parts)
+    out["stewardship"] = stewardship.changes(x, jload(os.path.join(C, "v4_keys.json"), {}), lp_pools)
     log("reserve history", len(res_hist), "days; forward-from-zero checks (0 = ties):", res_chk)
     for k_, v_ in res_chk.items():
         if k_.startswith(("eth_", "tok_")):
@@ -855,8 +978,8 @@ def main():
     names = dict(wl); names[PM.lower()] = "pool"; names.update({H["feeSplitter"].lower(): "feeSplitter", H["taxHook"].lower(): "taxHook", H["expansionVault"].lower(): "expansion"})
     grp, sellers, grp_stats = extra.flows_by_group(x, pf, names, bankers, sbh, H["teamWallet"].lower(), genesis_ts, dl)
     log("pool flows", len(pf["rows"]), "rows;", grp_stats, "| bankers", len(bankers), "S-Bill holders", len(sbh))
-    fee_lp = 0.01; s0 = ecall_late(SV, sel("getSlot0(bytes32)") + STD_POOL[2:], BT); sp_now = int(s0[2:66], 16) / 2 ** 96
-    depth = extra.std_depth(x, STD_POOL, sp_now, ethusd, closes, eth_day, dl, fee_lp, int(snap["tax"]["buyTaxNowBps"]) / 1e4, int(snap["tax"]["sellTaxNowBps"]) / 1e4, H["polManager"].lower())
+    fee_lp = 0.01; sp_now = standard_sqrt_price
+    depth = extra.std_depth(x, STD_POOL, sp_now, ethusd, closes, eth_day, dl, fee_lp, int(snap["tax"]["buyTaxNowBps"]) / 1e4, int(snap["tax"]["sellTaxNowBps"]) / 1e4, H["polManager"].lower(), out["billSchedule"])
     log("depth", {k_: (round(v_) if isinstance(v_, float) else v_) for k_, v_ in depth.items() if k_ in ("bid2", "ask2", "bid5", "ask5", "protocolShare", "positions", "posStd")})
     # protocol liquidity is the PoolManager's STANDARD balance (the protocol's own definition); the STANDARD/ETH pool's positions hold most of it,
     # and the rest sits in other STANDARD pools and fees not yet collected (12 Nov 2026 audit: 76,974 at one block, 0.21%)
@@ -957,18 +1080,11 @@ def main():
               "every swap's volume at the reserve's share of liquidity at the swap's final tick (the counterparty pass)", 0.05, gate=False, unit="USD")
     reconcile("exempt_served", "Fee-exempt volume served, last 7 days, from the swap replay", e7_, a_ if a_ else None,
               "zero-fee swaps summed in the counterparty pass at each swap's final-tick share", 0.05, gate=False, unit="USD")
-    # the launchpad markets API's own fee total, a cross-check (the API allows only standardreserve.xyz in the browser)
-    MK = "https://markets.standardreserve.xyz/v1/"
-    kp_ = get(MK + "pilot/pool?limit=1", tries=2)
     lp_px = {s_: v_["price"] for s_, v_ in lp.items()}; lp_px.update({"USDG": 1.0, "WETH": ethusd})
     out["launchpad"] = {"feeSafe": extra.LPAD["feeSafe"], "held": lpad_held, "heldUsd": sum(a_ * (lp_px.get(s_) or 0) for s_, a_ in lpad_held.items()),
                         "feeSafeEth": fee_safe_eth,   # launch fees, 0.0005 ETH a launch
-                        "indexerFeesUsd": kp_.get("feesUsd"), "indexerAsOf": kp_.get("asOfTime"), "got": lpad_got, "outTo": lpad_out, "top": lt_top,
+                        "got": lpad_got, "outTo": lpad_out, "top": lt_top,
                         "ethToReserve": ru_chk["outsideIn"].get(extra.LPAD["feeSafe"], 0.0)}   # launch fees the Safe sent to the reserve Safe in ETH
-    log("launchpad: fee Safe", {k_: round(v_, 3) for k_, v_ in lpad_held.items()}, "| received, all days", round(sum(v_.get("lpadSafe", 0) for v_ in lpad.values())),
-        "| indexer", kp_.get("feesUsd"))
-    reconcile("launchpad_fees", "Launchpad fees received by the fee Safe, at daily closes", sum(v_.get("lpadSafe", 0) for v_ in lpad.values()), kp_.get("feesUsd"),
-       "launchpad markets API, fees at trade time", 0.03, gate=False, unit="USD")
     chk_ = [(row["date"], s_, round(row.get("poolVolChain_" + s_) or 0), round(row.get("spVol_" + s_) or 0)) for row in series[-3:-1] for s_ in lp_pools]
     for row in series[-3:-1]:
         a_ = sum(row.get("poolVolChain_" + s_) or 0 for s_ in lp_pools); b_ = sum(row.get("spVol_" + s_) or 0 for s_ in lp_pools)
@@ -982,6 +1098,8 @@ def main():
     jsave(os.path.join(D, "history.json"), hist)
     # addresses and the compile block, so the page can replay the blocks after it (balances, transfers, indexer events) in the browser
     out["addrs"] = {**{k: v.lower() for k, v in H.items()}, "STANDARD": STD.lower(), "poolManager": PM.lower(), "charterAuction": CA, "zero": ZERO}
+    out["lateReads"] = LATE_READS
+    out["sourceRevision"] = os.environ.get("GITHUB_SHA")
     out["tipTs"] = block_ts(tip); out["genesisTs"] = genesis_ts; out["foundingCharters"] = founding
     out.update({"live": live, "epochs": epochs, "charters": charters, "licensePeriods": lic_periods, "series": series, "history": hist,
                 "swapsBySender": {}, "elapsed": round(time.time() - t_start)})
@@ -992,8 +1110,13 @@ def main():
         cls = "zero-fee" if fee == 0 else snd
         bys[cls][0] += usdg; bys[cls][1] += usdg * fee / 1e6; bys[cls][2] += 1
     out["swapsBySender"] = {k: {"vol": v[0], "fee": v[1], "n": v[2]} for k, v in sorted(bys.items(), key=lambda x: -x[1][0])[:8]}
+    attach_treasury_flows(out)
+    if rpc("eth_getBlockByNumber", [BT, False])["result"]["hash"] != header["hash"]:
+        raise RuntimeError("Compile block changed during collection")
     jsave(os.path.join(D, "dash.json"), out)
     log("done in", out["elapsed"], "s; days", len(series))
 
 if __name__ == "__main__":
-    main()
+    with open(os.path.join(D, ".pull.lock"), "a") as lock:
+        fcntl.flock(lock, fcntl.LOCK_EX)
+        main()

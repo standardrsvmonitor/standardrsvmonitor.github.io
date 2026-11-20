@@ -43,17 +43,17 @@ jobs:
         env:
           T: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
         run: if [ -z "$T" ]; then echo "CLAUDE_CODE_OAUTH_TOKEN is not set; nothing to do"; echo "ok=0" >> "$GITHUB_OUTPUT"; else echo "ok=1" >> "$GITHUB_OUTPUT"; fi
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         if: steps.auth.outputs.ok == '1'
         with:
           fetch-depth: 0
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
         if: steps.auth.outputs.ok == '1'
         with:
           python-version: "3.12"
       - name: Restore incremental caches (read only; the agent's runs never write the shared cache)
         if: steps.auth.outputs.ok == '1'
-        uses: actions/cache/restore@v4
+        uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
         with:
           path: data/cache
           key: sr2-cache-evolve-${{ github.run_id }}
@@ -100,7 +100,7 @@ jobs:
           print("why=" + ("chosen by hand" if force in ("opus", "sonnet") else "; ".join(why) if model == "opus" else "the next item is marked Sonnet: no new figures"))
           PY
           cat "$GITHUB_OUTPUT" | tail -2
-      - uses: anthropics/claude-code-action@v1
+      - uses: anthropics/claude-code-action@c84e279f859e2591391e95bd309286eb111c345f # v1
         id: claude
         if: steps.auth.outputs.ok == '1'
         with:

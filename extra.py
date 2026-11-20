@@ -31,14 +31,29 @@ def day(ts): return dt.datetime.fromtimestamp(ts, dt.timezone.utc).strftime("%Y-
 def day_end(d): return int(dt.datetime.strptime(d, "%Y-%m-%d").replace(tzinfo=dt.timezone.utc).timestamp()) + 86400
 
 
+import tempfile
+
+def read_json(p, default):
+    try:
+        with open(p) as src: return json.load(src)
+    except FileNotFoundError: return default
+def write_json(p, o):
+    with tempfile.NamedTemporaryFile(mode="w", dir=os.path.dirname(p), delete=False) as tmp:
+        try:
+            json.dump(o, tmp, allow_nan=False)
+            tmp.flush()
+            os.replace(tmp.name, p)
+        finally:
+            if os.path.exists(tmp.name): os.unlink(tmp.name)
+
 class Ctx:
     """What pull.py hands over: RPC helpers, block-time interpolation, the compile block and the address book."""
     def __init__(self, **kw): self.__dict__.update(kw)
     def jl(self, name, default):
         p = os.path.join(self.cache, name)
-        try: return json.load(open(p))
-        except Exception: return default
-    def js(self, name, o): json.dump(o, open(os.path.join(self.cache, name), "w"))
+        return read_json(p, default)
+    def js(self, name, o):
+        write_json(os.path.join(self.cache, name), o)
 
 
 # ---------- LP fees of the protocol's own positions in the STANDARD/ETH pool, swap by swap ----------
@@ -131,9 +146,13 @@ def reserve_history(x, lp_pools, closes, eth_day, epochs, dates, today_parts):
             m = next((i for i, v in enumerate(fs_to_safe) if abs(v - e["toVault"]) < 1e-6), None)
             if m is None: ev.append((e["settledAt"], "expansion", e["toVault"]))
             else: fs_to_safe.pop(m)
+    buybacks = collections.Counter()
     x.log("reserve: vault logs")
     for l in x.getlogs({"address": H["contractionVault"], "topics": [CV_BUY]}, G, tip, 4000000):
-        ev.append((x.T(int(l["blockNumber"], 16)), "contraction", -int(words(l["data"])[0], 16) / 1e18))
+        ts = x.T(int(l["blockNumber"], 16))
+        spent = int(words(l["data"])[0], 16) / 1e18
+        buybacks[day(ts)] += spent
+        ev.append((ts, "contraction", -spent))
     for l in x.getlogs({"address": H["expansionVault"], "topics": [EV_FWD]}, G, tip, 4000000):
         ev.append((x.T(int(l["blockNumber"], 16)), "expansion", -int(l["data"], 16) / 1e18))
     now_eth = {"safe": x.bal["reserveSafe"]["ETH"], "contraction": x.bal["contractionVault"]["ETH"], "expansion": x.bal["expansionVault"]["ETH"]}
@@ -169,6 +188,7 @@ def reserve_history(x, lp_pools, closes, eth_day, epochs, dates, today_parts):
     checks["lp_liquidity"] = round(sum(dl for *_, dl in mods) / max(1, x.lp_liq_now) - 1, 9)   # summed liquidity against the positions' liquidity now
     x.log("reserve: valuing", len(dates), "days"); # value by day
     out = {}
+    prior_units = prior_prices = None
     for d in dates:
         t_end = day_end(d)
         eth_units = sum(now_eth.values()) - sum(v for ts, _, v in ev if ts >= t_end)
@@ -179,7 +199,7 @@ def reserve_history(x, lp_pools, closes, eth_day, epochs, dates, today_parts):
             if c is None: px[s] = None; continue
             sp = c / 2 ** 96; P = sp * sp
             px[s] = (1e12 / P if P else 0) if p["usdg0"] else P * 1e18 / 1e6
-        lp_usd = 0.0; lp_by = collections.Counter()
+        lp_usd = 0.0; lp_by = collections.Counter(); pooled_units = collections.Counter()
         rng = collections.defaultdict(int)
         for ts, pid, tl, tu, dl in mods:
             if ts < t_end: rng[(pid, tl, tu)] += dl
@@ -188,6 +208,7 @@ def reserve_history(x, lp_pools, closes, eth_day, epochs, dates, today_parts):
             if L <= 0 or c is None: continue
             a0, a1 = lp_amounts(L, tl, tu, c / 2 ** 96)
             usdg, stock = (a0 / 1e6, a1 / 1e18) if p["usdg0"] else (a1 / 1e6, a0 / 1e18)
+            pooled_units[s] += stock
             v = stock * (px[s] or 0) + usdg; lp_usd += v; lp_by[s] += v
         stock_usd = sum(tok_units[s] * (px.get(s) or 0) for s in toks if s not in ("USDG", "WETH"))
         e_px = eth_day.get(d)
@@ -195,6 +216,13 @@ def reserve_history(x, lp_pools, closes, eth_day, epochs, dates, today_parts):
         eth_units += tok_units["WETH"]
         out[d] = {"total": eth_units * e_px + tok_units["USDG"] + stock_usd + lp_usd, "eth": eth_units * e_px, "usdg": tok_units["USDG"], "stocks": stock_usd,
                   "lp": {s: lp_by.get(s, 0.0) for s in lp_pools}}
+        quantities = {s: pooled_units[s] + (0 if p["isEth"] else tok_units[s]) for s,p in lp_pools.items()}
+        quantities["safe-and-vault-eth"] = eth_units
+        prices = {**px, "safe-and-vault-eth": e_px}
+        if prior_units is not None and all(prices[s] is not None and prior_prices[s] is not None for s,q in prior_units.items() if q):
+            out[d]["markChange"] = sum(q * (prices[s] - prior_prices[s]) for s,q in prior_units.items() if q)
+        out[d]["buybackSpend"] = buybacks[d] * e_px
+        prior_units, prior_prices = quantities, prices
     if dates and today_parts is not None:       # today is the reserve read at the compile block, the same figures as the tile
         if dates[-1] in out: checks["today_rebuilt_vs_read"] = round(out[dates[-1]]["total"] / today_parts["total"] - 1, 6)
         out[dates[-1]] = today_parts
@@ -546,7 +574,23 @@ def depth_usd(rng, sp, pct, ethusd):
     return bid / 1e18 * ethusd, ask / 1e18 * ethusd
 
 
-def std_depth(x, pid, sp_now, ethusd, closes, eth_day, dates, fee, tax_buy, tax_sell, protocol_lp):
+def bill_exits(schedule, as_of, rng, sp, ethusd, fee, tax):
+    quantity = sum(amount for maturity, amount in schedule["due"] if maturity <= as_of + 7 * 86400)
+    # Token1 capacity until the last initialized tick, net of the input fee.
+    capacity = sum(liquidity * max(0, hi - max(sp, lo)) for lo, hi, liquidity in rng)
+    rows = []
+    for share in (0.25, 0.5, 1.0):
+        principal = share * quantity
+        effective = principal * 1e18 * (1 - fee)
+        proceeds = None
+        if effective <= capacity:
+            eth, _ = swap(rng, sp, effective, False)
+            proceeds = eth / 1e18 * ethusd * (1 - tax)
+        rows.append({"share": share, "principal": principal, "mark": principal / sp**2 * ethusd, "proceeds": proceeds})
+    return rows
+
+
+def std_depth(x, pid, sp_now, ethusd, closes, eth_day, dates, fee, tax_buy, tax_sell, protocol_lp, schedule=None):
     mods = std_positions(x, pid)
     rng = ranges_at(mods, x.tip_ts + 1)
     mid = 1 / (sp_now * sp_now)                                    # ETH per STANDARD
@@ -575,7 +619,8 @@ def std_depth(x, pid, sp_now, ethusd, closes, eth_day, dates, fee, tax_buy, tax_
         if c is None or e is None: continue
         rg = ranges_at(mods, day_end(d)); bd, ak = depth_usd(rg, c / 2 ** 96, 0.02, e); b5_, a5_ = depth_usd(rg, c / 2 ** 96, 0.05, e)
         hist[d] = {"bid2": bd, "ask2": ak, "bid5": b5_, "ask5": a5_}
-    return {"bid2": b2, "ask2": a2, "bid5": b5, "ask5": a5, "slip": slip, "fee": fee, "taxBuy": tax_buy, "taxSell": tax_sell,
+    return {"billExits": bill_exits(schedule, x.tip_ts, rng, sp_now, ethusd, fee, tax_sell) if schedule else [],
+            "bid2": b2, "ask2": a2, "bid5": b5, "ask5": a5, "slip": slip, "fee": fee, "taxBuy": tax_buy, "taxSell": tax_sell,
             "protocolShare": prot_in / in_range if in_range else None, "positions": sum(1 for _ in rng), "posStd": pos_std, "hist": hist}
 
 
@@ -652,17 +697,24 @@ def _liq_many(x, pids, block):
         head = "".join(f"{n * 32 + i * 192:064x}" for i in range(n))
         body = "".join(x.pad(x.SV)[2:] + f"{1:064x}" + f"{96:064x}" + f"{36:064x}" + (sel + p_[2:]).ljust(128, "0") for p_ in part)
         data = "0x82ad56cb" + f"{32:064x}" + f"{n:064x}" + head + body
+        read_block = block
         for t in range(6):
-            r = x.rpc("eth_call", [{"to": MC3, "data": data}, hex(block)])
+            r = x.rpc("eth_call", [{"to": MC3, "data": data}, hex(read_block)])
             if "result" in r: break
+            if "historical state" in str(r.get("error")) and read_block == block:
+                read_block = int(x.rpc("eth_blockNumber", [])["result"], 16)
+                x.late_reads.append({"address": MC3, "selector": data[:10], "requestedBlock": block, "readBlock": read_block})
+                continue
             time.sleep(5 * (t + 1))
         else: raise RuntimeError(f"getLiquidity multicall failed at {block}: {r.get('error')}")
         h = r["result"][2:]; W = lambda o: int(h[o * 2:o * 2 + 64], 16)
+        if W(0) != 32 or W(32) != n: raise ValueError("Incomplete pool liquidity response")
         base = W(0) + 32
         for i, p_ in enumerate(part):
             o = base + W(base + i * 32)
             ok, ln = W(o), W(o + W(o + 32))
-            out[p_] = W(o + W(o + 32) + 32) if ok and ln >= 32 else 0
+            if ok != 1 or ln != 32: raise ValueError(f"Liquidity unreadable for pool {p_}")
+            out[p_] = W(o + W(o + 32) + 32)
         time.sleep(0.2)
     return out
 
@@ -910,27 +962,42 @@ def lp_pnl(x, lp_pools, closes, dates, res_hist, fee_tokens_by_day):
     positions valued at the pool price just before it; holding value marks those token amounts at each day's close, and so do the fees:
     the tokens earned to date (raw units of the pool's two currencies, from pool_fees) at the day's closing pool price, so position, holding
     and fees are all marked at one price. Returns per pool and day: position value, holding value, cost in USD, fees earned to date."""
-    import time
-    lm = x.jl("lp_mods.json", {"rows": []}); cache = x.jl("lp_cost.json", {})
+    lm = x.jl("lp_mods.json", {"rows": []}); cache = x.jl("lp_cost_ordered.json", {})
     ids = {"0x" + format(i, "064x") for i in set(x.pos_ids) | set(x.jl("positions.json", {"ids": []})["ids"])}   # closed positions included
-    INIT = x.INIT
-    def price_before(pid, b):
-        for span in (20000, 200000, 2000000):
-            lg = x.getlogs({"address": x.PM, "topics": [x.SW, pid]}, max(x.G, b - span), b - 1, 4000000)
-            if lg: return int(words(lg[-1]["data"])[2], 16)
-        lg = x.getlogs({"address": x.PM, "topics": [INIT, pid]}, max(x.G, b - 2000000), b, 4000000)
-        return int(words(lg[-1]["data"])[3], 16) if lg else None
+    def prices_before_changes(pid, b):
+        # Replay this block in log order. Multiple identical changes may share a block.
+        block_logs = x.getlogs({"address": x.PM, "topics": [[x.SW, x.INIT, x.ML], pid]}, b, b)
+        price = None
+        changes = collections.defaultdict(list)
+        for log in sorted(block_logs, key=lambda item: int(item["logIndex"], 16)):
+            event = log["topics"][0]
+            w = words(log["data"])
+            if event in (x.SW, x.INIT):
+                price = int(w[2 if event == x.SW else 3], 16)
+            elif log["topics"][2].lower() == x.pad(x.POSM).lower():
+                if price is None:
+                    for span in (20000, 200000, 2000000, b - x.G):
+                        prev = x.getlogs({"address": x.PM, "topics": [[x.SW, x.INIT], pid]}, max(x.G, b-span), b-1, 4000000)
+                        if prev:
+                            last = max(prev, key=lambda event: (int(event["blockNumber"],16), int(event["logIndex"],16)))
+                            price = int(words(last["data"])[2 if last["topics"][0] == x.SW else 3],16)
+                            break
+                if price is None: raise RuntimeError("Pool has no initialization or swap before liquidity change")
+                key = f"{b}:{pid}:{s256(w[0])}:{s256(w[1])}:{s256(w[2])}:{'0x'+w[3]}"
+                changes[key].append(str(price))
+        return changes
+    occurrences = collections.Counter()
     pid_sym = {p["pool"]: s for s, p in lp_pools.items()}
     ev = []
     for b, pid, tl, tu, dl, salt in lm["rows"]:
         if salt not in ids or pid not in pid_sym: continue
-        k = f"{b}:{pid}:{tl}:{tu}:{dl}"
-        if k not in cache:
-            sp = price_before(pid, b); cache[k] = str(sp) if sp else None; time.sleep(0.2)
-        if not cache[k]: continue
-        sp = int(cache[k]) / 2 ** 96; a0, a1 = lp_amounts(abs(int(dl)), tl, tu, sp); sg = 1 if int(dl) > 0 else -1
+        k = f"{b}:{pid}:{tl}:{tu}:{dl}:{salt}"
+        if k not in cache: cache.update(prices_before_changes(pid,b))
+        sp = int(cache[k][occurrences[k]]) / 2 ** 96
+        occurrences[k] += 1
+        a0, a1 = lp_amounts(abs(int(dl)), tl, tu, sp); sg = 1 if int(dl) > 0 else -1
         ev.append((day(x.T(b)), pid_sym[pid], sg * a0, sg * a1, sp))
-    x.js("lp_cost.json", cache)
+    x.js("lp_cost_ordered.json", cache)
     out = collections.defaultdict(dict)
     for s, p in lp_pools.items():
         d0, d1 = (6, 18) if p["usdg0"] else (18, 6)

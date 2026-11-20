@@ -185,7 +185,9 @@ def reserve_history(x, lp_pools, closes, eth_day, epochs, dates, today_parts):
         lm["rows"].sort(key=lambda r: r[0])
         lm["last"] = tip; x.js("lp_mods.json", lm)
     mods = [(x.T(b), pid, tl, tu, int(dl)) for b, pid, tl, tu, dl, salt in lm["rows"] if salt in ids and pid in pid_sym]
-    checks["lp_liquidity"] = round(sum(dl for *_, dl in mods) / max(1, x.lp_liq_now) - 1, 9)   # summed liquidity against the positions' liquidity now
+    # summed liquidity against the positions' liquidity now; with every position closed (20 Nov 2026, block 119215444) both are zero and tie
+    s_liq = sum(dl for *_, dl in mods)
+    checks["lp_liquidity"] = round(s_liq / x.lp_liq_now - 1, 9) if x.lp_liq_now else (0.0 if s_liq == 0 else 1.0)
     x.log("reserve: valuing", len(dates), "days"); # value by day
     out = {}
     prior_units = prior_prices = None

@@ -186,5 +186,14 @@
   "to": "2026-11-09",
   "until": "2026-11-19",
   "why": "launchpad fee Safe and creator escrow transfers re-dated with the exact UTC midnight blocks; the cache was built before the 2 Nov 2026 midnight fix (12 Nov 2026 audit)"
+ },
+ {
+  "fields": [
+   "lpadOutFrac"
+  ],
+  "from": "2026-10-14",
+  "to": "2026-11-17",
+  "until": "2026-11-27",
+  "why": "share of each day's launchpad fee Safe receipts that has since left the reserve: on 20 Nov 2026 the reserve closed all its pool positions (block 119215444) and sent its stock tokens out of the Safe, so receipts forwarded to it in stock tokens now read as sent out; a chain event, not a method change"
  }
 ]

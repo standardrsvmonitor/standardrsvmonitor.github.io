@@ -348,13 +348,27 @@ for n in (7, 30, 0):
     mark = sum(p["markChange"] for p in parts)
     residual = period[-1]["reserveUsd"] - opening["reserveUsd"] - flow - mark
     panel = DK.get("reserveFlows", {}).get(str(n), {})
-    cash = dict(panel.get("t_cashflows", []))
-    value = dict(panel.get("t_valuation", []))
+    moves = dict(panel.get("t_reserve_change", []))
+    def dollars(v):
+        return f"${int(abs(v)+0.5):,}"
     def signed_usd(v):
-        return ("+" if v > 0 else "") + usd(v, 2)
+        return ("+" if v>0 else "−" if v<0 else "") + dollars(v)
+    def close_label(prefix, day):
+        date = dt.date.fromisoformat(day)
+        month = "Sept" if date.month == 9 else date.strftime("%b")
+        return f"{prefix} reserve · {date.day} {month}"
+    ordered = panel.get("t_reserve_change", [])
+    add("recompute", f"reserve table starts and ends at the actual closes for {n or 'all'} days",
+        ordered and ordered[0] == [close_label("Opening", opening["date"]), dollars(opening["reserveUsd"])]
+        and ordered[-1] == [close_label("Closing", period[-1]["date"]), dollars(period[-1]["reserveUsd"])])
     add("recompute", f"reserve movements reconcile across {n or 'all'} days",
-        cash.get("Net identified flow") == signed_usd(flow) and value.get("Price changes on prior holdings") == signed_usd(mark) and
-        value.get("Inventory changes still unattributed") == signed_usd(residual))
+        moves.get("Epoch settlements received") == signed_usd(settlements) and
+        moves.get("Launchpad fees received") == signed_usd(sum(p["feeSafeIn"] for p in parts)) and
+        moves.get("Contraction buybacks") == signed_usd(-sum(p["buybackSpend"] for p in parts)) and
+        moves.get("One-way transfers out") == signed_usd(sum(p["externalOut"] for p in parts)) and
+        moves.get("Price changes on holdings") == signed_usd(mark) and
+        moves.get("Unattributed inventory changes") == signed_usd(residual) and
+        moves.get("Total reserve change", "").split(" ")[0] == signed_usd(period[-1]["reserveUsd"] - opening["reserveUsd"]))
     marks = {}
     for part in parts:
         for asset, move in part["markByAsset"].items():

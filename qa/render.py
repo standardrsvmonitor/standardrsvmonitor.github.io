@@ -46,8 +46,8 @@ async function run(){
         r[cv.id] = ch ? {tab:t, n:ch.data.labels.length, last:String(ch.data.labels[ch.data.labels.length-1]), sig:ch.data.labels.join('|'),
           headline:txt(cv.closest('.panel').querySelector('.pn')), title:txt(cv.closest('.panel').querySelector('.pt'))} : null; }); });
       o.sweep[n] = r;
-      o.reserveFlows[n] = Object.fromEntries(['t_cashflows','t_valuation','t_marks'].map(id=>
-        [id,[...document.getElementById(id).tBodies[0].rows].map(row=>[...row.cells].map(txt))])); }
+      o.reserveFlows[n] = Object.fromEntries(['t_reserve_change','t_marks'].map(id=>
+        [id,[...(document.getElementById(id).tBodies[0]?.rows||[])].map(row=>[...row.cells].map(txt))])); }
     const b30 = document.querySelector('#range button[data-n="30"]'); if (b30) b30.click();
   }
   tabs.forEach(t=>{ show(t); const sec=document.getElementById('t-'+t), T={layout:layout(sec)};

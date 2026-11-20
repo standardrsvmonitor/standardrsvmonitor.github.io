@@ -129,11 +129,8 @@ SECTIONS = {
 
 "reserve": kpis("reserve") + '<div class="grid">' +
     panel(12, "Reserve flows and price changes", "Opening and closing reserve use complete UTC days. Settlements and buybacks use the ETH close on the transaction date. Price effects revalue the prior day’s holdings at the new close. The remainder can include pool rebalancing, trades and unclassified transfers. Uncollected LP fees are excluded from reserve value.", '''<div id="reserve_change"></div>
-      <div id="reserve_drivers"><div class="flow-columns">
-      <div><h3>Money in and out</h3>''' + table("t_cashflows") + '''</div>
-      <div><h3>Price effects and unexplained change</h3>''' + table("t_valuation") + '''</div></div>
-      <details><summary>See dated flows and price changes by asset</summary><div class="flow-columns">
-      <div>''' + table("t_flowlog") + '''</div><div>''' + table("t_marks") + '''</div></div></details></div>''', "h_resflow", "p_resflow") +
+      <div id="reserve_drivers">''' + table("t_reserve_change") + '''
+      <details><summary>Dated flows and price changes by asset</summary>''' + table("t_flowlog") + table("t_marks") + '</details></div>', "h_resflow", "p_resflow") +
     panel(7, "Reserve assets by component, daily", "ETH and USDG in the reserve Safe, ETH in the policy vaults, tokenized equities held outside pools and the Safe’s Uniswap v4 "
           "positions, at each day’s close; WETH in the Safe counts as ETH. Equities held before their pools opened (2 to 13 Oct) are valued at each pool’s first close on "
           "14 Oct. Excludes ETH held by the POL buyback contract and the team wallet, and uncollected position fees. On 10 Nov 2026 the Safe collected its position fees, "
@@ -356,18 +353,12 @@ a{color:inherit}
 .sell-quote select{display:block;min-width:11rem;margin-top:.45rem;padding:.5rem .75rem;color:var(--white);background:var(--sel);border:1px solid var(--line2);border-radius:.35rem;font:inherit}
 .sell-quote strong,.sell-quote small{display:block}.sell-quote strong{margin:.2rem 0;color:var(--white);font-size:1.55rem;font-weight:500}
 .sale-basis{margin:.6rem 0 1rem}#p_sale summary{cursor:pointer;font-size:.82rem}
-.flow-columns{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:.75rem 2rem}
-#p_resflow h3{margin:1rem 0 0;font-size:.875rem;font-weight:500;color:var(--white)}
-#reserve_change{margin:.65rem 0 .25rem}
-#reserve_change strong{font-size:1.75rem;font-weight:500;color:var(--white);letter-spacing:-.035em}
-#reserve_change p{margin:.45rem 0 0;font-size:.9rem;color:var(--fg)}
-#reserve_change small{display:block;color:var(--sec);font-size:.8125rem;margin-top:.25rem}
 #p_resflow details{margin-top:1rem}
 #p_resflow summary{cursor:pointer;color:var(--sec);font-size:.8125rem}
 #p_resflow td:first-child,#p_resflow th{white-space:normal}
 #p_resflow td:last-child{font-variant-numeric:tabular-nums}
-#t_cashflows tr:last-child td,#t_valuation tr:last-child td{color:var(--white);font-weight:550}
-@media(max-width:720px){.flow-columns{grid-template-columns:1fr;gap:0}}
+#t_reserve_change tbody tr:first-child td,#t_reserve_change tbody tr:last-child td{color:var(--white);font-weight:550}
+
 .pn{margin-left:auto;color:var(--sec);font-size:.8125rem;white-space:nowrap}
 .pn em{font-style:normal;color:var(--white);font-weight:500}
 .ph>.i{position:absolute;top:1.15rem;right:1rem}
@@ -713,7 +704,8 @@ function renderReserveFlows(opening,end,days){
     return;
   }
   const change=end.reserveUsd-opening.reserveUsd;
-  const signed=v=>(v>0?'+':'')+fmt.usd(v,2);
+  const dollars=v=>'$'+fmt.int(Math.abs(v));
+  const signed=v=>(v>0?'+':v<0?'−':'')+dollars(v);
   const piece=key=>days.every(r=>Number.isFinite(r.reserveParts?.[key])) ? sum(days.map(r=>r.reserveParts[key])) : null;
   const shown=v=>v==null?'Unmeasured':signed(v);
   const fees=piece('feeSafeIn'), external=piece('externalOut'), spent=piece('buybackSpend'), mark=piece('markChange');
@@ -737,28 +729,18 @@ function renderReserveFlows(opening,end,days){
   }
   const fullFlows=[fees,external,spent].every(Number.isFinite);
   const flow=routed+(fees??0)+(external??0)-(spent??0);
-  const total=summary.appendChild(document.createElement('strong'));
-  total.textContent=signed(change)+(opening.reserveUsd>0?' ('+fmt.pct(change/opening.reserveUsd,1)+')':'');
-  const balance=summary.appendChild(document.createElement('small'));
-  balance.textContent=fmt.usd(opening.reserveUsd,2)+' at '+dm(opening.date)+' close → '+fmt.usd(end.reserveUsd,2)+' at '+dm(end.date)+' close';
-  if(fullFlows && mark!=null){
-    const verdict=summary.appendChild(document.createElement('p'));
-    const describe=(v,up,down)=>v===0?'had no net effect':(v>0?up:down)+' '+fmt.usd(Math.abs(v),1);
-    const priceEffect=mark===0?'Asset prices had no net effect.':
-      'Asset prices '+(mark<0?'reduced':'increased')+' reserve value by '+fmt.usd(Math.abs(mark),1)+'.';
-    verdict.textContent='Identified flows '+describe(flow,'added','removed')+'. '+priceEffect;
-  }
   header.textContent=dm(days[0].date)+' – '+dm(end.date)+' UTC';
   details.hidden=false;
-  investorRows('t_cashflows',['Source or use','USD'],[
-    ['Epoch settlements received',signed(routed)],['Launchpad fees transferred in',shown(fees)],
-    ['Contraction buybacks',shown(spent==null?null:-spent)],['One-way transfers out',shown(external)],
-    [fullFlows?'Net identified flow':'Subtotal of measured flows',signed(flow)]]);
   const residual=change-flow-(mark??0);
-  const values=[['Price changes on prior holdings',shown(mark)],
-    [fullFlows && mark!=null?'Inventory changes still unattributed':'Change still unexplained by available records',signed(residual)]];
-  if(fullFlows && mark!=null) values.push(['Total change outside identified flows',signed(change-flow)]);
-  investorRows('t_valuation',['Source of change','USD'],values);
+  const changePct=opening.reserveUsd>0?' ('+fmt.pct(change/opening.reserveUsd,1)+')':'';
+  investorRows('t_reserve_change',['Reserve movement','USD'],[
+    ['Opening reserve · '+dm(opening.date),dollars(opening.reserveUsd)],
+    ['Epoch settlements received',signed(routed)],['Launchpad fees received',shown(fees)],
+    ['Contraction buybacks',shown(spent==null?null:-spent)],['One-way transfers out',shown(external)],
+    ['Price changes on holdings',shown(mark)],
+    [fullFlows && mark!=null?'Unattributed inventory changes':'Unexplained change',signed(residual)],
+    ['Total reserve change',signed(change)+changePct],
+    ['Closing reserve · '+dm(end.date),dollars(end.reserveUsd)]]);
   log.sort((a,b)=>b[0].localeCompare(a[0]));
   investorRows('t_flowlog',['UTC date','Recorded flow','Amount','USD'],log.length?log.map(([date,label,amount,value])=>[dm(date),label,amount,value]):[['—','No identified flows in this period','—','—']]);
   log.forEach((entry,i)=>{

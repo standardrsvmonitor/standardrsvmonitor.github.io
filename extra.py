@@ -775,17 +775,26 @@ def venue_scan(x, pairs, reserve_pids, lp_pools=None):
     import time
     cu = x.jl("venue_custb.json", {})
     # custodial pools' balances at the compile block, read first: the RPC keeps no historical state, so the compile block's state is gone after a
-    # long backfill. A read that fails (no result) stops the run rather than being taken as a zero balance.
+    # long backfill. A read that fails (no result) stops the run rather than being taken as a zero balance. The RPC keeps about 10,000 blocks
+    # (about 17 minutes) of state; when a long run reaches this point after the compile block's state is gone, the balances are read at the
+    # newest block instead and each such read is listed in lateReads, as the other late reads are.
     cust = [r for r in reg if not r["v4"]]; calls = [(r["id"], t) for r in cust for t in {r["base"], r["quote"]}]
+    read_block = x.tip
     for k in range(0, len(calls), 10):
         part = calls[k:k + 10]
         for t_ in range(6):
             try:
-                res = x.rpcb([("eth_call", [{"to": t, "data": "0x70a08231" + x.pad(pid)[2:]}, hex(x.tip)]) for pid, t in part])
+                res = x.rpcb([("eth_call", [{"to": t, "data": "0x70a08231" + x.pad(pid)[2:]}, hex(read_block)]) for pid, t in part])
                 if all(v is not None for v in res): break
             except Exception: pass
+            if read_block == x.tip:
+                probe = x.rpc("eth_call", [{"to": part[0][1], "data": "0x70a08231" + x.pad(part[0][0])[2:]}, hex(x.tip)])
+                if "historical state" in str(probe.get("error")):
+                    read_block = int(x.rpc("eth_blockNumber", [])["result"], 16); continue
             time.sleep(5 * (t_ + 1))
-        else: raise RuntimeError(f"custodial pool balances at block {x.tip} could not be read")
+        else: raise RuntimeError(f"custodial pool balances at block {read_block} could not be read")
+        if read_block != x.tip:
+            x.late_reads += [{"address": t, "selector": "0x70a08231", "requestedBlock": x.tip, "readBlock": read_block} for pid, t in part]
         for (pid, t), v in zip(part, res): cu.setdefault(pid, {"last": None, "d": {}}).setdefault("now", {})[t] = str(int(v, 16)) if v != "0x" else "0"
         time.sleep(0.3)
     x.js("venue_custb.json", cu)

@@ -76,6 +76,11 @@ Owners may reorder, add or strike items at any time.
 
 ## Findings (facts later runs rely on)
 
+- 20 Nov 2026: the Robinhood Chain RPC keeps historical state for a few thousand blocks only (about 10 blocks a second; reads failed
+  10,000 blocks back in a probe and already 6,688 blocks back in this run). Any read pinned to the compile block late in the pull must fall back
+  to the newest block and record itself in `lateReads` (see `ecall_late` in `pull.py`, `_liq_many` and the custodial balances in `venue_scan`
+  in `extra.py`). The 20 Nov refresh failed because the custodial pool balances had no fallback.
+
 - 8 Nov 2026: the central bank accrues issuance lazily. `cumulativeIssued` stands at `lastAccrual()` (any interaction moves it), not at the
   block time, so a rebuild run to the compile time drifts above it by the issuance rate times the time since the last interaction (1.9 hours,
   21,797 STANDARD, 0.10%, on 8 Nov). The `issued` reconciliation now compares at `lastAccrual()`, read at the indexer snapshot's block. It

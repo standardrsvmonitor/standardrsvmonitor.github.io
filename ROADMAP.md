@@ -76,6 +76,12 @@ Owners may reorder, add or strike items at any time.
 
 ## Findings (facts later runs rely on)
 
+- 20 Nov 2026: the reserve closed every pool position (11 positions, SPCX, SKHY and ETH pools, block 119215444) and sent all its SPCX
+  (6,232) and SKHY (6,431) out of the Safe (blocks 119216316 and 119221089, about $1.49M). With no positions, the liquidity identity and
+  the pools table total are zero, and both checks now handle zero. `lpadOutFrac` is the share of a day's fee Safe receipts that has
+  *since* left the reserve, so it rewrites past days whenever the reserve sends tokens on. That needs an `accept.json` entry each time,
+  unless the owner decides to exempt it from the drift check.
+
 - 8 Nov 2026: the central bank accrues issuance lazily. `cumulativeIssued` stands at `lastAccrual()` (any interaction moves it), not at the
   block time, so a rebuild run to the compile time drifts above it by the issuance rate times the time since the last interaction (1.9 hours,
   21,797 STANDARD, 0.10%, on 8 Nov). The `issued` reconciliation now compares at `lastAccrual()`, read at the indexer snapshot's block. It

@@ -121,7 +121,7 @@ try:
     P = T["liquidity"]["tables"]["t_pools"]
     for col, nm in ((1, "position value"), (4, "volume, 30d"), (5, "LP fees, 30d")):
         rows_ = [num(r[col]) for r in P[1:-1]]; tot = num(P[-1][col])
-        add("consistency", f"pools table rows sum to the total, {nm}", abs(sum(rows_) - tot) / tot < 0.01, f"{sum(rows_):.0f} vs {tot:.0f}")
+        add("consistency", f"pools table rows sum to the total, {nm}", abs(sum(rows_) - tot) <= 0.01 * tot if tot else sum(rows_) == 0, f"{sum(rows_):.0f} vs {tot:.0f}")   # zero once the reserve holds no positions
     for r in T["liquidity"]["tables"]["t_cpty"][1:]:
         s_ = sum(int(x[:-1]) for x in r[1:]); add("consistency", f"counterparty shares sum to 100, {r[0]}", s_ == 100, str(s_))
 except Exception as e:
